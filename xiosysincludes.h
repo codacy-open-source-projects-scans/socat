@@ -9,7 +9,5 @@
 #include "xioconfig.h"	/* what features are enabled */
 
 #include "sysincludes.h"
-//#undef IP_ADD_SOURCE_MEMBERSHIP
-#undef HAVE_STRUCT_IP_MREQ_SOURCE
 
 #endif /* !defined(__xiosysincludes_h_included) */

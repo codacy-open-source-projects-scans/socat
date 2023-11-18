@@ -285,7 +285,7 @@ static int dalan_item(int c, const char **line0, uint8_t *data, size_t *p, size_
 
 /* read data description from line (\0-terminated), write result to data; do
    not write so much data that *p exceeds n !
-   p must be initialized to 0.
+   *p must be initialized.
    return 0 on success,
    -1 if the data was cut due to n limit,
    1 if a syntax error occurred
@@ -310,9 +310,15 @@ int dalan(const char *line, uint8_t *data, size_t *p, size_t n, char deflt) {
 	 /* white space */
 	 continue;
       } else if (rc == 3) {
-	 /* no, we did not recognize c as type specifier, try default type */
+	 const char *line0;
 	 --line;
+	 line0 = line;
+	 /* No, we did not recognize c as type specifier, try default type */
 	 rc = dalan_item(deflt, &line, data, p, n);
+	 if (line == line0) {
+	    /* Nothing was parsed */
+	    return 1;
+	 }
       }
       if (rc != 0) {
 	 return rc;

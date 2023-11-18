@@ -18,9 +18,9 @@
 
 #define MAXPTYNAMELEN 64
 
-static int xioopen_pty(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *fd, unsigned groups, int dummy1, int dummy2, int dummy3);
+static int xioopen_pty(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *fd, const struct addrdesc *addrdesc);
 
-const struct addrdesc addr_pty = { "pty",   3, xioopen_pty, GROUP_NAMED|GROUP_FD|GROUP_TERMIOS|GROUP_PTY, 0, 0, 0 HELP("") };
+const struct addrdesc xioaddr_pty = { "PTY",   3, xioopen_pty, GROUP_NAMED|GROUP_FD|GROUP_TERMIOS|GROUP_PTY, 0, 0, 0 HELP("") };
 
 const struct optdesc opt_symbolic_link = { "symbolic-link", "link", OPT_SYMBOLIC_LINK, GROUP_PTY, PH_LATE, TYPE_FILENAME, OFUNC_SPEC, 0, 0 };
 #if HAVE_POLL
@@ -28,9 +28,18 @@ const struct optdesc opt_pty_wait_slave = { "pty-wait-slave", "wait-slave", OPT_
 const struct optdesc opt_pty_intervall  = { "pty-interval",  NULL,         OPT_PTY_INTERVALL,  GROUP_PTY, PH_EARLY, TYPE_TIMESPEC, OFUNC_SPEC, 0, 0 };
 #endif /* HAVE_POLL */
 
-static int xioopen_pty(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *xfd, unsigned groups, int dummy1, int dummy2, int dummy3) {
+static int xioopen_pty(
+	int argc,
+	const char *argv[],
+	struct opt *opts,
+	int xioflags,
+	xiofile_t *xfd,
+	const struct addrdesc *addrdesc)
+{
    /* we expect the form: filename */
-   int ptyfd = -1, ttyfd = -1;
+   struct single *sfd = &xfd->stream;
+   int ptyfd = -1; 	/* master */
+   int ttyfd = -1; 	/* slave */
 #if defined(HAVE_DEV_PTMX) || defined(HAVE_DEV_PTC)
    bool useptmx = false;	/* use /dev/ptmx or equivalent */
 #endif
@@ -43,18 +52,20 @@ static int xioopen_pty(int argc, const char *argv[], struct opt *opts, int xiofl
    bool opt_unlink_close = true;	/* remove symlink afterwards */
    bool wait_slave = false;	/* true would be better for many platforms, but
 				   some OSes cannot handle this, and for common
-				   default behaviour as well as backward 
+				   default behaviour as well as backward
 				   compatibility we choose "no" as default */
    struct timespec pollintv = { PTY_INTERVALL };
 
    if (argc != 1) {
-      Error2("%s: wrong number of parameters (%d instead of 0)", argv[0], argc-1);
+      xio_syntax(argv[0], 0, argc-1, addrdesc->syntax);
+      return STAT_NORETRY;
    }
 
-   xfd->stream.howtoend = END_CLOSE;
+   if (sfd->howtoend == END_UNSPEC)
+      sfd->howtoend = END_CLOSE;
 
-   if (applyopts_single(&xfd->stream, opts, PH_INIT) < 0)  return -1;
-   applyopts(-1, opts, PH_INIT);
+   if (applyopts_single(sfd, opts, PH_INIT) < 0)  return -1;
+   applyopts(sfd, -1, opts, PH_INIT);
 
    retropt_bool(opts, OPT_UNLINK_CLOSE, &opt_unlink_close);
 
@@ -88,10 +99,22 @@ static int xioopen_pty(int argc, const char *argv[], struct opt *opts, int xiofl
    retropt_timespec(opts, OPT_PTY_INTERVALL, &pollintv);
 #endif /* HAVE_POLL */
 
-   if (applyopts_single(&xfd->stream, opts, PH_INIT) < 0)  return -1;
-   applyopts2(-1, opts, PH_INIT, PH_EARLY);
+   if (applyopts_single(sfd, opts, PH_INIT) < 0)  return -1;
+   applyopts2(sfd, -1, opts, PH_INIT, PH_EARLY);
 
-   applyopts(-1, opts, PH_PREBIGEN);
+   applyopts(sfd, -1, opts, PH_PREBIGEN);
+
+#if HAVE_OPENPTY
+   if (ptyfd < 0) {
+      int result;
+      if ((result = Openpty(&ptyfd, &ttyfd, ptyname, NULL, NULL)) < 0) {
+	 Error4("openpty(%p, %p, %p, NULL, NULL): %s",
+		&ptyfd, &ttyfd, ptyname, strerror(errno));
+	 return -1;
+      }
+      Notice1("PTY is %s", ptyname);
+   }
+#endif /* HAVE_OPENPTY */
 
 #if defined(HAVE_DEV_PTMX)
 #  define PTMX "/dev/ptmx"	/* Linux */
@@ -99,7 +122,7 @@ static int xioopen_pty(int argc, const char *argv[], struct opt *opts, int xiofl
 #  define PTMX "/dev/ptc"	/* AIX 4.3.3 */
 #endif
 #if HAVE_DEV_PTMX || HAVE_DEV_PTC
-   if (useptmx) {
+   if (useptmx || ptyfd < 0) {
       if ((ptyfd = Open(PTMX, O_RDWR|O_NOCTTY, 0620)) < 0) {
 	 Warn1("open(\""PTMX"\", O_RDWR|O_NOCTTY, 0620): %s",
 	       strerror(errno));
@@ -107,7 +130,7 @@ static int xioopen_pty(int argc, const char *argv[], struct opt *opts, int xiofl
       } else {
 	 ;/*0 Info1("open(\""PTMX"\", O_RDWR|O_NOCTTY, 0620) -> %d", ptyfd);*/
       }
-      if (ptyfd >= 0 && ttyfd < 0) {
+      if (ptyfd >= 0) {
 	 /* we used PTMX before forking */
 	 /*0 extern char *ptsname(int);*/
 #if HAVE_GRANTPT	/* AIX, not Linux */
@@ -136,31 +159,18 @@ static int xioopen_pty(int argc, const char *argv[], struct opt *opts, int xiofl
       }
    }
 #endif /* HAVE_DEV_PTMX || HAVE_DEV_PTC */
-#if HAVE_OPENPTY
-   if (ptyfd < 0) {
-      int result;
-      if ((result = Openpty(&ptyfd, &ttyfd, ptyname, NULL, NULL)) < 0) {
-	 Error4("openpty(%p, %p, %p, NULL, NULL): %s",
-		&ptyfd, &ttyfd, ptyname, strerror(errno));
-	 return -1;
-      }
-      Notice1("PTY is %s", ptyname);
-   }
-#endif /* HAVE_OPENPTY */
 
    if (!retropt_string(opts, OPT_SYMBOLIC_LINK, &linkname)) {
-      if (Unlink(linkname) < 0 && errno != ENOENT) {
-	 Error2("unlink(\"%s\"): %s", linkname, strerror(errno));
-      }
+      xio_unlink(linkname, E_ERROR);
       if (Symlink(ptyname, linkname) < 0) {
 	 Error3("symlink(\"%s\", \"%s\"): %s",
 		ptyname, linkname, strerror(errno));
       }
       if (opt_unlink_close) {
-	 if ((xfd->stream.unlink_close = strdup(linkname)) == NULL) {
+	 if ((sfd->unlink_close = strdup(linkname)) == NULL) {
 	    Error1("strdup(\"%s\"): out of memory", linkname);
 	 }
-	 xfd->stream.opt_unlink_close = true;
+	 sfd->opt_unlink_close = true;
       }
    }
 
@@ -168,9 +178,9 @@ static int xioopen_pty(int argc, const char *argv[], struct opt *opts, int xiofl
    applyopts_named(ptyname, opts, PH_FD);
 
    applyopts_cloexec(ptyfd, opts);/*!*/
-   xfd->stream.dtype    = XIODATA_PTY;
+   sfd->dtype    = XIODATA_PTY;
 
-   applyopts(ptyfd, opts, PH_FD);
+   applyopts(sfd, ttyfd, opts, PH_FD);
 
    {
       /* special handling of user-late etc.; with standard behaviour (up to
@@ -198,9 +208,10 @@ static int xioopen_pty(int argc, const char *argv[], struct opt *opts, int xiofl
 
    }
 
-   xfd->stream.fd = ptyfd;
-   applyopts(ptyfd, opts, PH_LATE);
-   if (applyopts_single(&xfd->stream, opts, PH_LATE) < 0)  return -1;
+   sfd->fd = ptyfd;
+   applyopts(sfd, -1, opts, PH_LATE);
+   if (applyopts_single(sfd, opts, PH_LATE) < 0)
+      return -1;
 
 #if HAVE_POLL
    /* if you can and wish: */

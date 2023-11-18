@@ -5,7 +5,7 @@
 #ifndef __xio_pty_h_included
 #define __xio_pty_h_included 1
 
-extern const struct addrdesc addr_pty;
+extern const struct addrdesc xioaddr_pty;
 
 extern const struct optdesc opt_symbolic_link;
 #if HAVE_POLL

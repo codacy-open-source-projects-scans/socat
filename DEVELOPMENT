@@ -78,7 +78,7 @@ The entries must be embedded in an IF_... macro of their group for conditional
 compiling.
 
 * For options using some predefined action (see OFUNC above), this might be
-enough - test the option and document it in xio.help!
+enough - test the option and document it in doc/socat.yo!
 For OFUNC_SPEC, it might suffice to add another "case" to the OFUNC_SPEC branch
 in applyopts() in xioopts.c. If you need more special handling, you should try
 to understand the address specific functions and add your code there.

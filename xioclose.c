@@ -10,6 +10,8 @@
 #include "xiolockfile.h"
 
 #include "xio-termios.h"
+#include "xio-interface.h"
+#include "xio-posixmq.h"
 
 
 /* close the xio fd; must be valid and "simple" (not dual) */
@@ -44,12 +46,17 @@ int xioclose1(struct single *pipe) {
 #endif /* WITH_OPENSSL */
 #if WITH_TERMIOS
    if (pipe->ttyvalid) {
-      if (Tcsetattr(pipe->fd, 0, &pipe->savetty) < 0) {
+      if (Tcsetattr(pipe->fd, TCSANOW, &pipe->savetty) < 0) {
 	 Warn2("cannot restore terminal settings on fd %d: %s",
 	       pipe->fd, strerror(errno));
       }
    }
 #endif /* WITH_TERMIOS */
+#if WITH_POSIXMQ
+   if ((pipe->dtype & XIODATA_MASK) == XIODATA_POSIXMQ) {
+      xioclose_posixmq(pipe);
+   }
+#endif /* WITH_POSIXMQ */
    if (pipe->fd >= 0) {
       switch (pipe->howtoend) {
       case END_KILL: case END_SHUTDOWN_KILL: case END_CLOSE_KILL:
@@ -77,6 +84,18 @@ int xioclose1(struct single *pipe) {
 	     Info3("shutdown(%d, %d): %s", pipe->fd, 2, strerror(errno)); }
          break;
 #endif /* _WITH_SOCKET */
+#if WITH_INTERFACE
+      case END_INTERFACE:
+	 {
+	    if (pipe->para.interface.name[0] != '\0') {
+	       _xiointerface_set_iff(pipe->fd, pipe->para.interface.name,
+				     pipe->para.interface.save_iff);
+	    }
+	    if (Close(pipe->fd) < 0) {
+	       Info2("close(%d): %s", pipe->fd, strerror(errno)); } break;
+	 }
+	 break;
+#endif /* WITH_INTERFACE */
       case END_NONE: default: break;
       }
    }
@@ -85,15 +104,15 @@ int xioclose1(struct single *pipe) {
    if (pipe->havelock) {
       xiounlock(pipe->lock.lockfile);
       pipe->havelock = false;
-   }      
+   }
    if (pipe->opt_unlink_close && pipe->unlink_close) {
       if (Unlink(pipe->unlink_close) < 0) {
-	 Info2("unlink(\"%s\"): %s", pipe->unlink_close, strerror(errno));
+	 Warn2("unlink(\"%s\"): %s", pipe->unlink_close, strerror(errno));
       }
       free(pipe->unlink_close);
    }
 
-   pipe->tag = XIO_TAG_INVALID;
+   pipe->tag |= XIO_TAG_CLOSED;
    return 0;	/*! */
 }
 
@@ -111,7 +130,7 @@ int xioclose(xiofile_t *file) {
    if (file->tag == XIO_TAG_DUAL) {
       result  = xioclose1(file->dual.stream[0]);
       result |= xioclose1(file->dual.stream[1]);
-      file->tag = XIO_TAG_INVALID;
+      file->tag |= XIO_TAG_CLOSED;
    } else {
       result = xioclose1(&file->stream);
    }

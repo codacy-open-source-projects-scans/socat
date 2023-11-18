@@ -17,23 +17,23 @@
 /****** TCP addresses ******/
 
 #if WITH_IP4 || WITH_IP6
-const struct addrdesc addr_tcp_connect = { "tcp-connect", 1+XIO_RDWR, xioopen_ipapp_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_CHILD|GROUP_RETRY, SOCK_STREAM, IPPROTO_TCP, PF_UNSPEC HELP(":<host>:<port>") };
+const struct addrdesc xioaddr_tcp_connect = { "TCP-CONNECT", 1+XIO_RDWR, xioopen_ipapp_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_CHILD|GROUP_RETRY, SOCK_STREAM, IPPROTO_TCP, PF_UNSPEC HELP(":<host>:<port>") };
 #if WITH_LISTEN
-const struct addrdesc addr_tcp_listen  = { "tcp-listen",  1+XIO_RDWR, xioopen_ipapp_listen,  GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_LISTEN|GROUP_CHILD|GROUP_RANGE|GROUP_RETRY, SOCK_STREAM, IPPROTO_TCP, PF_UNSPEC HELP(":<port>") };
+const struct addrdesc xioaddr_tcp_listen  = { "TCP-LISTEN",  1+XIO_RDWR, xioopen_ipapp_listen,  GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_LISTEN|GROUP_CHILD|GROUP_RANGE|GROUP_RETRY, SOCK_STREAM, IPPROTO_TCP, PF_UNSPEC HELP(":<port>") };
 #endif
 #endif
 
 #if WITH_IP4
-const struct addrdesc addr_tcp4_connect = { "tcp4-connect", 1+XIO_RDWR, xioopen_ipapp_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_IP_TCP|GROUP_CHILD|GROUP_RETRY, SOCK_STREAM, IPPROTO_TCP, PF_INET HELP(":<host>:<port>") };
+const struct addrdesc xioaddr_tcp4_connect = { "TCP4-CONNECT", 1+XIO_RDWR, xioopen_ipapp_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_IP_TCP|GROUP_CHILD|GROUP_RETRY, SOCK_STREAM, IPPROTO_TCP, PF_INET HELP(":<host>:<port>") };
 #if WITH_LISTEN
-const struct addrdesc addr_tcp4_listen  = { "tcp4-listen", 1+XIO_RDWR, xioopen_ipapp_listen, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_IP_TCP|GROUP_LISTEN|GROUP_CHILD|GROUP_RANGE|GROUP_RETRY, SOCK_STREAM, IPPROTO_TCP, PF_INET HELP(":<port>") };
+const struct addrdesc xioaddr_tcp4_listen  = { "TCP4-LISTEN", 1+XIO_RDWR, xioopen_ipapp_listen, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_IP_TCP|GROUP_LISTEN|GROUP_CHILD|GROUP_RANGE|GROUP_RETRY, SOCK_STREAM, IPPROTO_TCP, PF_INET HELP(":<port>") };
 #endif
 #endif /* WITH_IP4 */
 
 #if WITH_IP6
-const struct addrdesc addr_tcp6_connect = { "tcp6-connect", 1+XIO_RDWR, xioopen_ipapp_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_CHILD|GROUP_RETRY, SOCK_STREAM, IPPROTO_TCP, PF_INET6 HELP(":<host>:<port>") };
+const struct addrdesc xioaddr_tcp6_connect = { "TCP6-CONNECT", 1+XIO_RDWR, xioopen_ipapp_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_CHILD|GROUP_RETRY, SOCK_STREAM, IPPROTO_TCP, PF_INET6 HELP(":<host>:<port>") };
 #if WITH_LISTEN
-const struct addrdesc addr_tcp6_listen  = { "tcp6-listen", 1+XIO_RDWR, xioopen_ipapp_listen, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_LISTEN|GROUP_CHILD|GROUP_RANGE|GROUP_RETRY, SOCK_STREAM, IPPROTO_TCP, PF_INET6 HELP(":<port>") };
+const struct addrdesc xioaddr_tcp6_listen  = { "TCP6-LISTEN", 1+XIO_RDWR, xioopen_ipapp_listen, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_LISTEN|GROUP_CHILD|GROUP_RANGE|GROUP_RETRY, SOCK_STREAM, IPPROTO_TCP, PF_INET6 HELP(":<port>") };
 #endif
 #endif /* WITH_IP6 */
 

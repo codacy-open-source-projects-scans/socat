@@ -14,13 +14,12 @@ extern const struct optdesc opt_unlink;
 extern const struct optdesc opt_unlink_early;
 extern const struct optdesc opt_unlink_late;
 extern const struct optdesc opt_unlink_close;
-extern const struct optdesc opt_umask;
 
 extern int
    applyopts_named(const char *filename, struct opt *opts, unsigned int phase);
-extern int _xioopen_named_early(int argc, const char *argv[], xiofile_t *xfd,
-				int groups,
-				bool *exists, struct opt *opts);
+extern int _xioopen_named_early(int argc, const char *argv[], xiofile_t *xfd, groups_t groups, bool *exists, struct opt *opts, const char *syntax);
 extern int _xioopen_open(const char *path, int rw, struct opt *opts);
+
+extern int xio_unlink(const char *pathname, int level);
 
 #endif /* !defined(__xio_named_h_included) */

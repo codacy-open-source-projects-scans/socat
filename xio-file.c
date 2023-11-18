@@ -11,7 +11,7 @@
 #include "xio-file.h"
 
 
-static int xioopen_open(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *fd, unsigned groups, int dummy1, int dummy2, int dummy3);
+static int xioopen_open(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *fd, const struct addrdesc *addrdesc);
 
 
 #if WITH_OPEN
@@ -66,56 +66,67 @@ const struct optdesc opt_o_trunc     = { "o-trunc",     "trunc",  OPT_O_TRUNC,  
 
 #if _WITH_FILE	/*! inconsistent name FILE vs. OPEN */
 
-const struct addrdesc addr_open   = { "open",   3, xioopen_open, GROUP_FD|GROUP_FIFO|GROUP_CHR|GROUP_BLK|GROUP_REG|GROUP_NAMED|GROUP_OPEN|GROUP_FILE|GROUP_TERMIOS, 0, 0, 0 HELP(":<filename>") };
+const struct addrdesc xioaddr_open   = { "OPEN",   3, xioopen_open, GROUP_FD|GROUP_FIFO|GROUP_CHR|GROUP_BLK|GROUP_REG|GROUP_NAMED|GROUP_OPEN|GROUP_FILE|GROUP_TERMIOS, 0, 0, 0 HELP(":<filename>") };
 
 /* open for writing:
    if the filesystem entry already exists, the data is appended
    if it does not exist, a file is created and the data is appended
 */
-static int xioopen_open(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *fd, unsigned groups, int dummy1, int dummy2, int dummy3) {
+static int xioopen_open(
+	int argc,
+	const char *argv[],
+	struct opt *opts,
+	int xioflags,
+	xiofile_t *xfd,
+	const struct addrdesc *addrdesc)
+{
    const char *filename = argv[1];
    int rw = (xioflags & XIO_ACCMODE);
+   struct single *sfd = &xfd->stream;
    bool exists;
    bool opt_unlink_close = false;
    int result;
 
    /* remove old file, or set user/permissions on old file; parse options */
-   if ((result = _xioopen_named_early(argc, argv, fd, groups, &exists, opts)) < 0) {
+   if ((result =
+	_xioopen_named_early(argc, argv, xfd, addrdesc->groups, &exists, opts,
+			     addrdesc->syntax))
+       < 0) {
       return result;
    }
 
    retropt_bool(opts, OPT_UNLINK_CLOSE, &opt_unlink_close);
    if (opt_unlink_close) {
-      if ((fd->stream.unlink_close = strdup(filename)) == NULL) {
+      if ((sfd->unlink_close = strdup(filename)) == NULL) {
 	 Error1("strdup(\"%s\"): out of memory", filename);
       }
-      fd->stream.opt_unlink_close = true;
+      sfd->opt_unlink_close = true;
    }
 
    Notice3("opening %s \"%s\" for %s",
 	   filetypenames[(result&S_IFMT)>>12], filename, ddirection[rw]);
    if ((result = _xioopen_open(filename, rw, opts)) < 0)
       return result;
-   fd->stream.fd = result;
+   sfd->fd = result;
 
 #if WITH_TERMIOS
-   if (Isatty(fd->stream.fd)) {
-      if (Tcgetattr(fd->stream.fd, &fd->stream.savetty) < 0) {
+   if (Isatty(sfd->fd)) {
+      if (Tcgetattr(sfd->fd, &sfd->savetty) < 0) {
 	 Warn2("cannot query current terminal settings on fd %d: %s",
-	       fd->stream.fd, strerror(errno));
+	       sfd->fd, strerror(errno));
       } else {
-	 fd->stream.ttyvalid = true;
+	 sfd->ttyvalid = true;
       }
    }
 #endif /* WITH_TERMIOS */
 
    applyopts_named(filename, opts, PH_FD);
-   applyopts(fd->stream.fd, opts, PH_FD);
-   applyopts_cloexec(fd->stream.fd, opts);
+   applyopts(sfd, -1, opts, PH_FD);
+   applyopts_cloexec(sfd->fd, opts);
 
-   applyopts_fchown(fd->stream.fd, opts);
+   applyopts_fchown(sfd->fd, opts);
 
-   if ((result = _xio_openlate(&fd->stream, opts)) < 0)
+   if ((result = _xio_openlate(sfd, opts)) < 0)
       return result;
 
    return 0;

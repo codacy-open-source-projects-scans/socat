@@ -24,7 +24,6 @@ compilation
 
 * socat.1: man page of socat
 * socat.html: html version of man page
-* xio.help: reference manual of the address definitions (xioopen function)
 
 * daemon.sh: example shell script for running socat as TCP relay daemon
 * ftp.sh: example shell based ftp client, using socat for transport

@@ -7,7 +7,9 @@
 # accepts and answers correct HTTP CONNECT requests, but then just echoes data.
 # it is required for test.sh
 # for TCP, use this script as:
-# socat tcp-l:8080,reuseaddr,crlf system:"proxyecho.sh"
+# socat TCP-L:8080,reuseaddr,crlf SYSTEM:"proxyecho.sh"
+
+# 20230423  GR Added option -V to require particular HTTP version
 
 if type socat >/dev/null 2>&1; then
     SOCAT=socat
@@ -24,11 +26,12 @@ HP-UX|OSF1)
     ;;
 esac
 
-SPACES=" "
+SPACES=" " REQVER=1.0
 while [ -n "$1" ]; do
     case "$1" in
     -w) n="$2"; while [ "$n" -gt 0 ]; do SPACES="$SPACES "; n=$((n-1)); done
 	shift ;;
+    -V) shift; REQVER="$1" ;;
     #-s) STAT="$2"; shift ;;
     esac
     shift
@@ -36,11 +39,15 @@ done
 
 # read and parse HTTP request
 read l
-if echo "$l" |egrep '^CONNECT +[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+ +HTTP/1.[01]$' >/dev/null
+if ! echo "$l" |egrep '^CONNECT +[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+ +HTTP/[1-3].[0-9]$' >/dev/null
 then
-    : go on below
-else
     echo "HTTP/1.0${SPACES}500 Bad Request"
+    echo
+    exit
+fi
+if ! echo "$l" |egrep '^CONNECT +[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+ +HTTP/'"$REQVER"'$' >/dev/null
+then
+    echo "HTTP/1.0${SPACES}426 Upgrade Required"
     echo
     exit
 fi
@@ -51,7 +58,7 @@ while [ -n "$l" ]; do
 done
 
 # send status
-echo "HTTP/1.0${SPACES}200 OK"
+echo "HTTP/$REQVER${SPACES}200 OK"
 # send empty line
 echo
 

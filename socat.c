@@ -22,10 +22,11 @@
 #include "xioopts.h"
 #include "xiolockfile.h"
 
+#include "xio-pipe.h"
+
 
 /* command line options */
-struct {
-   size_t bufsiz;
+struct socat_opts {
    bool verbose;
    bool verbhex;
    struct timeval pollintv;	/* with ignoreeof, reread after seconds */
@@ -36,11 +37,10 @@ struct {
    char logopt;		/* y..syslog; s..stderr; f..file; m..mixed */
    bool lefttoright;	/* first addr ro, second addr wo */
    bool righttoleft;	/* first addr wo, second addr ro */
-   int sniffleft;	/* -1 or an FD for teeing data arriving on xfd1 */
-   int sniffright;	/* -1 or an FD for teeing data arriving on xfd2 */
    xiolock_t lock;	/* a lock file */
+   unsigned long log_sigs;	/* signals to be caught just for logging */
+   bool statistics; 	/* log statistics on exit */
 } socat_opts = {
-   8192,	/* bufsiz */
    false,	/* verbose */
    false,	/* verbhex */
    {1,0},	/* pollintv */
@@ -51,9 +51,9 @@ struct {
    's',		/* logopt */
    false,	/* lefttoright */
    false,	/* righttoleft */
-   -1,		/* sniffleft */
-   -1,		/* sniffright */
    { NULL, 0 },	/* lock */
+   1<<SIGHUP | 1<<SIGINT | 1<<SIGQUIT | 1<<SIGILL | 1<<SIGABRT | 1<<SIGBUS | 1<<SIGFPE | 1<<SIGSEGV | 1<<SIGTERM, 	/* log_sigs */
+   false	/* statistics */
 };
 
 void socat_usage(FILE *fd);
@@ -63,6 +63,7 @@ int socat(const char *address1, const char *address2);
 int _socat(void);
 int cv_newline(unsigned char *buff, ssize_t *bytes, int lineterm1, int lineterm2);
 void socat_signal(int sig);
+void socat_signal_logstats(int sig);
 static int socat_sigchild(struct single *file);
 
 void lftocrlf(char **in, ssize_t *len, size_t bufsiz);
@@ -71,6 +72,7 @@ void crlftolf(char **in, ssize_t *len, size_t bufsiz);
 static int socat_lock(void);
 static void socat_unlock(void);
 static int socat_newchild(void);
+static void socat_print_stats(void);
 
 static const char socatversion[] =
 #include "./VERSION"
@@ -85,7 +87,6 @@ const char copyright_ssleay[] = "This product includes software written by Tim H
 
 bool havelock;
 
-
 int main(int argc, const char *argv[]) {
    const char **arg1, *a;
    char *mainwaitstring;
@@ -93,6 +94,7 @@ int main(int argc, const char *argv[]) {
    double rto;
    int i, argc0, result;
    bool isdash = false;
+   int msglevel = 0;
    struct utsname ubuf;
    int lockrc;
 
@@ -124,10 +126,32 @@ int main(int argc, const char *argv[]) {
 	 Exit(0);
 #endif /* WITH_HELP */
       case 'd':
-	 a = *arg1+1;
+	 a = *arg1+2;
+	 switch (*a) {
+	 case 'd':
+	    break;
+	 case '-': case '0': case '1': case '2': case '3': case '4':
+	    {
+	       char *endptr;
+	       msglevel = strtol(a, &endptr, 0);
+	       if (endptr == a || *endptr) {
+		  Error2("Invalid (trailing) character(s) \"%c\" in \"%s\"option", *a, *arg1);
+	       }
+	       diag_set_int('d', 4-msglevel);
+	    }
+	    break;
+	 case '\0':
+	    ++msglevel;
+	    diag_set_int('d', 4-msglevel);
+	    break;
+	 default: socat_usage(stderr);
+	 }
+	 if (*a != 'd')  break;
+	 ++msglevel;
 	 while (*a)  {
 	    if (*a == 'd') {
-	       diag_set('d', NULL);
+	       ++msglevel;
+	       diag_set_int('d', 4-msglevel);
 	    } else {
 	       socat_usage(stderr);
 	       Exit(1);
@@ -188,21 +212,7 @@ int main(int argc, const char *argv[]) {
 	       break;
 	    }
 	 }
-	 if ((socat_opts.sniffleft = Open(a, O_CREAT|O_WRONLY|O_APPEND|
-#ifdef O_LARGEFILE
-					  O_LARGEFILE|
-#endif
-					  O_NONBLOCK, 0664)) < 0) {
-	    if (errno == ENXIO) {
-	       if ((socat_opts.sniffleft = Open(a, O_CREAT|O_RDWR|O_APPEND|
-#ifdef O_LARGEFILE
-						O_LARGEFILE|
-#endif
-						O_NONBLOCK, 0664)) > 0)
-		  break; 	/* try to open pipe rdwr */
-	    }
-	    Error2("option -r \"%s\": %s", a, strerror(errno));
-         }
+	 xiosetopt('r', a);
 	 break;
       case 'R': if (arg1[0][2]) {
 	    a = *arg1+2;
@@ -213,21 +223,7 @@ int main(int argc, const char *argv[]) {
 	       break;
 	    }
 	 }
-	 if ((socat_opts.sniffright = Open(a, O_CREAT|O_WRONLY|O_APPEND|
-#ifdef O_LARGEFILE
-					   O_LARGEFILE|
-#endif
-					   O_NONBLOCK, 0664)) < 0) {
-	    if (errno == ENXIO) {
-	       if ((socat_opts.sniffright = Open(a, O_CREAT|O_RDWR|O_APPEND|
-#ifdef O_LARGEFILE
-						O_LARGEFILE|
-#endif
-						O_NONBLOCK, 0664)) > 0)
-		  break; 	/* try to open pipe rdwr */
-	    }
-	    Error2("option -R \"%s\": %s", a, strerror(errno));
-         }
+	 xiosetopt('R', a);
 	 break;
       case 'b': if (arg1[0][2]) {
 	    a = *arg1+2;
@@ -238,10 +234,22 @@ int main(int argc, const char *argv[]) {
 	       Exit(1);
 	    }
 	 }
-	 socat_opts.bufsiz = Strtoul(a, (char **)&a, 0, "-b");
+	 xioparms.bufsiz = Strtoul(a, (char **)&a, 0, "-b");
 	 break;
       case 's':  if (arg1[0][2])  { socat_opt_hint(stderr, arg1[0][1], arg1[0][2]); Exit(1); }
 	 diag_set_int('e', E_FATAL); break;
+      case 'S': 	/* do not catch signals */
+	 if (arg1[0][2]) {
+	    a = *arg1+2;
+	 } else {
+	    ++arg1, --argc;
+	    if ((a = *arg1) == NULL) {
+	       Error("option -S requires an argument; use option \"-h\" for help");
+	       Exit(1);
+	    }
+	 }
+	 socat_opts.log_sigs = Strtoul(a, (char **)&a, 0, "-S");
+	 break;
       case 't': if (arg1[0][2]) {
 	    a = *arg1+2;
 	 } else {
@@ -254,7 +262,7 @@ int main(int argc, const char *argv[]) {
 	 rto = Strtod(a, (char **)&a, "-t");
 	 socat_opts.closwait.tv_sec = rto;
 	 socat_opts.closwait.tv_usec =
-	    (rto-socat_opts.closwait.tv_sec) * 1000000; 
+	    (rto-socat_opts.closwait.tv_sec) * 1000000;
 	 break;
       case 'T':  if (arg1[0][2]) {
 	    a = *arg1+2;
@@ -268,7 +276,7 @@ int main(int argc, const char *argv[]) {
 	 rto = Strtod(a, (char **)&a, "-T");
 	 socat_opts.total_timeout.tv_sec = rto;
 	 socat_opts.total_timeout.tv_usec =
-	    (rto-socat_opts.total_timeout.tv_sec) * 1000000; 
+	    (rto-socat_opts.total_timeout.tv_sec) * 1000000;
 	 break;
       case 'u':  if (arg1[0][2])  { socat_opt_hint(stderr, arg1[0][1], arg1[0][2]); Exit(1); }
 	 socat_opts.lefttoright = true; break;
@@ -288,8 +296,9 @@ int main(int argc, const char *argv[]) {
 	    }
 	 }
 	 break;
-      case 'W': if (socat_opts.lock.lockfile)
+      case 'W': if (socat_opts.lock.lockfile) {
 	    Error("only one -L and -W option allowed");
+	 }
 	 if (arg1[0][2]) {
 	    socat_opts.lock.lockfile = *arg1+2;
 	 } else {
@@ -311,10 +320,19 @@ int main(int argc, const char *argv[]) {
       case '6':
 #endif
 	 if (arg1[0][2])  { socat_opt_hint(stderr, arg1[0][1], arg1[0][2]); Exit(1); }
-	 xioopts.default_ip = arg1[0][1];
-	 xioopts.preferred_ip = arg1[0][1];
+	 xioparms.default_ip = arg1[0][1];
+	 xioparms.preferred_ip = arg1[0][1];
 	 break;
 #endif /* WITH_IP4 || WITH_IP6 */
+      case '-':
+	 if (!strcmp("experimental", &arg1[0][2])) {
+	    xioparms.experimental = true;
+	 } else if (!strcmp("statistics", &arg1[0][2])) {
+	    socat_opts.statistics = true;
+	 } else {
+	    Error1("unknown option \"%s\"; use option \"-h\" for help", arg1[0]);
+	 }
+	 break;
       case '\0':
       case ',':
       case ':':
@@ -362,20 +380,33 @@ int main(int argc, const char *argv[]) {
 #endif /* WITH_MSGLEVEL <= E_DEBUG */
 
    {
+#if HAVE_SIGACTION
       struct sigaction act;
-      sigfillset(&act.sa_mask);
+#endif
+      int i, m;
+
+      sigfillset(&act.sa_mask); 	/* while in sighandler block all signals */
       act.sa_flags = 0;
       act.sa_handler = socat_signal;
       /* not sure which signals should be caught and print a message */
-      Sigaction(SIGHUP,  &act, NULL);
-      Sigaction(SIGINT,  &act, NULL);
-      Sigaction(SIGQUIT, &act, NULL);
-      Sigaction(SIGILL,  &act, NULL);
-      Sigaction(SIGABRT, &act, NULL);
-      Sigaction(SIGBUS,  &act, NULL);
-      Sigaction(SIGFPE,  &act, NULL);
-      Sigaction(SIGSEGV, &act, NULL);
-      Sigaction(SIGTERM, &act, NULL);
+      for (i = 0, m = 1; i < 8*sizeof(unsigned long); ++i, m <<= 1) {
+	 if (socat_opts.log_sigs & m) {
+#if HAVE_SIGACTION
+	    Sigaction(i,  &act, NULL);
+#else
+	    Signal(i, socat_signal);
+#endif
+	 }
+      }
+
+#if WITH_STATS
+#if HAVE_SIGACTION
+      act.sa_handler = socat_signal_logstats;
+      Sigaction(SIGUSR1, &act, NULL);
+#else
+      Signal(SIGUSR1, socat_signal_logstats);
+#endif
+#endif /* WITH_STATS */
    }
    Signal(SIGPIPE, SIG_IGN);
 
@@ -390,8 +421,16 @@ int main(int argc, const char *argv[]) {
    }
 
    Atexit(socat_unlock);
+#if WITH_STATS
+   if (socat_opts.statistics) {
+      Atexit(socat_print_stats);
+   }
+#endif /* WITH_STATS */
 
    result = socat(arg1[0], arg1[1]);
+   if (result == EXIT_SUCCESS && engine_result != EXIT_SUCCESS) {
+      result = engine_result; 	/* a signal handler reports failure */
+   }
    Notice1("exiting with status %d", result);
    Exit(result);
    return 0;	/* not reached, just for gcc -Wall */
@@ -402,22 +441,25 @@ void socat_usage(FILE *fd) {
    fputs(copyright_socat, fd); fputc('\n', fd);
    fputs("Usage:\n", fd);
    fputs("socat [options] <bi-address> <bi-address>\n", fd);
-   fputs("   options:\n", fd);
+   fputs("   options (general command line options):\n", fd);
    fputs("      -V     print version and feature information to stdout, and exit\n", fd);
 #if WITH_HELP
    fputs("      -h|-?  print a help text describing command line options and addresses\n", fd);
    fputs("      -hh    like -h, plus a list of all common address option names\n", fd);
    fputs("      -hhh   like -hh, plus a list of all available address option names\n", fd);
 #endif /* WITH_HELP */
-   fputs("      -d[ddd]         increase verbosity (use up to 4 times; 2 are recommended)\n", fd);
+   fputs("      -d[ddd]        increase verbosity (use up to 4 times; 2 are recommended)\n", fd);
+   fputs("      -d0|1|2|3|4    set verbosity level (0: Errors; 4 all including Debug)\n", fd);
 #if WITH_FILAN
    fputs("      -D     analyze file descriptors before loop\n", fd);
 #endif
+   fputs("      --experimental enable experimental features\n", fd);
+   fputs("      --statistics   output transfer statistics on exit\n", fd);
    fputs("      -ly[facility]  log to syslog, using facility (default is daemon)\n", fd);
    fputs("      -lf<logfile>   log to file\n", fd);
    fputs("      -ls            log to stderr (default if no other log)\n", fd);
    fputs("      -lm[facility]  mixed log mode (stderr during initialization, then syslog)\n", fd);
-   fputs("      -lp<progname>  set the program name used for logging\n", fd);
+   fputs("      -lp<progname>  set the program name used for logging and vars\n", fd);
    fputs("      -lu            use microseconds for logging timestamps\n", fd);
    fputs("      -lh            add hostname to log messages\n", fd);
    fputs("      -v     verbose text dump of data traffic\n", fd);
@@ -426,6 +468,7 @@ void socat_usage(FILE *fd) {
    fputs("      -R <file>      raw dump of data flowing from right to left\n", fd);
    fputs("      -b<size_t>     set data buffer size (8192)\n", fd);
    fputs("      -s     sloppy (continue on error)\n", fd);
+   fputs("      -S<sigmask>    log these signals, override default\n", fd);
    fputs("      -t<timeout>    wait seconds before closing second channel\n", fd);
    fputs("      -T<timeout>    total inactivity timeout in seconds\n", fd);
    fputs("      -u     unidirectional mode (left to right)\n", fd);
@@ -456,6 +499,16 @@ void socat_version(FILE *fd) {
    fprintf(fd, "   running on %s version %s, release %s, machine %s\n",
 	   ubuf.sysname, ubuf.version, ubuf.release, ubuf.machine);
    fputs("features:\n", fd);
+#ifdef WITH_HELP
+   fprintf(fd, "  #define WITH_HELP %d\n", WITH_HELP);
+#else
+   fputs("  #undef WITH_HELP\n", fd);
+#endif
+#ifdef WITH_STATS
+   fprintf(fd, "  #define WITH_STATS %d\n", WITH_STATS);
+#else
+   fputs("  #undef WITH_STATS\n", fd);
+#endif
 #ifdef WITH_STDIO
    fprintf(fd, "  #define WITH_STDIO %d\n", WITH_STDIO);
 #else
@@ -490,6 +543,11 @@ void socat_version(FILE *fd) {
    fprintf(fd, "  #define WITH_PIPE %d\n", WITH_PIPE);
 #else
    fputs("  #undef WITH_PIPE\n", fd);
+#endif
+#ifdef WITH_SOCKETPAIR
+   fprintf(fd, "  #define WITH_SOCKETPAIR %d\n", WITH_SOCKETPAIR);
+#else
+   fputs("  #undef WITH_SOCKETPAIR\n", fd);
 #endif
 #ifdef WITH_UNIX
    fprintf(fd, "  #define WITH_UNIX %d\n", WITH_UNIX);
@@ -541,10 +599,25 @@ void socat_version(FILE *fd) {
 #else
    fputs("  #undef WITH_SCTP\n", fd);
 #endif
+#ifdef WITH_DCCP
+   fprintf(fd, "  #define WITH_DCCP %d\n", WITH_DCCP);
+#else
+   fputs("  #undef WITH_DCCP\n", fd);
+#endif
+#ifdef WITH_UDPLITE
+   fprintf(fd, "  #define WITH_UDPLITE %d\n", WITH_UDPLITE);
+#else
+   fputs("  #undef WITH_UDPLITE\n", fd);
+#endif
 #ifdef WITH_LISTEN
    fprintf(fd, "  #define WITH_LISTEN %d\n", WITH_LISTEN);
 #else
    fputs("  #undef WITH_LISTEN\n", fd);
+#endif
+#ifdef WITH_POSIXMQ
+   fprintf(fd, "  #define WITH_POSIXMQ %d\n", WITH_POSIXMQ);
+#else
+   fputs("  #undef WITH_POSIXMQ\n", fd);
 #endif
 #ifdef WITH_SOCKS4
    fprintf(fd, "  #define WITH_SOCKS4 %d\n", WITH_SOCKS4);
@@ -556,10 +629,20 @@ void socat_version(FILE *fd) {
 #else
    fputs("  #undef WITH_SOCKS4A\n", fd);
 #endif
+#ifdef WITH_SOCKS5
+   fprintf(fd, "  #define WITH_SOCKS5 %d\n", WITH_SOCKS5);
+#else
+   fputs("  #undef WITH_SOCKS5\n", fd);
+#endif
 #ifdef WITH_VSOCK
    fprintf(fd, "  #define WITH_VSOCK %d\n", WITH_VSOCK);
 #else
    fputs("  #undef WITH_VSOCK\n", fd);
+#endif
+#ifdef WITH_NAMESPACES
+   fprintf(fd, "  #define WITH_NAMESPACES %d\n", WITH_NAMESPACES);
+#else
+   fputs("  #undef WITH_NAMESPACES\n", fd);
 #endif
 #ifdef WITH_PROXY
    fprintf(fd, "  #define WITH_PROXY %d\n", WITH_PROXY);
@@ -570,6 +653,11 @@ void socat_version(FILE *fd) {
    fprintf(fd, "  #define WITH_SYSTEM %d\n", WITH_SYSTEM);
 #else
    fputs("  #undef WITH_SYSTEM\n", fd);
+#endif
+#ifdef WITH_SHELL
+   fprintf(fd, "  #define WITH_SHELL %d\n", WITH_SHELL);
+#else
+   fputs("  #undef WITH_SHELL\n", fd);
 #endif
 #ifdef WITH_EXEC
    fprintf(fd, "  #define WITH_EXEC %d\n", WITH_EXEC);
@@ -627,12 +715,23 @@ void socat_version(FILE *fd) {
 #else
    fputs("  #undef WITH_MSGLEVEL\n", fd);
 #endif
+#ifdef WITH_DEFAULT_IPV
+#  if WITH_DEFAULT_IPV
+   fprintf(fd, "  #define WITH_DEFAULT_IPV %c\n", WITH_DEFAULT_IPV);
+#  else
+   fprintf(fd, "  #define WITH_DEFAULT_IPV '\\0'\n");
+#  endif
+#else
+   fputs("  #undef WITH_DEFAULT_IPV\n", fd);
+#endif
 }
 
 
 xiofile_t *sock1, *sock2;
 int closing = 0;	/* 0..no eof yet, 1..first eof just occurred,
 			   2..counting down closing timeout */
+int sniffleft = -1; 		/* -1 or an FD for teeing data arriving on xfd1 */
+int sniffright = -1; 	/* -1 or an FD for teeing data arriving on xfd2 */
 
 /* call this function when the common command line options are parsed, and the
    addresses are extracted (but not resolved). */
@@ -667,6 +766,7 @@ int socat(const char *address1, const char *address2) {
 	       the communication channel, so continue */
 	    Info2("child "F_pid" has already died with status %d",
 		  XIO_RDSTREAM(sock1)->para.exec.pid, statunknown[i]);
+	    ++num_child; 	/* it was counted as anonymous child, undo */
 	    if (statunknown[i] != 0) {
 	       return 1;
 	    }
@@ -721,8 +821,7 @@ int socat(const char *address1, const char *address2) {
 #endif
 
    Info("resolved and opened all sock addresses");
-   return 
-      _socat();	/* nsocks, sockets are visible outside function */
+   return _socat();	/* nsocks, sockets are visible outside function */
 }
 
 /* checks if this is a connection to a child process, and if so, sees if the
@@ -782,6 +881,7 @@ bool maywr2;		/* sock2 can be written to, according to poll() */
    and their options are set/applied
    returns -1 on error or 0 on success */
 int _socat(void) {
+   char *transferwaitstring;
    struct pollfd fds[4],
        *fd1in  = &fds[0],
        *fd1out = &fds[1],
@@ -793,6 +893,28 @@ int _socat(void) {
    int polling = 0;	/* handling ignoreeof */
    int wasaction = 1;	/* last poll was active, do NOT sleep before next */
    struct timeval total_timeout;	/* the actual total timeout timer */
+
+   {
+      /* Open sniff file(s) */
+      char name[PATH_MAX];
+      struct timeval tv = { 0 }; 	/* 'cache' to have same time in both */
+
+      if (xioinqopt('r', name, sizeof(name)) == 0) {
+	 if (sniffleft >= 0)  Close(sniffleft);
+	 sniffleft = xio_opensnifffile(name, &tv);
+	 if (sniffleft < 0) {
+	    Error2("option -r \"%s\": %s", name, strerror(errno));
+         }
+      }
+
+      if (xioinqopt('R', name, sizeof(name)) == 0) {
+	 if (sniffright >= 0)  Close(sniffright);
+	 sniffright = xio_opensnifffile(name, &tv);
+	 if (sniffright < 0) {
+	    Error2("option -R \"%s\": %s", name, strerror(errno));
+         }
+      }
+   }
 
 #if WITH_FILAN
    if (socat_opts.debug) {
@@ -824,9 +946,9 @@ int _socat(void) {
 #endif /* WITH_FILAN */
 
    /* when converting nl to crnl, size might double */
-   if (socat_opts.bufsiz > (SIZE_MAX-1)/2) {
-      Error2("buffer size option (-b) to big - "F_Zu" (max is "F_Zu")", socat_opts.bufsiz, (SIZE_MAX-1)/2);
-      socat_opts.bufsiz = (SIZE_MAX-1)/2;
+   if (xioparms.bufsiz > (SIZE_MAX-1)/2) {
+      Error2("buffer size option (-b) to big - "F_Zu" (max is "F_Zu")", xioparms.bufsiz, (SIZE_MAX-1)/2);
+      xioparms.bufsiz = (SIZE_MAX-1)/2;
    }
 
 #if HAVE_PROTOTYPE_LIB_posix_memalign
@@ -834,23 +956,27 @@ int _socat(void) {
       Without this, eg.read() fails with "Invalid argument" */
    {
       int _errno;
-      if ((_errno = Posix_memalign((void **)&buff, getpagesize(), 2*socat_opts.bufsiz+1)) != 0) {
+      if ((_errno = Posix_memalign((void **)&buff, getpagesize(), 2*xioparms.bufsiz+1)) != 0) {
 	 Error1("posix_memalign(): %s", strerror(_errno));
 	 return -1;
       }
    }
 #else /* !HAVE_PROTOTYPE_LIB_posix_memalign */
-   buff = Malloc(2*socat_opts.bufsiz+1);
+   buff = Malloc(2*xioparms.bufsiz+1);
    if (buff == NULL)  return -1;
 #endif /* !HAVE_PROTOTYPE_LIB_posix_memalign */
 
    if (socat_opts.logopt == 'm' && xioinqopt('l', NULL, 0) == 'm') {
       Info("switching to syslog");
-      diag_set('y', xioopts.syslogfac);
+      diag_set('y', xioparms.syslogfac);
       xiosetopt('l', "\0");
    }
    total_timeout = socat_opts.total_timeout;
 
+   if (transferwaitstring = getenv("SOCAT_TRANSFER_WAIT")) {
+      Info1("before starting data transfer loop: sleeping %ds (env:SOCAT_TRANSFER_WAIT)", atoi(transferwaitstring));
+      sleep(atoi(transferwaitstring));
+   }
    Notice4("starting data transfer loop with FDs [%d,%d] and [%d,%d]",
 	   XIO_GETRDFD(sock1), XIO_GETWRFD(sock1),
 	   XIO_GETRDFD(sock2), XIO_GETWRFD(sock2));
@@ -1019,7 +1145,7 @@ int _socat(void) {
 	 if (closing) {
 	    break;
 	 }
-	 /* one possibility to come here is ignoreeof on some fd, but no EOF 
+	 /* one possibility to come here is ignoreeof on some fd, but no EOF
 	    and no data on any descriptor - this is no indication for end! */
 	 continue;
       }
@@ -1029,7 +1155,7 @@ int _socat(void) {
 	 if (fd1in->revents & POLLNVAL) {
 	    /* this is what we find on Mac OS X when poll()'ing on a device or
 	       named pipe. a read() might imm. return with 0 bytes, resulting
-	       in a loop? */ 
+	       in a loop? */
 	    Error1("poll(...[%d]: invalid request", fd1in->fd);
 		  free(buff);
 	    return -1;
@@ -1064,7 +1190,7 @@ int _socat(void) {
 
       if (mayrd1 && maywr2) {
 	 mayrd1 = false;
-	 if ((bytes1 = xiotransfer(sock1, sock2, buff, socat_opts.bufsiz, false))
+	 if ((bytes1 = xiotransfer(sock1, sock2, buff, xioparms.bufsiz, false))
 	     < 0) {
 	    if (errno != EAGAIN) {
 	       closing = MAX(closing, 1);
@@ -1096,7 +1222,7 @@ int _socat(void) {
 
       if (mayrd2 && maywr1) {
 	 mayrd2 = false;
-	 if ((bytes2 = xiotransfer(sock2, sock1, buff, socat_opts.bufsiz, true))
+	 if ((bytes2 = xiotransfer(sock2, sock1, buff, xioparms.bufsiz, true))
 	     < 0) {
 	    if (errno != EAGAIN) {
 	       closing = MAX(closing, 1);
@@ -1115,7 +1241,7 @@ int _socat(void) {
 		XIO_RDSTREAM(sock2)->actbytes == 0) {
 	       /* avoid idle when all readbytes already there */
 	       mayrd2 = true;
-	    }          
+	    }
 	    /* escape char occurred? */
 	    if (XIO_RDSTREAM(sock2)->actescape) {
 	       bytes2 = 0;	/* indicate EOF */
@@ -1265,7 +1391,7 @@ static int
 /* inpipe is suspected to have read data available; read at most bufsiz bytes
    and transfer them to outpipe. Perform required data conversions.
    buff must be a malloc()'ed storage and might be realloc()'ed in this
-   function if more space is required after conversions. 
+   function if more space is required after conversions.
    Returns the number of bytes written, or 0 on EOF or <0 if an
    error occurred or when data was read but none written due to conversions
    (with EAGAIN). EAGAIN also occurs when reading from a nonblocking FD where
@@ -1277,6 +1403,7 @@ static int
 int xiotransfer(xiofile_t *inpipe, xiofile_t *outpipe,
 		unsigned char *buff, size_t bufsiz, bool righttoleft) {
    ssize_t bytes, writt = 0;
+   ssize_t sniffed;
 
 	 bytes = xioread(inpipe, buff, bufsiz);
 	 if (bytes < 0) {
@@ -1293,6 +1420,10 @@ int xiotransfer(xiofile_t *inpipe, xiofile_t *outpipe,
 	 }
 
 	 if (bytes > 0) {
+#if WITH_STATS
+	    ++XIO_RDSTREAM(inpipe)->blocks_read;
+	    XIO_RDSTREAM(inpipe)->bytes_read += bytes;
+#endif
 	    /* handle escape char */
 	    if (XIO_RDSTREAM(inpipe)->escape != -1) {
 	       /* check input data for escape char */
@@ -1326,10 +1457,24 @@ int xiotransfer(xiofile_t *inpipe, xiofile_t *outpipe,
 	       errno = EAGAIN;  return -1;
 	    }
 
-	    if (!righttoleft && socat_opts.sniffleft >= 0) {
-	       Write(socat_opts.sniffleft, buff, bytes);
-	    } else if (righttoleft && socat_opts.sniffright >= 0) {
-	       Write(socat_opts.sniffright, buff, bytes);
+	    if (!righttoleft && sniffleft >= 0) {
+	       if ((sniffed = Write(sniffleft, buff, bytes)) < bytes) {
+		  if (sniffed < 0)
+		     Warn3("-r: write(%d, buff, "F_Zu"): %s",
+			   sniffleft, bytes, strerror(errno));
+		  else if (sniffed < bytes)
+		     Warn3("-r: write(%d, buff, "F_Zu") -> "F_Zd,
+			   sniffleft, bytes, sniffed);
+	       }
+	    } else if (righttoleft && sniffright >= 0) {
+	       if ((sniffed = Write(sniffright, buff, bytes)) < bytes) {
+		  if (sniffed < 0)
+		     Warn3("-R: write(%d, buff, "F_Zu"): %s",
+			   sniffright, bytes, strerror(errno));
+		  else if (sniffed < bytes)
+		     Warn3("-R: write(%d, buff, "F_Zu") -> "F_Zd,
+			   sniffright, bytes, sniffed);
+	       }
 	    }
 
 	    if (socat_opts.verbose && socat_opts.verbhex) {
@@ -1430,6 +1575,10 @@ int xiotransfer(xiofile_t *inpipe, xiofile_t *outpipe,
 	    } else {
 	       Info3("transferred "F_Zu" bytes from %d to %d",
 		     writt, XIO_GETRDFD(inpipe), XIO_GETWRFD(outpipe));
+#if WITH_STATS
+	       ++XIO_WRSTREAM(outpipe)->blocks_written;
+	       XIO_WRSTREAM(outpipe)->bytes_written += writt;
+#endif
 	    }
 	 }
    return writt;
@@ -1494,7 +1643,7 @@ int cv_newline(unsigned char *buff, ssize_t *bytes,
 	 from = '\r';
       }
       if (buf2 == NULL) {
-	 if ((buf2 = Malloc(socat_opts.bufsiz)) == NULL) {
+	 if ((buf2 = Malloc(xioparms.bufsiz)) == NULL) {
 	    return -1;
 	 }
       }
@@ -1520,11 +1669,7 @@ void socat_signal(int signum) {
    diag_in_handler = 1;
    Notice1("socat_signal(): handling signal %d", signum);
    switch (signum) {
-   case SIGILL:
-   case SIGABRT:
-   case SIGBUS:
-   case SIGFPE:
-   case SIGSEGV:
+   default:
       diag_immediate_exit = 1;
    case SIGQUIT:
    case SIGPIPE:
@@ -1534,13 +1679,12 @@ void socat_signal(int signum) {
       break;
    case SIGTERM:
       Warn1("exiting on signal %d", signum); break;
-   case SIGHUP:  
+   case SIGHUP:
    case SIGINT:
       Notice1("exiting on signal %d", signum); break;
    }
-   //Exit(128+signum);
    Notice1("socat_signal(): finishing signal %d", signum);
-   diag_exit(128+signum);	/*!!! internal cleanup + _exit() */
+   diag_exit(128+signum);	/* internal cleanup + _exit() */
    diag_in_handler = 0;
    errno = _errno;
 }
@@ -1616,3 +1760,66 @@ static int socat_newchild(void) {
    havelock = false;
    return 0;
 }
+
+
+#if WITH_STATS
+void socat_signal_logstats(int signum) {
+   diag_in_handler = 1;
+   Notice1("socat_signal_logstats(): handling signal %d", signum);
+   socat_print_stats();
+   Notice1("socat_signal_logstats(): finishing signal %d", signum);
+   diag_in_handler = 0;
+}
+#endif /* WITH_STATS */
+
+#if WITH_STATS
+static void socat_print_stats(void)
+{
+	const char ltorf0[] = "STATISTICS: left to right: %%%ullu packets(s), %%%ullu byte(s)";
+	const char rtolf0[] = "STATISTICS: right to left: %%%ullu packets(s), %%%ullu byte(s)";
+	char ltorf1[sizeof(ltorf0)];	/* final printf format with lengths of number */
+	char rtolf1[sizeof(rtolf0)];	/* final printf format with lengths of number */
+	unsigned int blocksd = 1, bytesd = 1;	/* number of digits in output */
+	struct single *sock1w, *sock2w;
+	int savelevel;
+
+	if (sock1 == NULL || sock2 == NULL) {
+		Warn("transfer engine not yet started, statistics not available");
+		return;
+	}
+	if ((sock1->tag & ~XIO_TAG_CLOSED) == XIO_TAG_DUAL) {
+		sock1w = sock1->dual.stream[1];
+	} else {
+		sock1w = &sock1->stream;
+	}
+	if ((sock2->tag & ~XIO_TAG_CLOSED) == XIO_TAG_DUAL) {
+		sock2w = sock2->dual.stream[1];
+	} else {
+		sock2w = &sock2->stream;
+	}
+	if (!socat_opts.righttoleft && !socat_opts.righttoleft) {
+		/* Both directions - format output */
+		unsigned long long int maxblocks =
+			Max(sock1w->blocks_written, sock2w->blocks_written);
+		unsigned long long int maxbytes =
+			Max(sock1w->bytes_written,  sock2w->bytes_written);
+		/* Calculate number of digits */
+		while (maxblocks >= 10) { ++blocksd; maxblocks /= 10; }
+		while (maxbytes  >= 10) { ++bytesd;  maxbytes  /= 10; }
+	}
+	snprintf(ltorf1, sizeof(ltorf1), ltorf0, blocksd, bytesd);
+	snprintf(rtolf1, sizeof(rtolf1), rtolf0, blocksd, bytesd);
+	/* Statistics are E_INFO level; make sure they are printed anyway */
+	savelevel = diag_get_int('d');
+	diag_set_int('d', E_INFO);
+	Warn("statistics are experimental");
+	if (!socat_opts.righttoleft) {
+		Info2(ltorf1, sock2w->blocks_written, sock2w->bytes_written);
+	}
+	if (!socat_opts.lefttoright) {
+		Info2(rtolf1, sock1w->blocks_written, sock1w->bytes_written);
+	}
+	diag_set_int('d', savelevel);
+	return;
+}
+#endif /* WITH_STATs */

@@ -9,10 +9,11 @@
 
 #include "xio-termios.h"
 #include "xio-socket.h"
+#include "xio-posixmq.h"
 #include "xio-readline.h"
 #include "xio-openssl.h"
 
- 
+
 /* xioread() performs read() or recvfrom()
    If result is < 0, errno is valid */
 ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
@@ -23,7 +24,7 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
    struct single *pipe;
    int _errno;
 
-   if (file->tag == XIO_TAG_INVALID) {
+   if (file->tag == XIO_TAG_INVALID || file->tag & XIO_TAG_CLOSED) {
       Error1("xioread(): invalid xiofile descriptor %p", file);
       errno = EINVAL;
       return -1;
@@ -31,7 +32,7 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
 
    if (file->tag == XIO_TAG_DUAL) {
       pipe = file->dual.stream[0];
-      if (pipe->tag == XIO_TAG_INVALID) {
+      if (pipe->tag == XIO_TAG_INVALID || file->tag & XIO_TAG_CLOSED) {
 	 Error1("xioread(): invalid xiofile sub descriptor %p[0]", file);
 	 errno = EINVAL;
 	 return -1;
@@ -42,7 +43,7 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
 
    if (pipe->readbytes) {
       if (pipe->actbytes == 0) {
-	 Info("xioread(): readbytes consumed, inserting EOF");
+	 Info1("xioread(%d, ...): readbytes consumed, inserting EOF", pipe->fd);
 	 return 0;	/* EOF by count */
       }
 
@@ -59,12 +60,9 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
       if (bytes < 0) {
 	 _errno = errno;
 	 switch (_errno) {
-#if 1
-	 case EPIPE: case ECONNRESET:
-	    Warn4("read(%d, %p, "F_Zu"): %s",
-		  pipe->fd, buff, bufsiz, strerror(_errno));
-	    break;
-#endif
+	 case EPIPE:
+	 case ECONNRESET:
+	    /*PASSTHROUGH*/
 	 default:
 	    Error4("read(%d, %p, "F_Zu"): %s",
 		   pipe->fd, buff, bufsiz, strerror(_errno));
@@ -75,29 +73,65 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
       break;
 
    case XIOREAD_PTY:
-      do {
+   {
+       int eio = 0;
+       bool m = false; 	/* loop message printed? */
+      while (true) {
+       do {
 	 bytes = Read(pipe->fd, buff, bufsiz);
-      } while (bytes < 0 && errno == EINTR);
-      if (bytes < 0) {
+       } while (bytes < 0 && errno == EINTR);
+       if (bytes < 0) {
 	 _errno = errno;
-	 if (_errno == EIO) {
-	    Notice4("read(%d, %p, "F_Zu"): %s (probably PTY closed)",
-		    pipe->fd, buff, bufsiz, strerror(_errno));
-	    return 0;
-	 } else {
-	    Error4("read(%d, %p, "F_Zu"): %s",
-		   pipe->fd, buff, bufsiz, strerror(_errno));
+	 if (_errno != EIO) {
+	    Error4("read(%d, %p, "F_Zu"): %s", pipe->fd, buff, bufsiz, strerror(_errno));
+	    errno = _errno;
+	    return -1;
 	 }
-	 errno = _errno;
+	 if (pipe->para.exec.sitout_eio.tv_sec == 0 &&
+	     pipe->para.exec.sitout_eio.tv_usec == 0) {
+		Notice4("read(%d, %p, "F_Zu"): %s (probably PTY closed)",
+			pipe->fd, buff, bufsiz, strerror(_errno));
+		return 0;
+	 }
+	 if (!m) {
+		 /* Starting first iteration: calc and report */
+		 /* Round up to 10ms */
+		 eio = 100*pipe->para.exec.sitout_eio.tv_sec +
+			    (pipe->para.exec.sitout_eio.tv_usec+9999)/10000;
+		 Notice3("xioread(fd=%d): EIO, sitting out %u.%02lus for recovery", pipe->fd, eio/100, (unsigned long)eio%100);
+		 m = true;
+	 }
+	 poll(NULL, 0, 10);
+	 if (--eio <= 0) {
+		 /* Timeout */
+		 Error4("read(%d, %p, "F_Zu"): %s", pipe->fd, buff, bufsiz, strerror(_errno));
+		 errno = _errno;
+		 return -1;
+	 }
+	 /* Not reached */
+       } else
+	       break; 	/* no error */
+      }
+   }
+   return bytes;
+   break;
+
+#if WITH_POSIXMQ
+   case XIOREAD_POSIXMQ:
+      if ((bytes = xioread_posixmq(pipe, buff, bufsiz)) < 0) {
 	 return -1;
       }
+      if (pipe->dtype & XIOREAD_RECV_ONESHOT) {
+	 pipe->eof = 2;
+      }
       break;
+#endif /* WITH_POSIXMQ */
 
 #if WITH_READLINE
    case XIOREAD_READLINE:
       if ((bytes = xioread_readline(pipe, buff, bufsiz)) < 0) {
 	 return -1;
-      }      
+      }
       break;
 #endif /* WITH_READLINE */
 
@@ -112,7 +146,31 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
 
 #if _WITH_SOCKET
    case XIOREAD_RECV:
-     if (pipe->dtype & XIOREAD_RECV_FROM) {
+     if (pipe->dtype & XIOREAD_RECV_NOCHECK) {
+	/* No need to check peer address */
+      do {
+	 bytes =
+	    Recv(pipe->fd, buff, bufsiz, 0);
+      } while (bytes < 0 && errno == EINTR);
+      if (bytes < 0) {
+	 _errno = errno;
+	 Error3("recvfrom(%d, %p, "F_Zu", 0", pipe->fd, buff, bufsiz);
+	 errno = _errno;
+	 return -1;
+      }
+      Notice1("received packet with "F_Zu" bytes", bytes);
+      if (bytes == 0) {
+	 if (!pipe->para.socket.null_eof) {
+	    errno = EAGAIN; return -1;
+	 }
+	 return bytes;
+      }
+
+     } else if (pipe->dtype & XIOREAD_RECV_FROM) {
+      /* Receiving packets in addresses of RECVFROM types, the sender address
+	   has already been determined in OPEN phase. */
+      Debug1("%s(): XIOREAD_RECV and XIOREAD_RECV_FROM (peer checks already done)",
+	     __func__);
 #if WITH_RAWIP || WITH_UDP || WITH_UNIX
       struct msghdr msgh = {0};
       union sockaddr_union from = {{0}};
@@ -129,8 +187,7 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
 #if HAVE_STRUCT_MSGHDR_MSGCONTROLLEN
       msgh.msg_controllen = sizeof(ctrlbuff);
 #endif
-
-      while ((rc = xiogetpacketsrc(pipe->fd, &msgh,
+      while ((rc = xiogetancillary(pipe->fd, &msgh,
 			  MSG_PEEK
 #ifdef MSG_TRUNC
 			  |MSG_TRUNC
@@ -138,6 +195,9 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
 				   )) < 0 &&
 	     errno == EINTR) ;
       if (rc < 0)  return -1;
+
+      /* Note: we do not call xiodopacketinfo() and xiocheckpeer() here because
+	 that already happened in xioopen() / _xioopen_dgram_recvfrom() ... */
 
       do {
 	 bytes =
@@ -153,17 +213,46 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
 	 errno = _errno;
 	 return -1;
       }
-      /* on packet type we also receive outgoing packets, this is not desired
-       */
-#if defined(PF_PACKET) && defined(PACKET_OUTGOING)
+
+#if defined(PF_PACKET) && !defined(PACKET_IGNORE_OUTGOING) && defined(PACKET_OUTGOING)
+      /* In future versions there may be an option that controls receiving of
+	 outgoing packets, but currently it is hardcoded that we try to avoid
+	 them - either by once setting socket option PACKET_IGNORE_OUTGOING
+	 when available, otherwise by checking flag PACKET_OUTGOING per packet.
+      */
       if (from.soa.sa_family == PF_PACKET) {
-	 if ((from.ll.sll_pkttype & PACKET_OUTGOING)
-	    == 0) {
-	    errno = EAGAIN;  return -1;
+	 if ((from.ll.sll_pkttype & PACKET_OUTGOING) != 0) {
+	    Info2("%s(fd=%d): ignoring outgoing packet", __func__, pipe->fd);
+	    errno = EAGAIN;
+	    return -1;
+	 }
+	 Debug2("%s(fd=%d): packet is not outgoing - process it", __func__, pipe->fd);
+      }
+#endif /* defined(PF_PACKET) && !defined(PACKET_IGNORE_OUTGOING) && defined(PACKET_OUTGOING) */
+
+#if defined(PF_PACKET) && HAVE_STRUCT_TPACKET_AUXDATA
+      if (from.soa.sa_family == PF_PACKET) {
+	 Debug3("xioread(FD=%d, ...): auxdata: flag=%d, vlan-id=%d",
+		pipe->fd, pipe->para.socket.ancill_flag.packet_auxdata,
+		pipe->para.socket.ancill_data_packet_auxdata.tp_vlan_tci);
+	 if (pipe->para.socket.retrieve_vlan &&
+	     pipe->para.socket.ancill_flag.packet_auxdata &&
+	     pipe->para.socket.ancill_data_packet_auxdata.tp_vlan_tci != 0) {
+	    int offs = 12; 	/* packet type id in Ethernet header */
+	    Debug1("xioread(%d, ...): restoring VLAN id from auxdata->tp_vlan_tci",
+		   pipe->fd);
+	    if (bytes+4 > bufsiz) {
+	       Error("buffer too small to restore VLAN id");
+	    }
+	    memmove((char *)buff+offs+4, (char *)buff+offs, bytes-offs);
+	    ((unsigned short *)((char *)buff+offs))[0] = htons(ETH_P_8021Q);
+	    ((unsigned short *)((char *)buff+offs))[1] =
+	       htons(pipe->para.socket.ancill_data_packet_auxdata.tp_vlan_tci);
+	    bytes += 4;
 	 }
       }
-#endif /* defined(PF_PACKET) && defined(PACKET_OUTGOING) */
-	    
+#endif /* defined(PF_PACKET && HAVE_STRUCT_TPACKET_AUXDATA */
+
       Notice2("received packet with "F_Zu" bytes from %s",
 	      bytes,
 	      sockaddr_info(&from.soa, fromlen, infobuff, sizeof(infobuff)));
@@ -271,8 +360,10 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
 #else
 	 Shutdown(pipe->fd, SHUT_RD);
 #endif
-	 if (pipe->ppid > 0) {
-	    Kill(pipe->ppid, SIGUSR1);
+	 if (pipe->triggerfd >= 0) {
+	    Info("notifying parent that socket is ready again");
+	    Close(pipe->triggerfd);
+	    pipe->triggerfd = -1;
 	 }
       }
 
@@ -312,19 +403,24 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
 	 continue;
       }
 #endif
-#else /* !WITH_RAWIP */
+#else /* !(WITH_RAWIP || WITH_UDP || WITH_UNIX) */
       Fatal("address requires raw sockets, but they are not compiled in");
       return -1;
-#endif /* !WITH_RAWIP || WITH_UDP || WITH_UNIX */
+#endif /* !(WITH_RAWIP || WITH_UDP || WITH_UNIX) */
 
-     } else /* ~XIOREAD_RECV_FROM */ {
-      union sockaddr_union from;  socklen_t fromlen = sizeof(from);
-      char infobuff[256];
+     } else /* ~(XIOREAD_RECV_FROM|XIOREAD_RECV_FROM) */ {
+	/* Receiving packets without planning to answer to the sender, but we
+	   might need sender info for some checks, thus we use recvfrom() */
       struct msghdr msgh = {0};
+      union sockaddr_union from = {{ 0 }};
+      socklen_t fromlen = sizeof(from);
+      char infobuff[256];
       char ctrlbuff[1024];	/* ancillary messages */
       int rc;
 
-      socket_init(pipe->para.socket.la.soa.sa_family, &from);
+      Debug1("%s(): XIOREAD_RECV and not XIOREAD_RECV_FROM (peer checks to be done)",
+	     __func__);
+
       /* get source address */
       msgh.msg_name = &from;
       msgh.msg_namelen = fromlen;
@@ -334,7 +430,7 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
 #if HAVE_STRUCT_MSGHDR_MSGCONTROLLEN
       msgh.msg_controllen = sizeof(ctrlbuff);
 #endif
-      while ((rc = xiogetpacketsrc(pipe->fd, &msgh,
+      while ((rc = xiogetancillary(pipe->fd, &msgh,
 			  MSG_PEEK
 #ifdef MSG_TRUNC
 			  |MSG_TRUNC
@@ -343,7 +439,7 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
 	     errno == EINTR) ;
       if (rc < 0)  return -1;
 
-      xiodopacketinfo(&msgh, true, false);
+      xiodopacketinfo(pipe, &msgh, true, false);
       if (xiocheckpeer(pipe, &from, &pipe->para.socket.la) < 0) {
 	 Recvfrom(pipe->fd, buff, bufsiz, 0, &from.soa, &fromlen);  /* drop */
 	 errno = EAGAIN;  return -1;
@@ -366,9 +462,46 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
 	 errno = _errno;
 	 return -1;
       }
+
+#if defined(PF_PACKET) && !defined(PACKET_IGNORE_OUTGOING) && defined(PACKET_OUTGOING)
+      /* For remarks see similar section above */
+      if (from.soa.sa_family == PF_PACKET) {
+	 if ((from.ll.sll_pkttype & PACKET_OUTGOING) != 0) {
+	     Info2("%s(fd=%d): ignoring outgoing packet", __func__, pipe->fd);
+	    errno = EAGAIN;
+	    return -1;
+	 }
+	 Debug2("%s(fd=%d): packet is not outgoing - process it", __func__, pipe->fd);
+      }
+#endif /* defined(PF_PACKET) && !defined(PACKET_IGNORE_OUTGOING) && defined(PACKET_OUTGOING) */
+
+#if defined(PF_PACKET) && HAVE_STRUCT_TPACKET_AUXDATA
+      if (from.soa.sa_family == PF_PACKET) {
+	 Debug3("xioread(%d, ...): auxdata: flag=%d, vlan-id=%d",
+		pipe->fd, pipe->para.socket.ancill_flag.packet_auxdata,
+		pipe->para.socket.ancill_data_packet_auxdata.tp_vlan_tci);
+	 if (pipe->para.socket.ancill_flag.packet_auxdata &&
+	     pipe->para.socket.ancill_data_packet_auxdata.tp_vlan_tci &&
+	     pipe->para.socket.ancill_data_packet_auxdata.tp_net >= 2) {
+	    Debug2("xioread(%d, ...): restoring VLAN id %d", pipe->fd, pipe->para.socket.ancill_data_packet_auxdata.tp_vlan_tci);
+	    int offs = pipe->para.socket.ancill_data_packet_auxdata.tp_net - 2;
+	    if (bytes+4 > bufsiz) {
+	       Error("buffer too small to restore VLAN id");
+	    }
+	    Debug3("xioread(): memmove(%p, %p, "F_Zu")", (char *)buff+offs+4, (char *)buff+offs, bytes-offs);
+	    memmove((char *)buff+offs+4, (char *)buff+offs, bytes-offs);
+	    ((unsigned short *)((char *)buff+offs))[0] = htons(ETH_P_8021Q);
+	    ((unsigned short *)((char *)buff+offs))[1] =
+	       htons(pipe->para.socket.ancill_data_packet_auxdata.tp_vlan_tci);
+	    bytes += 4;
+	 }
+      }
+#endif /* defined(PF_PACKET) &&& HAVE_STRUCT_TPACKET_AUXDATA */
+
       Notice2("received packet with "F_Zu" bytes from %s",
 	      bytes,
 	      sockaddr_info(&from.soa, fromlen, infobuff, sizeof(infobuff)));
+
       if (bytes == 0) {
 	 if (!pipe->para.socket.null_eof) {
 	    errno = EAGAIN; return -1;
@@ -431,7 +564,7 @@ ssize_t xioread(xiofile_t *file, void *buff, size_t bufsiz) {
 ssize_t xiopending(xiofile_t *file) {
    struct single *pipe;
 
-   if (file->tag == XIO_TAG_INVALID) {
+   if (file->tag == XIO_TAG_INVALID || file->tag & XIO_TAG_CLOSED) {
       Error1("xiopending(): invalid xiofile descriptor %p", file);
       errno = EINVAL;
       return -1;
@@ -439,7 +572,7 @@ ssize_t xiopending(xiofile_t *file) {
 
    if (file->tag == XIO_TAG_DUAL) {
       pipe = file->dual.stream[0];
-      if (pipe->tag == XIO_TAG_INVALID) {
+      if (pipe->tag == XIO_TAG_INVALID || file->tag & XIO_TAG_CLOSED) {
 	 Error1("xiopending(): invalid xiofile sub descriptor %p[0]", file);
 	 errno = EINVAL;
 	 return -1;

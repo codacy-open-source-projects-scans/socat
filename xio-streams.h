@@ -3,7 +3,7 @@
 /* Published under the GNU General Public License V.2, see file COPYING */
 
 /* when including this file select one part that you need by defining the
-   appropriate CPP define: 
+   appropriate CPP define:
 
    (none): standard define, variable, and function declarations
    ENABLE_OPTCODE: option codes for use in enum e_optcode

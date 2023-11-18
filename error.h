@@ -228,9 +228,9 @@ struct diag_dgram {
    char text[TEXTLEN];
 } ;
 
-extern sig_atomic_t diag_in_handler;
-extern sig_atomic_t diag_immediate_msg;
-extern sig_atomic_t diag_immediate_exit;
+extern volatile sig_atomic_t diag_in_handler;
+extern volatile sig_atomic_t diag_immediate_msg;
+extern volatile sig_atomic_t diag_immediate_exit;
 
 extern void diag_set(char what, const char *arg);
 extern void diag_set_int(char what, int arg);

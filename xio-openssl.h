@@ -26,6 +26,12 @@ extern const struct optdesc opt_openssl_dhparam;
 extern const struct optdesc opt_openssl_cafile;
 extern const struct optdesc opt_openssl_capath;
 extern const struct optdesc opt_openssl_egd;
+#if HAVE_SSL_CTX_set_tlsext_max_fragment_length || defined(SSL_CTX_set_tlsext_max_fragment_length)
+extern const struct optdesc opt_openssl_maxfraglen;
+#endif
+#if HAVE_SSL_CTX_set_max_send_fragment || defined(SSL_CTX_set_max_send_fragment)
+extern const struct optdesc opt_openssl_maxsendfrag;
+#endif
 extern const struct optdesc opt_openssl_pseudo;
 #if OPENSSL_VERSION_NUMBER >= 0x00908000L
 extern const struct optdesc opt_openssl_compress;

@@ -3,7 +3,7 @@
 /* Published under the GNU General Public License V.2, see file COPYING */
 
 /* the subroutine filan makes a "FILe descriptor ANalysis". It checks the
-   type of file descriptor and tries to retrieve as much info about it as 
+   type of file descriptor and tries to retrieve as much info about it as
    possible without modifying its state.
    NOTE: it works on UNIX (kernel) file descriptors, not on libc files! */
 
@@ -79,7 +79,7 @@ int filan_file(const char *filename, FILE *outfile) {
    default:
       if ((fd =
 	   Open(filename,  O_RDONLY|O_NOCTTY|O_NONBLOCK
-#ifdef O_NOFOLLOW		
+#ifdef O_NOFOLLOW
 		|(filan_followsymlinks?0:O_NOFOLLOW)
 #endif
 #ifdef O_LARGEFILE
@@ -91,7 +91,7 @@ int filan_file(const char *filename, FILE *outfile) {
 	       filename, strerror(errno));
       }
    }
-     
+
    result = filan_stat(&buf, fd, -1, outfile, filename);
    fputc('\n', outfile);
    return result;
@@ -146,10 +146,10 @@ int filan_fd(int fd, FILE *outfile) {
 	    ;
 #if HAVE_POLL
 	 if (Poll(&ufds, 1, 0) < 0) {
-	    Warn4("poll({%d, %hd, %hd}, 1, 0): %s",
+	    Warn4("\tpoll({%d, %hd, %hd}, 1, 0): %s",
 		   ufds.fd, ufds.events, ufds.revents, strerror(errno));
 	 } else {
-	    fputs("poll: ", outfile);
+	    fputs("\tpoll: ", outfile);
 	    if (ufds.revents & POLLIN)   fputs("IN,", outfile);
 	    if (ufds.revents & POLLPRI)  fputs("PRI,", outfile);
 	    if (ufds.revents & POLLOUT)  fputs("OUT,", outfile);
@@ -200,7 +200,7 @@ int filan_fd(int fd, FILE *outfile) {
 	       }
 	    }
 #endif /* _WITH_SOCKET && defined(MSG_DONTWAIT) */
-	 }	 
+	 }
 #endif /* HAVE_POLL */
       }
    }
@@ -378,6 +378,9 @@ int filan_stat(
   if (statfd >= 0) { /*!indent */
    switch (buf->st_mode&S_IFMT) {
    case (S_IFIFO):	/* 1, FIFO */
+#if defined(F_GETPIPE_SZ)
+      fprintf(outfile, "\tF_GETPIPE_SZ=%d", Fcntl(statfd, F_GETPIPE_SZ));
+#endif
       break;
    case (S_IFCHR):	/* 2, character device */
       cdevan(statfd, outfile);
@@ -412,8 +415,12 @@ int filan_stat(
 	{
 	   char linktarget[PATH_MAX+1];
 	   memset(linktarget, 0, PATH_MAX+1);
-	   Readlink(filename, linktarget, PATH_MAX);
-	   fprintf(outfile, "LINKTARGET=%s", linktarget);
+	   if (Readlink(filename, linktarget, PATH_MAX) < 0) {
+	      Warn3("readlink(\"%s\", linktarget, %d): %s",
+		    filename, PATH_MAX, strerror(errno));
+	   } else {
+	      fprintf(outfile, "LINKTARGET=%s", linktarget);
+	   }
 	}
 	break;
 #endif /* S_IFLNK */
@@ -642,7 +649,7 @@ int sockan(int fd, FILE *outfile) {
 #     define TYPENAMEMAX 16
       char typename[TYPENAMEMAX];
       sockettype(*optval.i, typename, sizeof(typename));
-      
+
       Debug3("fd %d: socket of type %d (\"%s\")", fd, *optval.i,
 	  typename);
    }
@@ -790,7 +797,7 @@ int ipan(int fd, FILE *outfile) {
    const struct sockopt *optname;
    int optproto;
    socklen_t optlen = sizeof(optproto);
-   
+
    optname = ipopts; while (optname->so) {
       sockoptan(fd, optname, SOL_IP, outfile);
       ++optname;
@@ -825,7 +832,7 @@ int ip6an(int fd, FILE *outfile) {
 #endif
       {0, NULL} } ;
    const struct sockopt *optname;
-   
+
    optname = ip6opts; while (optname->so) {
       sockoptan(fd, optname, SOL_IPV6, outfile);
       ++optname;
@@ -952,9 +959,11 @@ int tcpan2(int fd, FILE *outfile) {
    fprintf(outfile, "%s={%u}\t", "TCPI_OPTIONS", 	tcpinfo.tcpi_options);
    fprintf(outfile, "%s={%u}\t", "TCPI_SND_WSCALE", 	tcpinfo.tcpi_snd_wscale);
    fprintf(outfile, "%s={%u}\t", "TCPI_RCV_WSCALE", 	tcpinfo.tcpi_rcv_wscale);
-   //fprintf(outfile, "%s={%u}\t", "TCPI_DELIVERY_RATE_APP_LIMITED", tcpinfo.tcpi_delivery_rate_app_limited);
-   //fprintf(outfile, "%s={%u}\t", "TCPI_FASTOPEN_CLIENT_FAIL", tcpinfo.tcpi_fastopen_client_fail);
-   // fprintf(outfile, "%s={%u}\t", "TCPI_", tcpinfo.tcpi_);
+#if LATER
+   fprintf(outfile, "%s={%u}\t", "TCPI_DELIVERY_RATE_APP_LIMITED", tcpinfo.tcpi_delivery_rate_app_limited);
+   fprintf(outfile, "%s={%u}\t", "TCPI_FASTOPEN_CLIENT_FAIL", tcpinfo.tcpi_fastopen_client_fail);
+   fprintf(outfile, "%s={%u}\t", "TCPI_", tcpinfo.tcpi_);
+#endif
 
    return 0;
 }
@@ -1057,4 +1066,4 @@ static int printtime(FILE *outfile, time_t time) {
       fputs(s, outfile);
    }
    return 0;
-}   
+}

@@ -5,12 +5,12 @@
 #ifndef __xio_tcp_h_included
 #define __xio_tcp_h_included 1
 
-extern const struct addrdesc addr_tcp_connect;
-extern const struct addrdesc addr_tcp_listen;
-extern const struct addrdesc addr_tcp4_connect;
-extern const struct addrdesc addr_tcp4_listen;
-extern const struct addrdesc addr_tcp6_connect;
-extern const struct addrdesc addr_tcp6_listen;
+extern const struct addrdesc xioaddr_tcp_connect;
+extern const struct addrdesc xioaddr_tcp_listen;
+extern const struct addrdesc xioaddr_tcp4_connect;
+extern const struct addrdesc xioaddr_tcp4_listen;
+extern const struct addrdesc xioaddr_tcp6_connect;
+extern const struct addrdesc xioaddr_tcp6_listen;
 
 extern const struct optdesc opt_tcp_nodelay;
 extern const struct optdesc opt_tcp_maxseg;

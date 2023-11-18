@@ -26,6 +26,6 @@ extern const struct optdesc opt_o_priv;
 extern const struct optdesc opt_o_trunc;
 extern const struct optdesc opt_o_noatime;
 
-extern const struct addrdesc addr_open;
+extern const struct addrdesc xioaddr_open;
 
 #endif /* !defined(__xio_file_h_included) */

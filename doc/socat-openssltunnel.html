@@ -39,22 +39,21 @@ client.</p>
 <p>Perform the following steps on a trusted host where OpenSSL is
 installed. It might as well be the client or server host themselves.</p>
 <p>Prepare a basename for the files related to the server certificate:</p>
-<span class="frame"><span class="shell">FILENAME=server</span></span>
+<span class="shell">FILENAME=server</span>
 
 <p>Generate a public/private key pair:</p>
-<span class="frame"><span class="shell">openssl genrsa -out $FILENAME.key 2048</span></span>
+<span class="shell">openssl genrsa -out $FILENAME.key 2048</span>
 
 <p>Generate a self signed certificate:</p>
-<span class="frame"><span class="shell">
-openssl req -new -key $FILENAME.key -x509 -days 3653 -out $FILENAME.crt</span></span>
+<span class="shell">openssl req -new -key $FILENAME.key -x509 -days 3653 -out $FILENAME.crt</span>
 <p>You will be prompted for your country code, name etc.; you may quit all prompts
 with the ENTER key, except for the Common Name which must be exactly the name or IP address of the server that the client will use.</p>
 <p>Generate the PEM file by just appending the key and certificate files:<p>
-<span class="frame"><span class="shell">cat $FILENAME.key $FILENAME.crt &gt;$FILENAME.pem</span></span>
+<span class="shell">cat $FILENAME.key $FILENAME.crt &gt;$FILENAME.pem</span>
 
 <p>The files that contain the private key should be kept secret, thus adapt
 their permissions:<p>
-<span class="frame"><span class="shell">chmod 600 $FILENAME.key $FILENAME.pem</span></span>
+<span class="shell">chmod 600 $FILENAME.key $FILENAME.pem</span>
 
 <p>Now bring the file <tt>server.pem</tt> to the SSL server, e.g. to directory
 <tt>$HOME/etc/</tt>, using a secure channel like USB memory stick or SSH. Keep
@@ -68,7 +67,7 @@ are not critical.
 
 <h3>Generate a client certificate</h3>
 <p>First prepare a different basename for the files related to the client certificate:</p>
-<span class="frame"><span class="shell">FILENAME=client</span></span>
+<span class="shell">FILENAME=client</span>
 
 <p>Repeat the procedure for certificate generation described above. A special common name is not required.
 Copy <tt>client.pem</tt> to the SSL client, and <tt>client.crt</tt> to the
@@ -81,7 +80,9 @@ for the server, <tt>cert=...</tt> tells the program to the file containing its
 ceritificate and private key, and <tt>cafile=...</tt> points to the file
 containing the certificate of the peer; we trust clients only if they can proof
 that they have the related private key (OpenSSL handles this for us):<p>
-<span class="frame"><span class="shell">socat OPENSSL-LISTEN:4433,reuseaddr,cert=$HOME/etc/server.pem,cafile=$HOME/etc/client.crt PIPE</span></span>
+<span class="shell">socat \
+    OPENSSL-LISTEN:4433,reuseaddr,cert=$HOME/etc/server.pem,cafile=$HOME/etc/client.crt \
+    PIPE</span>
 <p>After starting this command, socat should be listening on port 4433, but
 will require client authentication.</p>
 
@@ -89,7 +90,8 @@ will require client authentication.</p>
 <p>Substitute your <tt>tcp-connect</tt> or <tt>tcp</tt> address keyword with
 <tt>openssl-connect</tt> or just <tt>ssl</tt> and here too add the
 <tt>cert</tt> and <tt>cafile</tt> options:<p>
-<span class="frame"><span class="shell">socat STDIO OPENSSL-CONNECT:server.domain.org:4433,cert=$HOME/etc/client.pem,cafile=$HOME/etc/server.crt</span></span>
+<span class="shell">socat STDIO \
+    OPENSSL-CONNECT:server.domain.org:4433,cert=$HOME/etc/client.pem,cafile=$HOME/etc/server.crt</span>
 <p>This command should establish a secured connection to the server
 process.</p>
 
@@ -99,21 +101,23 @@ process.</p>
 to be adapted; <tt>ip6name.domain.org</tt> is assumed to resolve to the IPv6
 address of the server:</p>
 <p>Server:</p>
-<span class="frame"><span class="shell">socat
-OPENSSL-LISTEN:4433,<b style="color:yellow">pf=ip6</b>,reuseaddr,cert=$HOME/etc/server.pem,cafile=$HOME/etc/client.crt PIPE</span></span>
+<span class="shell">socat \
+    OPENSSL-LISTEN:4433,<b style="color:yellow">pf=ip6</b>,reuseaddr,cert=$HOME/etc/server.pem,cafile=$HOME/etc/client.crt \
+    PIPE</span>
 
 <p>Client:</p>
-<span class="frame"><span class="shell">socat STDIO OPENSSL-CONNECT:<b style="color:yellow">ip6name</b>.domain.org:4433,cert=$HOME/etc/client.pem,cafile=$HOME/etc/server.crt</span></span>
+<span class="shell">socat STDIO \
+    OPENSSL-CONNECT:<b style="color:yellow">ip6name</b>.domain.org:4433,cert=$HOME/etc/client.pem,cafile=$HOME/etc/server.crt</span>
 
 <h2>Troubleshooting</h2>
 
 <h3>Test OpenSSL Integration</h3>
 <p>
 If you get error messages like this:</p>
-<table border="1" bgcolor="#e08080"><tr><td><tt>... E unknown device/address "openssl-listen"</tt></td></tr></table>
+<span class="error">... E unknown device/address "OPENSSL-LISTEN"</span>
 <p>your socat executable probably does not have the OpenSSL library linked in. 
 Check socat's compile time configuration with the following command:</p>
-<span class="frame"><span class="shell">socat -V |grep SSL</span></span>
+<span class="shell">socat -V |grep SSL</span>
 <p>Positive output: 
 <tt>#define WITH_OPENSSL 1</tt><br>
 Negative output: 

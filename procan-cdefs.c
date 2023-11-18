@@ -41,6 +41,14 @@ int procan_cdefs(FILE *outfile) {
    fprintf(outfile, "#define SHUT_RDWR %u\n", SHUT_RDWR);
 #endif
 
+   /* Compile time controls */
+#ifdef _FILE_OFFSET_BITS
+   fprintf(outfile, "#define _FILE_OFFSET_BITS %u\n", _FILE_OFFSET_BITS);
+#endif
+#ifdef _LARGE_FILES
+   fprintf(outfile, "#define _LARGE_FILES %u\n", _LARGE_FILES);
+#endif
+
    /* termios constants */
 #ifdef CRDLY
    fprintf(outfile, "#define CRDLY 0%011o\n", CRDLY);
@@ -85,6 +93,9 @@ int procan_cdefs(FILE *outfile) {
 #endif
 
    /* socket constants */
+#ifdef PF_UNSPEC
+   fprintf(outfile, "#define PF_UNSPEC %d\n", PF_UNSPEC);
+#endif
 #ifdef PF_UNIX
    fprintf(outfile, "#define PF_UNIX %d\n", PF_UNIX);
 #elif defined(PF_LOCAL)
@@ -101,6 +112,9 @@ int procan_cdefs(FILE *outfile) {
 #endif
 #ifdef PF_PACKET
    fprintf(outfile, "#define PF_PACKET %d\n", PF_PACKET);
+#endif
+#ifdef PF_VSOCK
+   fprintf(outfile, "#define PF_VSOCK %d\n", PF_VSOCK);
 #endif
 #ifdef SOCK_STREAM
    fprintf(outfile, "#define SOCK_STREAM %d\n", SOCK_STREAM);
@@ -126,11 +140,17 @@ int procan_cdefs(FILE *outfile) {
 #ifdef IPPROTO_UDP
    fprintf(outfile, "#define IPPROTO_UDP %d\n", IPPROTO_UDP);
 #endif
+#ifdef IPPROTO_DCCP
+   fprintf(outfile, "#define IPPROTO_DCCP %d\n", IPPROTO_DCCP);
+#endif
 #ifdef IPPROTO_SCTP
    fprintf(outfile, "#define IPPROTO_SCTP %d\n", IPPROTO_SCTP);
 #endif
-#ifdef IPPROTO_DCCP
-   fprintf(outfile, "#define IPPROTO_DCCP %d\n", IPPROTO_DCCP);
+#ifdef IPPROTO_UDPLITE
+   fprintf(outfile, "#define IPPROTO_UDPLITE %d\n", IPPROTO_UDPLITE);
+#endif
+#ifdef IPPROTO_RAW
+   fprintf(outfile, "#define IPPROTO_RAW %d\n", IPPROTO_RAW);
 #endif
 #ifdef SOL_SOCKET
    fprintf(outfile, "#define SOL_SOCKET 0x%x\n", SOL_SOCKET);
@@ -155,6 +175,12 @@ int procan_cdefs(FILE *outfile) {
 #endif
 #ifdef SOL_DCCP
    fprintf(outfile, "#define SOL_DCCP 0x%x\n", SOL_DCCP);
+#endif
+#ifdef SO_PROTOCOL
+   fprintf(outfile, "#define SO_PROTOCOL %d\n", SO_PROTOCOL);
+#endif
+#ifdef SO_PROTOTYPE
+   fprintf(outfile, "#define SO_PROTOTYPE %d\n", SO_PROTOTYPE);
 #endif
 #ifdef SO_REUSEADDR
    fprintf(outfile, "#define SO_REUSEADDR %d\n", SO_REUSEADDR);

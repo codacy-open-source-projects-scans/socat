@@ -1,6 +1,6 @@
 
-%define majorver 1.7
-%define minorver 4.4
+%define majorver 1.8
+%define minorver 0.0
 
 Summary: socat - multipurpose relay
 Name: socat
@@ -38,15 +38,26 @@ mkdir -p $RPM_BUILD_ROOT%{_bindir}
 mkdir -p $RPM_BUILD_ROOT%{_mandir}/man1
 
 make install DESTDIR=$RPM_BUILD_ROOT
+mv $RPM_BUILD_ROOT%{_bindir}/socat $RPM_BUILD_ROOT%{_bindir}/socat1
+mv $RPM_BUILD_ROOT%{_mandir}/man1/socat.1 $RPM_BUILD_ROOT%{_mandir}/man1/socat1.1
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root)
-%doc README CHANGES EXAMPLES SECURITY doc/xio.help doc/socat.html FAQ BUGREPORTS
+%doc README CHANGES EXAMPLES SECURITY doc/socat.html FAQ BUGREPORTS
 %doc COPYING COPYING.OpenSSL FILES PORTING DEVELOPMENT
+%{_bindir}/socat1
 %{_bindir}/socat
 %{_bindir}/procan
 %{_bindir}/filan
-%{_mandir}/man1/socat.1*
+%{_mandir}/man1/socat1.1
+
+%post
+ln -s -f socat1 %{_binddir}/socat
+ln -s -f socat1.1 %{_mandir}/man1/socat.1
+
+%postun
+rm -f %{_bindir}/socat
+rm -f %{_mandir}/man1/socat.1

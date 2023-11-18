@@ -56,7 +56,7 @@ ACTIVE PHASE:
     names (sorted strictly ASCII for binary search)
   . filan.c: add the option to the appropriate array (sockopts, ipopts,
     tcpopts) 
-  . socat.html, socat.1, xio.help: write a short documentation and tell which
+  . socat.html, socat.1: write a short documentation and tell which
     platform and version implements this option
 
 * problems may occur especially:

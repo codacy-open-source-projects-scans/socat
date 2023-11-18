@@ -45,29 +45,17 @@ distributions.
 platforms
 ---------
 
-socat 1.7.0 was compiled and more or less successfully tested under the
+socat 1.8.0 was compiled and more or less successfully tested under the
 following operating systems:
 
-Debian lenny/sid on x86, kernel 2.6.24
-FreeBSD 6.1 on x86
-NetBSD 4.0  on x86
-OpenBSD 4.3 on x86
-OpenSolaris 10 on x86 with gcc
-Mac OS X 10.5.5 on iMac G5, with libreadline
-HP-UX 11.23
-AIX 5.3 on 64bit Power4 with gcc
-Cygwin 1.5.25 on i686
-
-tests on Tru64 can no longer be performed because HP testdrive has taken down
-these hosts.
-
-Some versions of socat have been reported to successfully compile under older
-Linux versions back to RedHat 2.1 (kernel 1.2.13, gcc 2.7.0), under AIX 4.1 and
-4.3, SunOS 5.7-5.8, FreeBSD 4.2 - 4.9, MacOS X 10.1, Cygwin, Solaris 8 on x86, 
-OSR 5.0.6, NetBSD 1.6.1 and 2.0.2, OpenBSD 3.4 and 3.8, Tru64 5.1B, Mac OS X
-10.1-10.2, and HP-UX 11
-
-It might well compile and run under other UNIX like operating systems.
+Debian 4 on x86_64
+FreeBSD 10 on amd64
+OpenBSD 7.2 on amd64
+OpenIndiana 2021-04 on i386 with gcc
+Ubuntu 10.04 on i386
+Ubuntu 12..22
+Rocky 9
+Cygwin 10.0
 
 
 install
@@ -75,16 +63,15 @@ install
 
 Get the tarball and extract it:
 	tar xzf socat.tar.gz
-	cd socat-1.7.4.4
+	cd socat-1.8.0.0
 	./configure
 	make
 	su
 	make install	# installs socat, filan, and procan in /usr/local/bin
 
-For compiling socat, gcc (or egc) is recommended.
-If gcc is not available, the configure script will fail to determine
-some features; then you'd better begin with one of the Makefiles and config.h's
-from the Config directory.
+For compiling socat, gcc (or clang) is recommended.
+If gcc (or a compiler with similar front end) is not available, the configure
+script might fail to determine some features
 
 If you have problems with the OpenSSL library, you can apply the option
 "--disable-openssl" to configure.
@@ -239,9 +226,6 @@ These files reside in the doc subdirectory:
 socat.1 is the man page, socat.html is the HTML based man page. It is actual,
 but describes only the more useful options.
 
-xio.help is an older, but more exact description in text form; with socat
-version 1.6.0 it is outdated.
-
 doc/socat-openssltunnel.html is a simple tutorial for a private SSL connection.
 doc/socat-multicast.html is a short tutorial for multicast and broadcast
 communications.
@@ -251,13 +235,7 @@ socat.1 and socat.html can be generated from socat.yo (which is released with
 socat 1.6.0.1 and later) using the yodl document language package. Maintenance
 of yodl had been discontinued by its author
 (http://www.xs4all.nl/~jantien/yodl/) (there seems to be a revival at
-http://yodl.sourceforge.net/ though). For socat, the old version 1.31 is used;
-an rpm is still distributed with recent OpenSuSE versions (confirmed for
-OpenSuSE 10.1 in suse/i586/yodl-1.31.18-1142.i586.rpm). It appears to install
-smoothly also under RedHat Linux. After yodl 1.31 installation, the following
-correction must be performed in /usr/share/yodl/shared.yo in two places:
-< whenhtml(htmlcommand(<!)ARG1+htmlcommand(>)))
-> whenhtml(htmlcommand(<!--)ARG1+htmlcommand(-->)))
+http://yodl.sourceforge.net/ though). For socat, the revival version 3.03 is used,
 
 
 license

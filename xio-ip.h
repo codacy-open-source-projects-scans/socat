@@ -29,6 +29,10 @@ extern const struct optdesc opt_ip_recvdstaddr;
 extern const struct optdesc opt_ip_recvif;
 extern const struct optdesc opt_ip_transparent;
 
+extern const struct optdesc opt_ai_addrconfig;
+extern const struct optdesc opt_ai_passive;
+extern const struct optdesc opt_ai_v4mapped;
+
 extern const struct optdesc opt_res_debug;
 extern const struct optdesc opt_res_aaonly;
 extern const struct optdesc opt_res_usevc;
@@ -38,18 +42,24 @@ extern const struct optdesc opt_res_recurse;
 extern const struct optdesc opt_res_defnames;
 extern const struct optdesc opt_res_stayopen;
 extern const struct optdesc opt_res_dnsrch;
+extern const struct optdesc opt_res_retrans;
+extern const struct optdesc opt_res_retry;
+extern const struct optdesc opt_res_nsaddr;
 
-extern int xiogetaddrinfo(const char *node, const char *service,
-			  int family, int socktype, int protocol,
-			  union sockaddr_union *sa, socklen_t *socklen,
-			  unsigned long res_opts0, unsigned long res_opts1);
-extern
-int xiolog_ancillary_ip(struct cmsghdr *cmsg, int *num,
-			char *typbuff, int typlen,
-			char *nambuff, int namlen,
-			char *envbuff, int envlen,
-			char *valbuff, int vallen);
+extern int xioinit_ip(int *pf, char ipv);
+
+extern int xiogetaddrinfo(const char *node, const char *service, int family, int socktype, int protocol, struct addrinfo **res, const int ai_flags[2]);
+extern void xiofreeaddrinfo(struct addrinfo *res);
+extern int xioresolve(const char *node, const char *service, int family, int socktype, int protocol, union sockaddr_union *addr, socklen_t *addrlen, const int ai_flags[2]);
+extern int xiolog_ancillary_ip(struct single *sfd, struct cmsghdr *cmsg, int *num, char *typbuff, int typlen, char *nambuff, int namlen, char *envbuff, int envlen, char *valbuff, int vallen);
+extern int xiotype_ip_add_membership(char *token, const struct optname *ent, struct opt *opt);
+extern int xioapply_ip_add_membership(xiosingle_t *xfd, struct opt *opt);
 extern int xiotype_ip_add_source_membership(char* token, const struct optname *ent, struct opt *opt);
 extern int xioapply_ip_add_source_membership(struct single *xfd, struct opt *opt);
+
+#if WITH_RESOLVE && HAVE_RESOLV_H
+extern int xio_res_init(struct single *sfd, struct __res_state *save_res);
+extern int xio_res_restore(struct __res_state *save_res);
+#endif /* WITH_RESOLVE && HAVE_RESOLV_H */
 
 #endif /* !defined(__xio_ip_h_included) */

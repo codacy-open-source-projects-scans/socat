@@ -21,7 +21,6 @@ const struct optdesc opt_unlink      = { "unlink",      NULL, OPT_UNLINK,      G
 const struct optdesc opt_unlink_early= { "unlink-early",NULL, OPT_UNLINK_EARLY,GROUP_NAMED, PH_EARLY,    TYPE_BOOL, OFUNC_SPEC };
 const struct optdesc opt_unlink_late = { "unlink-late", NULL, OPT_UNLINK_LATE, GROUP_NAMED, PH_PASTOPEN, TYPE_BOOL, OFUNC_SPEC };
 const struct optdesc opt_unlink_close  = { "unlink-close", NULL, OPT_UNLINK_CLOSE, GROUP_NAMED, PH_LATE,  TYPE_BOOL, OFUNC_SPEC };
-const struct optdesc opt_umask       = { "umask",       NULL, OPT_UMASK,       GROUP_NAMED, PH_EARLY,  TYPE_MODET, OFUNC_SPEC };
 #endif /* WITH_NAMED */
 
 /* applies to filesystem entry all options belonging to phase */
@@ -59,19 +58,16 @@ int applyopts_named(const char *filename, struct opt *opts, unsigned int phase) 
 	 break;
       case OPT_UNLINK_EARLY:
       case OPT_UNLINK:
+	 xio_unlink(filename, E_ERROR);
+	 break;
       case OPT_UNLINK_LATE:
 	 if (Unlink(filename) < 0) {
 	    if (errno == ENOENT) {
+	       /* We have just created/opened it, that's - surprising! */
 	       Warn2("unlink(\"%s\"): %s", filename, strerror(errno));
 	    } else {
 	       Error2("unlink(\"%s\"): %s", filename, strerror(errno));
 	    }
-	 }
-	 break;
-      case OPT_UMASK:
-	 if (Umask(opt->value.u_modet) < 0) {
-	    /* linux docu says it always succeeds, but who believes it? */
-	    Error2("umask("F_mode"): %s", opt->value.u_modet, strerror(errno));
 	 }
 	 break;
       default: Error1("applyopts_named(): option \"%s\" not implemented",
@@ -85,17 +81,24 @@ int applyopts_named(const char *filename, struct opt *opts, unsigned int phase) 
 }
 
 
-/* perform actions that are common to all NAMED group addresses: checking if 
+/* perform actions that are common to all NAMED group addresses: checking if
    the entry exists, parsing options, ev.removing old filesystem entry or
    setting early owners and permissions.
    It applies options of PH_EARLY and PH_PREOPEN.
    If the path exists, its st_mode field is returned.
    After this sub you may proceed with open() or whatever...
    */
-int _xioopen_named_early(int argc, const char *argv[], xiofile_t *xfd,
-			 int groups,
-		      bool *exists, struct opt *opts) {
+int _xioopen_named_early(
+	int argc,
+	const char *argv[],
+	xiofile_t *xfd,
+	groups_t groups,
+	bool *exists,
+	struct opt *opts,
+	const char *syntax)
+{
    const char *path = argv[1];
+   struct single *sfd = &xfd->stream;
 #if HAVE_STAT64
    struct stat64 statbuf;
 #else
@@ -104,7 +107,8 @@ int _xioopen_named_early(int argc, const char *argv[], xiofile_t *xfd,
    bool opt_unlink_early = false;
 
    if (argc != 2) {
-      Error2("%s: wrong number of parameters (%d instead of 1)", argv[0]?argv[0]:"<named>", argc);
+      xio_syntax(argv[0], 1, argc-1, syntax);
+      return STAT_NORETRY;
    }
    statbuf.st_mode = 0;
    /* find the appropriate groupbits */
@@ -124,8 +128,9 @@ int _xioopen_named_early(int argc, const char *argv[], xiofile_t *xfd,
       *exists = true;
    }
 
-   if (applyopts_single(&xfd->stream, opts, PH_INIT) < 0)  return -1;
-   applyopts(-1, opts, PH_INIT);
+   if (applyopts_single(sfd, opts, PH_INIT) < 0)
+      return -1;
+   applyopts(sfd, -1, opts, PH_INIT);
 
    retropt_bool(opts, OPT_UNLINK_EARLY, &opt_unlink_early);
    if (*exists && opt_unlink_early) {
@@ -138,7 +143,7 @@ int _xioopen_named_early(int argc, const char *argv[], xiofile_t *xfd,
    }
 
    applyopts_named(path, opts, PH_EARLY);
-   applyopts(-1, opts, PH_EARLY);
+   applyopts(sfd, -1, opts, PH_EARLY);
    if (*exists) {
       applyopts_named(path, opts, PH_PREOPEN);
    } else {
@@ -194,7 +199,10 @@ int _xioopen_open(const char *path, int rw, struct opt *opts) {
 
    retropt_modet(opts, OPT_PERM,      &mode);
 
-   if ((fd = Open(path, flags, mode)) < 0) {
+   do {
+      fd = Open(path, flags, mode);
+   } while (fd < 0 && errno == EINTR);
+   if (fd < 0) {
       Error4("open(\"%s\", 0%lo, 0%03o): %s",
 	     path, flags, mode, strerror(errno));
       return STAT_RETRYLATER;
@@ -207,6 +215,27 @@ int _xioopen_open(const char *path, int rw, struct opt *opts) {
    applyopts_cloexec(fd, opts);
 #endif
    return fd;
+}
+
+/* Wrapper around Unlink() that handles the case of non existing file (ENOENT)
+   just as E_INFO. All other errors are handled with level. */
+int xio_unlink(
+	const char *filename,	/* the file to be removed */
+	int level)	/* the severity level for other errors, e.g.E_ERROR */
+{
+	int _errno;
+
+	if (Unlink(filename) < 0) {
+		_errno = errno;
+		if (errno == ENOENT) {
+			Info2("unlink(\"%s\"): %s", filename, strerror(errno));
+		} else {
+			Msg2(level, "unlink(\"%s\"): %s", filename, strerror(errno));
+			errno = _errno;
+			return -1;
+		}
+	}
+	return 0;
 }
 
 #endif /* _WITH_NAMED */

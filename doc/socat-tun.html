@@ -53,14 +53,20 @@ the two socat instances; the TUN interfaces both have the same quality.
 
 <h3>TUN Server</h3>
 
-<span class="frame"><span class="shell">socat -d -d TCP-LISTEN:11443,reuseaddr TUN:192.168.255.1/24,up</span></span>
+<span class="shell">socat -d -d \
+    UDP-LISTEN:11443 \
+    TUN:192.168.255.1/24,up
+</span>
 <p>After starting this command, socat will wait for a connection and then
 create a TUN pseudo network device with address 192.168.255.1; the bit number
 specifies the mask of the network that is pretended to be connected on this
 interface.</p>
 
 <h3>TUN Client</h3>
-<span class="frame"><span class="shell">socat TCP:1.2.3.4:11443 TUN:192.168.255.2/24,up</span></span>
+<span class="shell">socat \
+    UDP:1.2.3.4:11443 \
+    TUN:192.168.255.2/24,up
+</span>
 <p>This command should establish a connection to the server and create the TUN
 device on the client.</p>
 
@@ -85,17 +91,17 @@ the <tt>ifconfig</tt> command.
 <h3>Test TUN integration</h3>
 <p>
 If you get error messages like this:</p>
-<table border="1" bgcolor="#e08080"><tr><td><tt>... E unknown device/address "tun"</tt></td></tr></table>
+<span class="error">... E unknown device/address "tun"</span>
 <p>your socat executable probably does not provide TUN/TAP support. Potential
 reasons: you are not on Linux or are using an older version of socat.
 </p>
 
 <h3>Missing kernel support</h3>
 <p>An error message like:</p>
-<table border="1" bgcolor="#e08080"><tr><td><tt>... E open("/dev/net/tun", 02, 0666): No such file or directory</tt></td></tr></table>
+<span class="error">... E open("/dev/net/tun", 02, 0666): No such file or directory</span>
 <p>indicates that your kernel either needs to load the tun module or does not
   have TUN/TAP support compiled in. Try to load the module:</p>
-<span class="frame"><span class="shell">modprobe tun</span></span>
+<span class="shell">modprobe tun</span>
 <p>and check
  for /dev/net/tun. If that does not succeed you need to
  rebuild your kernel with the appropriate configuration (probably under
@@ -104,14 +110,14 @@ reasons: you are not on Linux or are using an older version of socat.
 
 <h3>TUN cloning device permissions</h3>
 <p>An error message like:</p>
-<table border="1" bgcolor="#e08080"><tr><td><tt>... E open("/dev/net/tun", 02, 0666): Permission denied</tt></td></tr></table>
+<span class="error">... E open("/dev/net/tun", 02, 0666): Permission denied</span>
 <p>indicates that you do not have permission to read or write the TUN cloning
 device. Check its permission and ownership.</p>
 
 <h3>Interface down</h3>
 <p>If no error occurs but the pings do not work check if the network devices
 have been created:</p>
-<span class="frame"><span class="shell">ifconfig tun0</span></span>
+<span class="shell">ifconfig tun0</span>
 <p>The output should look like:</p>
 <pre>
 tun0      Link encap:UNSPEC  HWaddr 00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00  
@@ -128,7 +134,7 @@ tun0      Link encap:UNSPEC  HWaddr 00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
 
 <h3>Routing</h3>
 <p></p>
-<span class="frame"><span class="shell">netstat -an |fgrep 192.168.255</span></span>
+<span class="shell">netstat -an |fgrep 192.168.255</span>
 <p>The output should look like:</p>
 <pre>
 192.168.255.0   0.0.0.0         255.255.255.0   U         0 0          0 tun0

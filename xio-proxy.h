@@ -8,6 +8,7 @@
 
 struct proxyvars {
    bool ignorecr;
+   char *version;
    bool doresolve;
    char *authstring;
    char *authfile;
@@ -17,14 +18,14 @@ struct proxyvars {
 
 extern const struct optdesc opt_proxyport;
 extern const struct optdesc opt_ignorecr;
+extern const struct optdesc opt_http_version;
 extern const struct optdesc opt_proxy_resolve;
 extern const struct optdesc opt_proxy_authorization;
 extern const struct optdesc opt_proxy_authorization_file;
 
-extern const struct addrdesc addr_proxy_connect;
+extern const struct addrdesc xioaddr_proxy_connect;
 
-int _xioopen_proxy_prepare(struct proxyvars *proxyvars, struct opt *opts,
-			   const char *targetname, const char *targetport);
+extern int _xioopen_proxy_prepare(struct proxyvars *proxyvars, struct opt *opts, const char *targetname, const char *targetport, const int ai_flags[2]);
 int _xioopen_proxy_connect(struct single *xfd,
 			   struct proxyvars *proxyvars,
 			   int level);

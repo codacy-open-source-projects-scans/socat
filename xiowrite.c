@@ -8,6 +8,7 @@
 #include "xiosysincludes.h"
 #include "xioopen.h"
 
+#include "xio-posixmq.h"
 #include "xio-readline.h"
 #include "xio-openssl.h"
 
@@ -22,7 +23,7 @@ ssize_t xiowrite(xiofile_t *file, const void *buff, size_t bytes) {
    struct single *pipe;
    int _errno;
 
-   if (file->tag == XIO_TAG_INVALID) {
+   if (file->tag == XIO_TAG_INVALID || file->tag & XIO_TAG_CLOSED) {
       Error1("xiowrite(): invalid xiofile descriptor %p", file);
       errno = EINVAL;
       return -1;
@@ -30,7 +31,7 @@ ssize_t xiowrite(xiofile_t *file, const void *buff, size_t bytes) {
 
    if (file->tag == XIO_TAG_DUAL) {
       pipe = file->dual.stream[1];
-      if (pipe->tag == XIO_TAG_INVALID) {
+      if (pipe->tag == XIO_TAG_INVALID || file->tag & XIO_TAG_CLOSED) {
 	 Error1("xiowrite(): invalid xiofile sub descriptor %p[1]", file);
 	 errno = EINVAL;
 	 return -1;
@@ -86,7 +87,7 @@ ssize_t xiowrite(xiofile_t *file, const void *buff, size_t bytes) {
 	 char infobuff[256];
 	 _errno = errno;
 	 Error6("sendto(%d, %p, "F_Zu", 0, %s, "F_socklen"): %s",
-		pipe->fd, buff, bytes, 
+		pipe->fd, buff, bytes,
 		sockaddr_info(&pipe->peersa.soa, pipe->salen,
 			      infobuff, sizeof(infobuff)),
 		pipe->salen, strerror(_errno));
@@ -95,12 +96,11 @@ ssize_t xiowrite(xiofile_t *file, const void *buff, size_t bytes) {
       }
       if ((size_t)writt < bytes) {
 	 char infobuff[256];
-	 Warn7("sendto(%d, %p, "F_Zu", 0, %s, "F_socklen") only wrote "F_Zu" of "F_Zu" bytes",
-	       pipe->fd, buff, bytes, 
+	 Warn7("sendto(%d, %p, "F_Zu", 0, %s, "F_socklen") only sent "F_Zu" of "F_Zu" bytes",
+	       pipe->fd, buff, bytes,
 	       sockaddr_info(&pipe->peersa.soa, pipe->salen,
 			     infobuff, sizeof(infobuff)),
 	       pipe->salen, writt, bytes);
-      } else {
       }
       {
 	 char infobuff[256];
@@ -114,7 +114,11 @@ ssize_t xiowrite(xiofile_t *file, const void *buff, size_t bytes) {
 #endif /* _WITH_SOCKET */
 
    case XIOWRITE_PIPE:
-      writt = Write(pipe->para.bipipe.fdout, buff, bytes);
+      if (pipe->para.bipipe.socktype == SOCK_STREAM) {
+	 writt = Write(pipe->para.bipipe.fdout, buff, bytes);
+      } else {
+	 writt = Send(pipe->para.bipipe.fdout, buff, bytes, 0);
+      }
       _errno = errno;
       if (writt < 0) {
 	 Error4("write(%d, %p, "F_Zu"): %s",
@@ -134,6 +138,14 @@ ssize_t xiowrite(xiofile_t *file, const void *buff, size_t bytes) {
 	 return -1;
       }
       break;
+
+#if WITH_POSIXMQ
+   case XIOWRITE_POSIXMQ:
+      if ((writt = xiowrite_posixmq(pipe, buff, bytes)) < 0) {
+	 return -1;
+      }
+      break;
+#endif /* WITH_POSIXMQ */
 
 #if WITH_OPENSSL
    case XIOWRITE_OPENSSL:

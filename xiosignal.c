@@ -55,21 +55,27 @@ void socatsignalpass(int sig) {
 
    _errno = errno;
    diag_in_handler = 1;
-   Notice1("socatsignalpass(%d)", sig);
+   Notice1("socatsignalpass(sig=%d)", sig);
    if ((sigdesc = socat_get_sig_desc(sig)) == NULL) {	/* is async-signal-safe */
       diag_in_handler = 0;
       errno = _errno;
       return;
    }
 
+  { /*debug*/
+     int n = 0;
    for (i=0; i<sigdesc->sig_use; ++i) {
       if (sigdesc->sig_pids[i]) {
+	 ++n;
 	 if (Kill(sigdesc->sig_pids[i], sig) < 0) {
 	    Warn2("kill("F_pid", %d): %m",
 		  sigdesc->sig_pids[i], sig);
 	 }
       }
    }
+   if (n >= 0)
+      Info1("socatsignalpass(): propagated signal to %d sub processes", n);
+  }
 #if !HAVE_SIGACTION
    Signal(sig, socatsignalpass);
 #endif /* !HAVE_SIGACTION */
@@ -79,7 +85,7 @@ void socatsignalpass(int sig) {
 }
 
 
-/* register the sub process pid for passing of signals of type signum. 
+/* register the sub process pid for passing of signals of type signum.
    Only for SIGHUP, SIGINT, and SIGQUIT!
    returns 0 on success or <0 if an error occurred */
 int xio_opt_signal(pid_t pid, int signum) {

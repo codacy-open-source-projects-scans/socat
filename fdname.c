@@ -89,7 +89,7 @@ static int procgetfdname(int fd, char *filepath, size_t pathsize) {
       }
    }
 #endif /* !HAVE_STAT64 */
-       
+
    if (pid < 0)  pid = Getpid();
    snprintf(procpath, sizeof(procpath), "/proc/"F_pid"/"
 #if HAVE_PROC_DIR_PATH
@@ -99,15 +99,15 @@ static int procgetfdname(int fd, char *filepath, size_t pathsize) {
 #endif
 	    "/%d", pid, fd);
    if ((len = Readlink(procpath, filepath, pathsize-1)) < 0) {
-      Warn4("readlink(\"%s\", %p, "F_Zu"): %s",
-	     procpath, filepath, pathsize, strerror(errno));
+      Notice4("readlink(\"%s\", %p, "F_Zu"): %s",
+	      procpath, filepath, pathsize, strerror(errno));
       len = 0;
    }
    filepath[len] = '\0';
    return 0;
 }
 #endif /* HAVE_PROC_DIR_FD || HAVE_PROC_DIR_PATH */
-   
+
 int statname(const char *file, int fd, int filetype, FILE *outfile,
 	     char style) {
    char filepath[PATH_MAX];
@@ -229,14 +229,14 @@ int sockname(int fd, FILE *outfile, char style) {
 #if HAVE_GETPROTOBYNUMBER || HAVE_GETPROTOBYNUMBER_R
    struct protoent protoent, *protoentp;
 #endif
-#define PROTONAMEMAX 1024 
+#define PROTONAMEMAX 1024
    char protoname[PROTONAMEMAX] = "";
 #if defined(SO_PROTOCOL) || defined(SO_PROTOTYPE)
-   int proto;
+   int proto = 0;
 #endif
    int opttype;
 #ifdef SO_ACCEPTCONN
-   int optacceptconn;
+   int optacceptconn = 0; 	/* OpenBSD does not give value on unix dgram */
 #endif
    int result /*0, i*/;
    char socknamebuff[FDNAME_NAMELEN];
@@ -260,7 +260,7 @@ int sockname(int fd, FILE *outfile, char style) {
    rc = Getsockopt(fd, SOL_SOCKET, SO_PROTOTYPE,  &proto,         &optlen);
 #endif
    if (rc < 0) {
-      Warn5("getsocktop(%d, SOL_SOCKET, "
+      Notice5("getsocktop(%d, SOL_SOCKET, "
 #ifdef SO_PROTOCOL
 	    "SO_PROTOCOL"
 #else
@@ -268,7 +268,6 @@ int sockname(int fd, FILE *outfile, char style) {
 #endif
 	    ", &%p, {"F_socklen"}): errno=%d (%s)", fd, &proto, optlen, errno, strerror(errno));
    }
-   proto = 0;
 #endif /* defined(SO_PROTOCOL) || defined(SO_PROTOTYPE) */
    optlen = sizeof(opttype);
    Getsockopt(fd, SOL_SOCKET, SO_TYPE,       &opttype,       &optlen);
@@ -294,9 +293,9 @@ int sockname(int fd, FILE *outfile, char style) {
       protoentp = getprotobynumber_r(proto, &protoent, buffer, FILAN_GETPROTOBYNUMBER_R_BUFLEN);
       strncpy(protoname, protoentp->p_name, sizeof(protoname));
    }
-#elif HAVE_GETPROTOBYNUMBER_R==3 /* AIX */
+#elif HAVE_GETPROTOBYNUMBER_R==3 /* AIX, OpenBSD */
    {
-      struct protoent_data proto_data;
+      struct protoent_data proto_data = { 0 }; 	/* OpenBSD might SIGSEGV */
       rc = getprotobynumber_r(proto, &protoent, &proto_data);
       if (rc == 0) {
 	 strncpy(protoname, protoent.p_name, sizeof(protoname));
@@ -305,21 +304,41 @@ int sockname(int fd, FILE *outfile, char style) {
    }
 #else
    switch (proto) {
-   case IPPROTO_TCP:  strcpy(protoname, "tcp"); break; 
-   case IPPROTO_UDP:  strcpy(protoname, "udp"); break; 
+   case IPPROTO_TCP:  strcpy(protoname, "tcp"); break;
+   case IPPROTO_UDP:  strcpy(protoname, "udp"); break;
    case IPPROTO_SCTP: strcpy(protoname, "sctp"); break;
    default: sprintf(protoname, "proto%d", proto); break;
    }
 #endif
-#else
+#else /* ! (defined(SO_PROTOCOL) || defined(SO_PROTOTYPE)) */
    if (opttype == SOCK_STREAM) {
-      strcpy(protoname, "tcp");
+      strcpy(protoname, "(stream)");
    } else if (opttype == SOCK_DGRAM) {
-      strcpy(protoname, "udp");
+      strcpy(protoname, "(dgram)");
+#ifdef SOCK_RAW
+   } else if (opttype == SOCK_RAW) {
+      strcpy(protoname, "(raw)");
+#endif
+#ifdef SOCK_RDM
+   } else if (opttype == SOCK_RDM) {
+      strcpy(protoname, "(rdm)");
+#endif
+#ifdef SOCK_SEQPACKET
+   } else if (opttype == SOCK_SEQPACKET) {
+      strcpy(protoname, "(seqpacket)");
+#endif
+#ifdef SOCK_DCCP
+   } else if (opttype == SOCK_DCCP) {
+      strcpy(protoname, "(dccp)");
+#endif
+#ifdef SOCK_PACKET
+   } else if (opttype == SOCK_PACKET) {
+      strcpy(protoname, "(packet)");
+#endif
    } else {
       strcpy(protoname, "socket");
    }
-#endif /* defined(SO_PROTOCOL) || defined(SO_PROTOTYPE) */
+#endif /* ! (defined(SO_PROTOCOL) || defined(SO_PROTOTYPE)) */
    socknamelen = sizeof(sockname);
    result = Getsockname(fd, &sockname.soa, &socknamelen);
    if (result < 0) {
@@ -348,7 +367,7 @@ int sockname(int fd, FILE *outfile, char style) {
 				 socknamebuff, sizeof(socknamebuff)));
       break;
      case 'S':
-	//sockettype(opttype, typename, TYPENAMEMAX);
+	/* sockettype(opttype, typename, TYPENAMEMAX); */
 	fprintf(outfile, "unix %s-%s %s %s",
 		sockaddr_unix_info(&sockname.un, socknamelen,
 				   socknamebuff, sizeof(socknamebuff)),

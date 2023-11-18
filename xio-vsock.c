@@ -13,31 +13,25 @@
 #include "xio-socket.h"
 #include "xio-vsock.h"
 
-static int xioopen_vsock_connect(int argc, const char *argv[], struct opt *opts,
-        int xioflags, xiofile_t *xxfd, unsigned groups, int abstract,
-        int dummy2, int dummy3);
-static int xioopen_vsock_listen(int argc, const char *argv[], struct opt *opts,
-        int xioflags, xiofile_t *xxfd, unsigned groups, int abstract,
-        int dummy2, int dummy3);
+static int xioopen_vsock_connect(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *xxfd, const struct addrdesc *addrdesc);
+static int xioopen_vsock_listen(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *xxfd, const struct addrdesc *addrdesc);
 
-const struct addrdesc addr_vsock_connect = { "vsock-connect", 1 + XIO_RDWR,
-    xioopen_vsock_connect,
-    GROUP_FD|GROUP_SOCKET|GROUP_CHILD|GROUP_RETRY,
-    0, 0, 0 HELP(":<cid>:<port>") };
+static void xiolog_vsock_cid(void);
+
+const struct addrdesc xioaddr_vsock_connect = { "VSOCK-CONNECT", 1+XIO_RDWR, xioopen_vsock_connect, GROUP_FD|GROUP_SOCKET|GROUP_CHILD|GROUP_RETRY,              0, 0, 0 HELP(":<cid>:<port>") };
 #if WITH_LISTEN
-const struct addrdesc addr_vsock_listen  = { "vsock-listen", 1 + XIO_RDWR,
-    xioopen_vsock_listen,
-    GROUP_FD|GROUP_SOCKET|GROUP_LISTEN|GROUP_CHILD|GROUP_RETRY,
-    0, 0, 0 HELP(":<port>") };
+const struct addrdesc xioaddr_vsock_listen  = { "VSOCK-LISTEN",  1+XIO_RDWR, xioopen_vsock_listen,  GROUP_FD|GROUP_SOCKET|GROUP_LISTEN|GROUP_CHILD|GROUP_RETRY, 0, 0, 0 HELP(":<port>") };
 #endif /* WITH_LISTEN */
 
+
+/* Initializes a sockaddr of type VSOCK */
 static int vsock_addr_init(struct sockaddr_vm *sa, const char *cid_str,
-        const char *port_str) {
+	   const char *port_str, int pf) {
    int ret;
 
    memset(sa, 0, sizeof(*sa));
 
-   sa->svm_family = AF_VSOCK;
+   sa->svm_family = pf;
    ret = sockaddr_vm_parse(sa, cid_str, port_str);
    if (ret < 0)
       return STAT_NORETRY;
@@ -45,26 +39,34 @@ static int vsock_addr_init(struct sockaddr_vm *sa, const char *cid_str,
    return STAT_OK;
 }
 
-static int vsock_init(struct opt *opts, struct single *xfd) {
 
-   xfd->howtoend = END_SHUTDOWN;
+/* Performs a few steps during opening an address of type VSOCK */
+static int vsock_init(struct opt *opts, struct single *sfd) {
 
-   if (applyopts_single(xfd, opts, PH_INIT) < 0)
+   if (sfd->howtoend == END_UNSPEC)
+      sfd->howtoend = END_SHUTDOWN;
+
+   if (applyopts_single(sfd, opts, PH_INIT) < 0)
       return STAT_NORETRY;
 
-   applyopts(-1, opts, PH_INIT);
-   applyopts(-1, opts, PH_EARLY);
+   applyopts(sfd, -1, opts, PH_INIT);
+   applyopts(sfd, -1, opts, PH_EARLY);
 
-   xfd->dtype = XIODATA_STREAM;
+   sfd->dtype = XIODATA_STREAM;
 
    return STAT_OK;
 }
 
-static int xioopen_vsock_connect(int argc, const char *argv[], struct opt *opts,
-        int xioflags, xiofile_t *xxfd, unsigned groups,
-        int abstract, int dummy2, int dummy3) {
+static int xioopen_vsock_connect(
+	int argc,
+	const char *argv[],
+	struct opt *opts,
+        int xioflags,
+	xiofile_t *xxfd,
+        const struct addrdesc *addrdesc)
+{
    /* we expect the form :cid:port */
-   struct single *xfd = &xxfd->stream;
+   struct single *sfd = &xxfd->stream;
    struct sockaddr_vm sa, sa_local;
    socklen_t sa_len = sizeof(sa);
    bool needbind = false;
@@ -74,47 +76,59 @@ static int xioopen_vsock_connect(int argc, const char *argv[], struct opt *opts,
    int ret;
 
    if (argc != 3) {
-      Error2("%s: wrong number of parameters (%d instead of 2)",
-	     argv[0], argc-1);
+      xio_syntax(argv[0], 2, argc-1, addrdesc->syntax);
       return STAT_NORETRY;
    }
 
-   ret = vsock_addr_init(&sa, argv[1], argv[2]);
+   retropt_socket_pf(opts, &pf);
+   retropt_int(opts, OPT_SO_TYPE, &socktype);
+   retropt_int(opts, OPT_SO_PROTOTYPE, &protocol);
+
+   ret = vsock_addr_init(&sa, argv[1], argv[2], pf);
    if (ret) {
       return ret;
    }
 
-   ret = vsock_init(opts, xfd);
+   ret = vsock_init(opts, sfd);
    if (ret) {
       return ret;
    }
+
+   xiolog_vsock_cid();
 
    ret = retropt_bind(opts, pf, socktype, protocol,
-                      (struct sockaddr *)&sa_local, &sa_len, 3, 0, 0);
+                      (struct sockaddr *)&sa_local, &sa_len, 3,
+		      sfd->para.socket.ip.ai_flags);
    if (ret == STAT_NORETRY)
       return ret;
    if (ret == STAT_OK)
       needbind = true;
 
-   ret = xioopen_connect(xfd, needbind ? (union sockaddr_union *)&sa_local : NULL,
+   ret = xioopen_connect(sfd, needbind ? (union sockaddr_union *)&sa_local : NULL,
                          sa_len, (struct sockaddr *)&sa, sizeof(sa),
                          opts, pf, socktype, protocol, false);
    if (ret)
       return ret;
 
-   ret = _xio_openlate(xfd, opts);
+   ret = _xio_openlate(sfd, opts);
    if (ret < 0)
        return ret;
 
    return STAT_OK;
 }
 
+
 #if WITH_LISTEN
-static int xioopen_vsock_listen(int argc, const char *argv[], struct opt *opts,
-        int xioflags, xiofile_t *xxfd, unsigned groups, int abstract,
-        int dummy2, int dummy3) {
+static int xioopen_vsock_listen(
+	int argc,
+	const char *argv[],
+	struct opt *opts,
+        int xioflags,
+	xiofile_t *xxfd,
+        const struct addrdesc *addrdesc)
+{
    /* we expect the form :port */
-   struct single *xfd = &xxfd->stream;
+   struct single *sfd = &xxfd->stream;
    struct sockaddr_vm sa, sa_bind;
    socklen_t sa_len = sizeof(sa_bind);
    struct opt *opts0;
@@ -124,46 +138,63 @@ static int xioopen_vsock_listen(int argc, const char *argv[], struct opt *opts,
    int ret;
 
    if (argc != 2) {
-      Error2("%s: wrong number of parameters (%d instead of 1)",
-	     argv[0], argc-1);
+      xio_syntax(argv[0], 1, argc-1, addrdesc->syntax);
       return STAT_NORETRY;
    }
 
-   ret = vsock_addr_init(&sa, NULL, argv[1]);
+   retropt_socket_pf(opts, &pf);
+   retropt_int(opts, OPT_SO_TYPE, &socktype);
+   retropt_int(opts, OPT_SO_PROTOTYPE, &protocol);
+
+   ret = vsock_addr_init(&sa, NULL, argv[1], pf);
    if (ret) {
       return ret;
    }
 
-   ret = vsock_init(opts, xfd);
+   ret = vsock_init(opts, sfd);
    if (ret) {
       return ret;
-   }
-
-   {
-      unsigned int cid;
-      if (Ioctl(xfd->fd, IOCTL_VM_SOCKETS_GET_LOCAL_CID, &cid) < 0) {
-	 Warn2("ioctl(%d, IOCTL_VM_SOCKETS_GET_LOCAL_CID, ...): %s",
-	       xfd->fd, strerror(errno));
-      } else {
-	 Notice1("VSOCK CID=%u", cid);
-      }
    }
 
    opts0 = copyopts(opts, GROUP_ALL);
 
    ret = retropt_bind(opts, pf, socktype, protocol, (struct sockaddr *)&sa_bind,
-                      &sa_len, 1, 0, 0);
+                      &sa_len, 1,
+		      sfd->para.socket.ip.ai_flags);
    if (ret == STAT_NORETRY)
        return ret;
    if (ret == STAT_OK)
        sa.svm_cid = sa_bind.svm_cid;
 
+   xiolog_vsock_cid();
+
    /* this may fork() */
-   return xioopen_listen(xfd, xioflags, (struct sockaddr *)&sa, sizeof(sa),
+   return xioopen_listen(sfd, xioflags, (struct sockaddr *)&sa, sizeof(sa),
                          opts, opts0, pf, socktype, protocol);
 }
-
 #endif /* WITH_LISTEN */
+
+
+/* Just tries to query and log the VSOCK CID */
+static void xiolog_vsock_cid(void) {
+   int vsock;
+   unsigned int cid;
+#ifdef IOCTL_VM_SOCKETS_GET_LOCAL_CID
+   if ((vsock = Open("/dev/vsock", O_RDONLY, 0)) < 0 ) {
+      Warn1("open(\"/dev/vsock\", ...): %s", strerror(errno));
+   } else if (Ioctl(vsock, IOCTL_VM_SOCKETS_GET_LOCAL_CID, &cid) < 0) {
+      Warn2("ioctl(%d, IOCTL_VM_SOCKETS_GET_LOCAL_CID, ...): %s",
+	    vsock, strerror(errno));
+   } else {
+      Notice1("VSOCK CID=%u", cid);
+   }
+   if (vsock >= 0) {
+      Close(vsock);
+   }
+#endif /* IOCTL_VM_SOCKETS_GET_LOCAL_CID */
+   return;
+}
+
 
 /* Returns information that can be used for constructing an environment
    variable describing the socket address.

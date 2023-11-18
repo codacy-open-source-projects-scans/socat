@@ -24,3 +24,39 @@ const struct optdesc opt_intervall = { "interval",  NULL, OPT_INTERVALL, GROUP_R
 const struct optdesc opt_retry     = { "retry",     NULL, OPT_RETRY,     GROUP_RETRY, PH_INIT, TYPE_UINT, OFUNC_EXT, XIO_OFFSETOF(retry),     XIO_SIZEOF(retry) };
 #endif
 
+const struct optdesc opt_chdir       = { "chdir",       "cd", OPT_CHDIR,       GROUP_ADDR, PH_INIT,  TYPE_FILENAME, OFUNC_SPEC };
+const struct optdesc opt_umask       = { "umask",       NULL, OPT_UMASK,       GROUP_ADDR, PH_INIT,  TYPE_MODET,    OFUNC_SPEC };
+
+
+int xio_chdir(
+	struct opt* opts,
+	char **orig_dir)
+{
+	char *tmp_dir = NULL;
+
+	if (retropt_string(opts, OPT_CHDIR, &tmp_dir) < 0)
+		return 0;
+
+	if ((*orig_dir = Malloc(PATH_MAX)) == NULL) {
+		free(tmp_dir);
+		return -1;
+	}
+
+	if (getcwd(*orig_dir, PATH_MAX) == NULL) {
+		Error1("getcwd(<ptr>, PATH_MAX): %s", strerror(errno));
+		free(*orig_dir);
+		free(tmp_dir);
+		return -1;
+	}
+	*orig_dir = Realloc(*orig_dir, strlen(*orig_dir)+1);
+
+	if (Chdir(tmp_dir) < 0) {
+		Error2("chdir(\"%s\"): %s", tmp_dir, strerror(errno));
+		free(*orig_dir);
+		free(tmp_dir);
+		return -1;
+	}
+
+	free(tmp_dir);
+	return 1;
+}

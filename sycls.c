@@ -547,7 +547,11 @@ ssize_t Read(int fd, void *buf, size_t count) {
    _errno = errno;
    if (!diag_in_handler) diag_flush();
 #if WITH_SYCLS
-   Debug1("read -> "F_Zd, result);
+   if (result < 0) {
+      Debug2("read -> "F_Zd" (errno=%d)", result, _errno);
+   } else {
+      Debug1("read -> "F_Zd, result);
+   }
 #endif /* WITH_SYCLS */
    errno = _errno;
    return result;
@@ -570,6 +574,7 @@ ssize_t Write(int fd, const void *buf, size_t count) {
    return result;
 }
 
+/* fcntl() without value */
 int Fcntl(int fd, int cmd) {
    int result, _errno;
    if (!diag_in_handler) diag_flush();
@@ -577,26 +582,47 @@ int Fcntl(int fd, int cmd) {
    Debug2("fcntl(%d, %d)", fd, cmd);
 #endif /* WITH_SYCLS */
    result = fcntl(fd, cmd);
-   if (!diag_in_handler) diag_flush();
+   if (!diag_in_handler)
+      diag_flush();
 #if WITH_SYCLS
    _errno = errno;
-   Debug1("fcntl() -> %d", result);
+   Debug1("fcntl() -> 0x%x", result);
    errno = _errno;
 #endif /* WITH_SYCLS */
    return result;
 }
 
+/* fcntl() with int value */
+int Fcntl_i(int fd, int cmd, int arg) {
+   int result, _errno;
+   if (!diag_in_handler) diag_flush();
+#if WITH_SYCLS
+   Debug3("fcntl(%d, %d, 0x%x)", fd, cmd, arg);
+#endif /* WITH_SYCLS */
+   result = fcntl(fd, cmd, arg);
+   _errno = errno;
+   if (!diag_in_handler)
+      diag_flush();
+#if WITH_SYCLS
+   Debug1("fcntl() -> 0x%x", result);
+#endif /* WITH_SYCLS */
+   errno = _errno;
+   return result;
+}
+
+/* fcntl() with long value */
 int Fcntl_l(int fd, int cmd, long arg) {
    int result, _errno;
    if (!diag_in_handler) diag_flush();
 #if WITH_SYCLS
-   Debug3("fcntl(%d, %d, %ld)", fd, cmd, arg);
+   Debug3("fcntl(%d, %d, 0x%lx)", fd, cmd, arg);
 #endif /* WITH_SYCLS */
    result = fcntl(fd, cmd, arg);
    _errno = errno;
-   if (!diag_in_handler) diag_flush();
+   if (!diag_in_handler)
+      diag_flush();
 #if WITH_SYCLS
-   Debug1("fcntl() -> %d", result);
+   Debug1("fcntl() -> 0x%x", result);
 #endif /* WITH_SYCLS */
    errno = _errno;
    return result;
@@ -1097,13 +1123,13 @@ int Connect(int sockfd, const struct sockaddr *serv_addr, socklen_t addrlen) {
    Debug18("connect(%d,{0x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x}, "F_Zd")",
 	   sockfd,
 	   ((unsigned char *)serv_addr)[0],  ((unsigned char *)serv_addr)[1],
-	   ((unsigned char *)serv_addr)[2],  ((unsigned char *)serv_addr)[3], 
-	   ((unsigned char *)serv_addr)[4],  ((unsigned char *)serv_addr)[5], 
-	   ((unsigned char *)serv_addr)[6],  ((unsigned char *)serv_addr)[7], 
-	   ((unsigned char *)serv_addr)[8],  ((unsigned char *)serv_addr)[9], 
-	   ((unsigned char *)serv_addr)[10], ((unsigned char *)serv_addr)[11], 
-	   ((unsigned char *)serv_addr)[12], ((unsigned char *)serv_addr)[13], 
-	   ((unsigned char *)serv_addr)[14], ((unsigned char *)serv_addr)[15], 
+	   ((unsigned char *)serv_addr)[2],  ((unsigned char *)serv_addr)[3],
+	   ((unsigned char *)serv_addr)[4],  ((unsigned char *)serv_addr)[5],
+	   ((unsigned char *)serv_addr)[6],  ((unsigned char *)serv_addr)[7],
+	   ((unsigned char *)serv_addr)[8],  ((unsigned char *)serv_addr)[9],
+	   ((unsigned char *)serv_addr)[10], ((unsigned char *)serv_addr)[11],
+	   ((unsigned char *)serv_addr)[12], ((unsigned char *)serv_addr)[13],
+	   ((unsigned char *)serv_addr)[14], ((unsigned char *)serv_addr)[15],
 	   addrlen);
 #else
    Debug4("connect(%d, {%d,%s}, "F_socklen")",
@@ -1142,6 +1168,7 @@ int Listen(int s, int backlog) {
 #if _WITH_SOCKET
 /* don't forget to handle EINTR when using Accept() ! */
 int Accept(int s, struct sockaddr *addr, socklen_t *addrlen) {
+      char infobuff[256];
    int result, _errno;
    fd_set accept_s;
    if (!diag_in_handler) diag_flush();
@@ -1151,15 +1178,14 @@ int Accept(int s, struct sockaddr *addr, socklen_t *addrlen) {
       return -1;
    }
 #if WITH_SYCLS
-   Debug3("accept(%d, %p, %p)", s, addr, addrlen);
+   sockaddr_info(addr, *addrlen, infobuff, sizeof(infobuff));
+   Debug3("accept(%d, %p, %p)", s, infobuff, addrlen);
 #endif /* WITH_SYCLS */
    result = accept(s, addr, addrlen);
    _errno = errno;
    if (!diag_in_handler) diag_flush();
 #if WITH_SYCLS
    if (result >= 0) {
-      char infobuff[256];
-      sockaddr_info(addr, *addrlen, infobuff, sizeof(infobuff));
       Info5("accept(%d, {%d, %s}, "F_socklen") -> %d", s,
 	    addr->sa_family,
 	    sockaddr_info(addr, *addrlen, infobuff, sizeof(infobuff)),
@@ -1441,7 +1467,7 @@ struct hostent *Gethostbyname(const char *name) {
 int Getaddrinfo(const char *node, const char *service,
 		const struct addrinfo *hints, struct addrinfo **res) {
    int result;
-   Debug15("getaddrinfo(%s%s%s, %s%s%s, {%d,%d,%d,%d,"F_socklen",%p,%p,%p}, %p)",
+   Debug15("getaddrinfo(%s%s%s, %s%s%s, {0x%02x,%d,%d,%d,"F_socklen",%p,%p,%p}, %p)",
 	   node?"\"":"", node?node:"NULL", node?"\"":"",
 	   service?"\"":"", service?service:"NULL", service?"\"":"",
 	   hints->ai_flags, hints->ai_family, hints->ai_socktype,
@@ -1536,7 +1562,7 @@ int Tcgetattr(int fd, struct termios *termios_p) {
 #else
    Debug6("tcgetattr(, {%08x,%08x,%08x,%08x,%s}) -> %d",
 	  termios_p->c_iflag, termios_p->c_oflag,
-	  termios_p->c_cflag, termios_p->c_lflag, 
+	  termios_p->c_cflag, termios_p->c_lflag,
 	  chars, result);
 #endif
    errno = _errno;
@@ -1738,6 +1764,27 @@ void Unsetenv(const char *name) {
    return;
 }
 #endif
+
+
+#if WITH_NAMESPACES
+int Setns(
+	int fd,
+	int nstype)
+{
+	int _errno;
+	int result;
+	Debug2("setns(%d, 0x%x)", fd, nstype);
+	result = setns(fd, nstype);
+	if (result < 0) {
+		_errno = errno;
+		Debug2("setns() -> %d (errno=%d)", result, errno);
+		errno = _errno;
+		return result;
+	}
+	Debug1("setns() -> %d", result);
+	return result;
+}
+#endif /* WITH_NAMESPACES */
 
 
 #if WITH_READLINE

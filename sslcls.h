@@ -9,7 +9,7 @@
 #if WITH_OPENSSL
 
 #if HAVE_OPENSSL_INIT_SSL
-int sycOPENSSL_init_ssl(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings);
+int sycOPENSSL_init_ssl(uint64_t opts, const void *settings);
 #endif
 void sycSSL_load_error_strings(void);
 int sycSSL_library_init(void);
@@ -44,6 +44,12 @@ void sycSSL_CTX_set_verify(SSL_CTX *ctx, int mode,
 			   int (*verify_callback)(int, X509_STORE_CTX *));
 int sycSSL_CTX_set_tmp_dh(SSL_CTX *ctx, DH *dh);
 int sycSSL_CTX_set_cipher_list(SSL_CTX *ctx, const char *str);
+#if HAVE_SSL_CTX_set_tlsext_max_fragment_length || defined(SSL_CTX_set_tlsext_max_fragment_length)
+int sycSSL_CTX_set_tlsext_max_fragment_length(SSL_CTX *ctx, uint8_t mode);
+#endif
+#if HAVE_SSL_CTX_set_max_send_fragment || defined(SSL_CTX_set_max_send_fragment)
+int sycSSL_CTX_set_max_send_fragment(SSL_CTX *ctx, long msf);
+#endif
 int sycSSL_set_cipher_list(SSL *ssl, const char *str);
 long sycSSL_get_verify_result(SSL *ssl);
 int sycSSL_set_fd(SSL *ssl, int fd);
@@ -108,6 +114,12 @@ const char *sycSSL_COMP_get_name(const COMP_METHOD *comp);
 #define sycSSL_CTX_set_verify(c,m,v) SSL_CTX_set_verify(c,m,v)
 #define sycSSL_CTX_set_tmp_dh(c,d) SSL_CTX_set_tmp_dh(c,d)
 #define sycSSL_CTX_set_cipher_list(c,s) SSL_CTX_set_cipher_list(c,s)
+#if HAVE_SSL_CTX_set_tlsext_max_fragment_length || defined(SSL_CTX_set_tlsext_max_fragment_length)
+#define sycSSL_CTX_set_tlsext_max_fragment_length(c,m) SSL_CTX_set_tlsext_max_fragment_length(c, m)
+#endif
+#if HAVE_SSL_CTX_set_max_send_fragment || defined(SSL_CTX_set_max_send_fragment)
+#define sycSSL_CTX_set_max_send_fragment(c,m) SSL_CTX_set_max_send_fragment(c, m)
+#endif
 #define sycSSL_set_cipher_list(s,t) SSL_set_cipher_list(s,t)
 #define sycSSL_get_verify_result(s) SSL_get_verify_result(s)
 #define sycSSL_set_fd(s,f) SSL_set_fd(s,f)

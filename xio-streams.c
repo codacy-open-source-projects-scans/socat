@@ -43,18 +43,20 @@ void dummy(void) {
    if (0) { { ;
 #endif
 #ifdef I_POP
-      } else if (opt->desc->func == OFUNC_STREAMS_I_POP_ALL) {
-	 while (Ioctl(fd, I_POP, 0) >= 0) {
-	    Warn2("ioctl(%d, I_POP, 0): %s", fd, strerror(errno));
-	 }
+	 case OFUNC_STREAMS_I_POP_ALL:
+	    while (Ioctl(fd, I_POP, 0) >= 0) {
+	       Warn2("ioctl(%d, I_POP, 0): %s", fd, strerror(errno));
+	    }
+	    break;
 #endif
 #ifdef I_PUSH
-      } else if (opt->desc->func == OFUNC_STREAMS_I_PUSH) {
-	 if (Ioctl(fd, I_PUSH, opt->value.u_string) < 0) {
-	    Warn3("ioctl(%d, I_PUSH, \"%s\"): %s",
-		  fd, opt->value.u_string, strerror(errno));
-	    opt->desc = ODESC_ERROR; ++opt; continue;
-	 }
+	 case OFUNC_STREAMS_I_PUSH:
+	    if (Ioctl(fd, I_PUSH, opt->value.u_string) < 0) {
+	       Warn3("ioctl(%d, I_PUSH, \"%s\"): %s",
+		     fd, opt->value.u_string, strerror(errno));
+	       rc = -1;
+	    }
+	    break;
 #endif
 #if 0
 } } }

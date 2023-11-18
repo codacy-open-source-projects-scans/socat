@@ -45,6 +45,12 @@ extern const struct optname optionnames[];
 
 extern int xioopen_makedual(xiofile_t *file);
 
+#if WITH_HELP
+extern int xio_syntax(const char *addr, int expectnum, int isnum, const char *syntax);
+#else
+#define xio_syntax(a,e,i,s) Error3("%s: wrong number of parameters (%d instead of %d)", a, i, e);
+#endif
+
 #define retropt_2bytes(o,c,r) retropt_ushort(o,c,r)
 
 /* mode_t might be unsigned short or unsigned int or what else? */

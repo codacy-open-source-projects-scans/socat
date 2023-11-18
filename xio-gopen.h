@@ -5,6 +5,6 @@
 #ifndef __xio_gopen_h_included
 #define __xio_gopen_h_included 1
 
-extern const struct addrdesc addr_gopen;
+extern const struct addrdesc xioaddr_gopen;
 
 #endif /* !defined(__xio_gopen_h_included) */

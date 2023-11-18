@@ -5,7 +5,7 @@
 #ifndef __xio_readline_h_included
 #define __xio_readline_h_included 1
 
-extern const struct addrdesc addr_readline;
+extern const struct addrdesc xioaddr_readline;
 
 extern const struct optdesc opt_history_file;
 extern const struct optdesc opt_prompt;

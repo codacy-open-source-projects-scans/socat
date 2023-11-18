@@ -21,38 +21,65 @@ const struct optdesc opt_lowport = { "lowport", NULL, OPT_LOWPORT, GROUP_IPAPP, 
 
 #if WITH_IP4
 /* we expect the form "host:port" */
-int xioopen_ipapp_connect(int argc, const char *argv[], struct opt *opts,
-			   int xioflags, xiofile_t *xxfd,
-			   unsigned groups, int socktype, int ipproto,
-			   int pf) {
-   struct single *xfd = &xxfd->stream;
+int xioopen_ipapp_connect(
+	int argc,
+	const char *argv[],
+	struct opt *opts,
+	int xioflags,
+	xiofile_t *xxfd,
+	const struct addrdesc *addrdesc)
+{
+   struct single *sfd = &xxfd->stream;
    struct opt *opts0 = NULL;
+   int socktype = addrdesc->arg1;
+   int ipproto = addrdesc->arg2;
+   int pf = addrdesc->arg3;
    const char *hostname = argv[1], *portname = argv[2];
    bool dofork = false;
+   int maxchildren = 0;
    union sockaddr_union us_sa,  *us = &us_sa;
-   union sockaddr_union them_sa, *them = &them_sa;
    socklen_t uslen = sizeof(us_sa);
-   socklen_t themlen = sizeof(them_sa);
+   struct addrinfo *themlist, *themp;
+   char infobuff[256];
    bool needbind = false;
    bool lowport = false;
    int level;
+   struct addrinfo **ai_sorted;
+   int i;
    int result;
 
    if (argc != 3) {
-      Error2("%s: wrong number of parameters (%d instead of 2)", argv[0], argc-1);
+      xio_syntax(argv[0], 2, argc-1, addrdesc->syntax);
+      return STAT_NORETRY;
    }
 
-   xfd->howtoend = END_SHUTDOWN;
+   xioinit_ip(&pf, xioparms.default_ip);
+   if (sfd->howtoend == END_UNSPEC)
+      sfd->howtoend = END_SHUTDOWN;
 
-   if (applyopts_single(xfd, opts, PH_INIT) < 0)  return -1;
-   applyopts(-1, opts, PH_INIT);
+   if (applyopts_single(sfd, opts, PH_INIT) < 0)
+      return -1;
+   applyopts(sfd, -1, opts, PH_INIT);
 
    retropt_bool(opts, OPT_FORK, &dofork);
+   if (dofork) {
+      if (!(xioflags & XIO_MAYFORK)) {
+	 Error("option fork not allowed here");
+	 return STAT_NORETRY;
+      }
+      sfd->flags |= XIO_DOESFORK;
+   }
+
+   retropt_int(opts, OPT_MAX_CHILDREN, &maxchildren);
+
+   if (! dofork && maxchildren) {
+       Error("option max-children not allowed without option fork");
+       return STAT_NORETRY;
+   }
 
    if (_xioopen_ipapp_prepare(opts, &opts0, hostname, portname, &pf, ipproto,
-			      xfd->para.socket.ip.res_opts[1],
-			      xfd->para.socket.ip.res_opts[0],
-			      them, &themlen, us, &uslen, &needbind, &lowport,
+			      sfd->para.socket.ip.ai_flags,
+			      &themlist, us, &uslen, &needbind, &lowport,
 			      socktype) != STAT_OK) {
       return STAT_NORETRY;
    }
@@ -61,44 +88,74 @@ int xioopen_ipapp_connect(int argc, const char *argv[], struct opt *opts,
       xiosetchilddied();	/* set SIGCHLD handler */
    }
 
-   if (xioopts.logopt == 'm') {
+   if (xioparms.logopt == 'm') {
       Info("starting connect loop, switching to syslog");
-      diag_set('y', xioopts.syslogfac);  xioopts.logopt = 'y';
+      diag_set('y', xioparms.syslogfac);  xioparms.logopt = 'y';
    } else {
       Info("starting connect loop");
    }
 
-   do {	/* loop over retries and forks */
+   /* Count addrinfo entries */
+   themp = themlist;
+   i = 0;
+   while (themp != NULL) {
+      ++i;
+      themp = themp->ai_next;
+   }
+   ai_sorted = Calloc((i+1), sizeof(struct addrinfo *));
+   if (ai_sorted == NULL)
+      return STAT_RETRYLATER;
+   /* Generate a list of addresses sorted by preferred ip version */
+   _xio_sort_ip_addresses(themlist, ai_sorted);
+
+   do {	/* loop over retries, and forks */
+
+      /* Loop over themlist - no, over ai_sorted */
+      result = STAT_RETRYLATER;
+      i = 0;
+      themp = ai_sorted[i++];
+      while (themp != NULL) {
+	 Notice1("opening connection to %s",
+		 sockaddr_info(themp->ai_addr, themp->ai_addrlen,
+			       infobuff, sizeof(infobuff)));
 
 #if WITH_RETRY
-      if (xfd->forever || xfd->retry) {
-	 level = E_INFO;
-      } else
+	 if (sfd->forever || sfd->retry || ai_sorted[i] != NULL) {
+	    level = E_INFO;
+         } else
 #endif /* WITH_RETRY */
-	 level = E_ERROR;
+	    level = E_ERROR;
 
-      result =
-	 _xioopen_connect(xfd,
+       result =
+	 _xioopen_connect(sfd,
 			  needbind?us:NULL, uslen,
-			  (struct sockaddr *)them, themlen,
-			  opts, pf, socktype, ipproto, lowport, level);
+			  themp->ai_addr, themp->ai_addrlen,
+			  opts, pf?pf:themp->ai_family, socktype, ipproto,
+			  lowport, level);
+       if (result == STAT_OK)
+	  break;
+       themp = ai_sorted[i++];
+       if (themp == NULL) {
+	  result = STAT_RETRYLATER;
+       }
+      }
       switch (result) {
       case STAT_OK: break;
 #if WITH_RETRY
       case STAT_RETRYLATER:
       case STAT_RETRYNOW:
-	 if (xfd->forever || xfd->retry) {
-	    --xfd->retry;
+	 if (sfd->forever || sfd->retry) {
+	    --sfd->retry;
 	    if (result == STAT_RETRYLATER) {
-	       Nanosleep(&xfd->intervall, NULL);
+	       Nanosleep(&sfd->intervall, NULL);
 	    }
 	    dropopts(opts, PH_ALL); free(opts); opts = copyopts(opts0, GROUP_ALL);
 	    continue;
 	 }
-	 return STAT_NORETRY;
 #endif /* WITH_RETRY */
       default:
-	  free(opts0);free(opts);
+	 free(ai_sorted);
+	 free(opts0);free(opts);
 	 return result;
       }
 
@@ -106,27 +163,32 @@ int xioopen_ipapp_connect(int argc, const char *argv[], struct opt *opts,
       if (dofork) {
 	 pid_t pid;
 	 int level = E_ERROR;
-	 if (xfd->forever || xfd->retry) {
+	 if (sfd->forever || sfd->retry) {
 	    level = E_WARN;	/* most users won't expect a problem here,
 				   so Notice is too weak */
 	 }
-	 while ((pid = xio_fork(false, level)) < 0) {
-	    if (xfd->forever || --xfd->retry) {
-	       Nanosleep(&xfd->intervall, NULL); continue;
+	 while ((pid = xio_fork(false, level, sfd->shutup)) < 0) {
+	    if (sfd->forever || --sfd->retry) {
+	       Nanosleep(&sfd->intervall, NULL); continue;
 	    }
-	  free(opts0);
+	    free(ai_sorted);
+	    free(opts0);
 	    return STAT_RETRYLATER;
 	 }
 
 	 if (pid == 0) {	/* child process */
-	    xfd->forever = false;  xfd->retry = 0;
+	    sfd->forever = false;  sfd->retry = 0;
 	    break;
 	 }
 
 	 /* parent process */
-	 Close(xfd->fd);
+	 Close(sfd->fd);
 	 /* with and without retry */
-	 Nanosleep(&xfd->intervall, NULL);
+	 Nanosleep(&sfd->intervall, NULL);
+	 while (maxchildren > 0 && num_child >= maxchildren) {
+	    Info1("all %d allowed children are active, waiting", maxchildren);
+	    Nanosleep(&sfd->intervall, NULL);
+	 }
 	 dropopts(opts, PH_ALL); free(opts); opts = copyopts(opts0, GROUP_ALL);
 	 continue;	/* with next socket() bind() connect() */
       } else
@@ -136,12 +198,14 @@ int xioopen_ipapp_connect(int argc, const char *argv[], struct opt *opts,
       }
    } while (true);
    /* only "active" process breaks (master without fork, or child) */
+   free(ai_sorted);
+   xiofreeaddrinfo(themlist);
 
-   if ((result = _xio_openlate(xfd, opts)) < 0) {
+   if ((result = _xio_openlate(sfd, opts)) < 0) {
 	   free(opts0);free(opts);
       return result;
    }
-   free(opts0);free(opts);
+   free(opts0); free(opts);
    return 0;
 }
 
@@ -152,55 +216,57 @@ int xioopen_ipapp_connect(int argc, const char *argv[], struct opt *opts,
    OPT_PROTOCOL_FAMILY, OPT_BIND, OPT_SOURCEPORT, OPT_LOWPORT
  */
 int
-   _xioopen_ipapp_prepare(struct opt *opts, struct opt **opts0,
-			   const char *hostname,
-			   const char *portname,
-			   int *pf,
-			   int protocol,
-			   unsigned long res_opts0, unsigned long res_opts1,
-			   union sockaddr_union *them, socklen_t *themlen,
-			   union sockaddr_union *us, socklen_t *uslen,
-			   bool *needbind, bool *lowport,
-			   int socktype) {
+   _xioopen_ipapp_prepare(
+	   struct opt *opts,
+	   struct opt **opts0,
+	   const char *hostname,
+	   const char *portname,
+	   int *pf,
+	   int protocol,
+	   const int ai_flags[2],
+	   struct addrinfo **themlist,
+	   union sockaddr_union *us,
+	   socklen_t *uslen,
+	   bool *needbind,
+	   bool *lowport,
+	   int socktype) {
    uint16_t port;
-   char infobuff[256];
    int result;
 
    retropt_socket_pf(opts, pf);
 
-   if ((result =
+   if (hostname != NULL || portname != NULL) {
+    if ((result =
 	xiogetaddrinfo(hostname, portname,
 		       *pf, socktype, protocol,
-		       (union sockaddr_union *)them, themlen,
-		       res_opts0, res_opts1
-		       ))
+		       themlist, ai_flags))
        != STAT_OK) {
       return STAT_NORETRY;	/*! STAT_RETRYLATER? */
-   }
-   if (*pf == PF_UNSPEC) {
-      *pf = them->soa.sa_family;
+    }
    }
 
-   applyopts(-1, opts, PH_EARLY);
+   applyopts(NULL, -1, opts, PH_EARLY);
 
    /* 3 means: IP address AND port accepted */
-   if (retropt_bind(opts, *pf, socktype, protocol, (struct sockaddr *)us, uslen, 3,
-		    res_opts0, res_opts1)
+   if (retropt_bind(opts, (*pf!=PF_UNSPEC)?*pf:(*themlist)->ai_family,
+		    socktype, protocol, (struct sockaddr *)us, uslen, 3,
+		    ai_flags)
        != STAT_NOACTION) {
       *needbind = true;
    } else {
-      switch (*pf) {
+      switch ((*pf!=PF_UNSPEC)?*pf:(*themlist)->ai_family) {
 #if WITH_IP4
       case PF_INET:  socket_in_init(&us->ip4);  *uslen = sizeof(us->ip4); break;
 #endif /* WITH_IP4 */
 #if WITH_IP6
       case PF_INET6: socket_in6_init(&us->ip6); *uslen = sizeof(us->ip6); break;
 #endif /* WITH_IP6 */
+      default: Error("unsupported protocol family");
       }
    }
 
    if (retropt_2bytes(opts, OPT_SOURCEPORT, &port) >= 0) {
-      switch (*pf) {
+      switch ((*pf!=PF_UNSPEC)?*pf:(*themlist)->ai_family) {
 #if WITH_IP4
       case PF_INET:  us->ip4.sin_port = htons(port); break;
 #endif /* WITH_IP4 */
@@ -216,8 +282,6 @@ int
 
    *opts0 = copyopts(opts, GROUP_ALL);
 
-   Notice1("opening connection to %s",
-	   sockaddr_info((struct sockaddr *)them, *themlen, infobuff, sizeof(infobuff)));
    return STAT_OK;
 }
 #endif /* WITH_IP4 */
@@ -228,27 +292,38 @@ int
    applies and consumes the following options:
    OPT_PROTOCOL_FAMILY, OPT_BIND
  */
-int _xioopen_ipapp_listen_prepare(struct opt *opts, struct opt **opts0,
-				   const char *portname, int *pf, int ipproto,
-				  unsigned long res_opts0,
-				  unsigned long res_opts1,
-				   union sockaddr_union *us, socklen_t *uslen,
-				   int socktype) {
+int _xioopen_ipapp_listen_prepare(
+	struct opt *opts,
+	struct opt **opts0,
+	const char *portname,
+	int *pf,
+	int ipproto,
+	const int ai_flags[2],
+	union sockaddr_union *us,
+	socklen_t *uslen,
+	int socktype)
+{
    char *bindname = NULL;
+   int ai_flags2[2];
    int result;
 
    retropt_socket_pf(opts, pf);
 
    retropt_string(opts, OPT_BIND, &bindname);
-   if ((result =
-	xiogetaddrinfo(bindname, portname, *pf, socktype, ipproto,
-		       (union sockaddr_union *)us, uslen,
-		       res_opts0, res_opts1))
-       != STAT_OK) {
+
+   /* Set AI_PASSIVE, except when it is explicitely disabled */
+   ai_flags2[0] = ai_flags[0];
+   ai_flags2[1] = ai_flags[1];
+   if (!(ai_flags2[1] & AI_PASSIVE))
+      ai_flags2[0] |= AI_PASSIVE;
+
+   result =
+	xioresolve(bindname, portname, *pf, socktype, ipproto,
+		   us, uslen, ai_flags2);
+   if (result != STAT_OK) {
       /*! STAT_RETRY? */
       return result;
    }
-
    *opts0 = copyopts(opts, GROUP_ALL);
    return STAT_OK;
 }
@@ -256,22 +331,36 @@ int _xioopen_ipapp_listen_prepare(struct opt *opts, struct opt **opts0,
 
 /* we expect the form: port */
 /* currently only used for TCP4 */
-int xioopen_ipapp_listen(int argc, const char *argv[], struct opt *opts,
-			  int xioflags, xiofile_t *fd,
-			 unsigned groups, int socktype,
-			 int ipproto, int pf) {
+int xioopen_ipapp_listen(
+	int argc,
+	const char *argv[],
+	struct opt *opts,
+	int xioflags,
+	xiofile_t *xfd,
+	const struct addrdesc *addrdesc)
+{
+   struct single *sfd = &xfd->stream;
    struct opt *opts0 = NULL;
+   int socktype = addrdesc->arg1;
+   int ipproto = addrdesc->arg2;
+   int pf = addrdesc->arg3;
    union sockaddr_union us_sa, *us = &us_sa;
    socklen_t uslen = sizeof(us_sa);
    int result;
 
    if (argc != 2) {
-      Error2("%s: wrong number of parameters (%d instead of 1)", argv[0], argc-1);
+      xio_syntax(argv[0], 2, argc-1, addrdesc->syntax);
+      return STAT_NORETRY;
    }
 
+   xioinit_ip(&pf, xioparms.default_ip);
    if (pf == PF_UNSPEC) {
 #if WITH_IP4 && WITH_IP6
-      pf = xioopts.default_ip=='6'?PF_INET6:PF_INET;
+      switch (xioparms.default_ip) {
+      case '4': pf = PF_INET; break;
+      case '6': pf = PF_INET6; break;
+      default: break;		/* includes \0 */
+      }
 #elif WITH_IP6
       pf = PF_INET6;
 #else
@@ -279,28 +368,84 @@ int xioopen_ipapp_listen(int argc, const char *argv[], struct opt *opts,
 #endif
    }
 
-   fd->stream.howtoend = END_SHUTDOWN;
+   if (sfd->howtoend == END_UNSPEC)
+      sfd->howtoend = END_SHUTDOWN;
 
-   if (applyopts_single(&fd->stream, opts, PH_INIT) < 0)  return -1;
-   applyopts(-1, opts, PH_INIT);
-   applyopts(-1, opts, PH_EARLY);
+   if (applyopts_single(sfd, opts, PH_INIT) < 0)  return -1;
+   applyopts(sfd, -1, opts, PH_INIT);
+   applyopts(sfd, -1, opts, PH_EARLY);
 
    if (_xioopen_ipapp_listen_prepare(opts, &opts0, argv[1], &pf, ipproto,
-				     fd->stream.para.socket.ip.res_opts[1],
-				     fd->stream.para.socket.ip.res_opts[0],
+				     sfd->para.socket.ip.ai_flags,
 				     us, &uslen, socktype)
        != STAT_OK) {
       return STAT_NORETRY;
    }
 
    if ((result =
-	xioopen_listen(&fd->stream, xioflags,
+	xioopen_listen(sfd, xioflags,
 		       (struct sockaddr *)us, uslen,
-		     opts, opts0, pf, socktype, ipproto))
+		       opts, opts0, pf, socktype, ipproto))
        != 0)
       return result;
    return 0;
 }
 #endif /* WITH_IP4 && WITH_TCP && WITH_LISTEN */
+
+
+/* Sort the records of an addrinfo list themp (as returned by getaddrinfo),
+   return the sorted list in the array ai_sorted (takes at most n entries
+   including the terminating NULL)
+   Returns 0 on success. */
+int _xio_sort_ip_addresses(
+	struct addrinfo *themlist,
+	struct addrinfo **ai_sorted)
+{
+	struct addrinfo *themp;
+	int i;
+	int ipv[3];
+	int ipi = 0;
+
+	/* Make a simple array of IP version preferences */
+	switch (xioparms.preferred_ip) {
+	case '0':
+		ipv[0] = PF_UNSPEC;
+		ipv[1] = -1;
+		break;
+	case '4':
+		ipv[0] = PF_INET;
+		ipv[1] = PF_INET6;
+		ipv[2] = -1;
+		break;
+	case '6':
+		ipv[0] = PF_INET6;
+		ipv[1] = PF_INET;
+		ipv[2] = -1;
+		break;
+	default:
+		Error("INTERNAL: undefined preferred_ip value");
+		return -1;
+	}
+
+	/* Create the sorted list */
+	ipi = 0;
+	i = 0;
+	while (ipv[ipi] >= 0) {
+		themp = themlist;
+		while (themp != NULL) {
+			if (ipv[ipi] == PF_UNSPEC) {
+				ai_sorted[i] = themp;
+				++i;
+			} else if (ipv[ipi] == themp->ai_family) {
+				ai_sorted[i] = themp;
+				++i;
+			}
+			themp = themp->ai_next;
+		}
+		++ipi;
+	}
+	ai_sorted[i] = NULL;
+	return 0;
+}
 
 #endif /* WITH_TCP || WITH_UDP */

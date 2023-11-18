@@ -7,7 +7,7 @@
 
 extern const struct optdesc opt_ip4_add_membership;
 
-int xioparsenetwork_ip4(const char *rangename, struct xiorange *range);
+extern int xioparsenetwork_ip4(const char *rangename, struct xiorange *range, const int ai_flags[2]);
 extern
 int xiocheckrange_ip4(struct sockaddr_in *pa, struct xiorange *range);
 extern int

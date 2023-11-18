@@ -13,6 +13,7 @@
 
 extern const struct optdesc opt_ipv6_v6only;
 extern const struct optdesc opt_ipv6_join_group;
+extern const struct optdesc opt_ipv6_join_source_group;
 extern const struct optdesc opt_ipv6_pktinfo;
 extern const struct optdesc opt_ipv6_recvpktinfo;
 extern const struct optdesc opt_ipv6_rthdr;
@@ -31,23 +32,22 @@ extern const struct optdesc opt_ipv6_tclass;
 extern const struct optdesc opt_ipv6_recvtclass;
 extern const struct optdesc opt_ipv6_recvpathmtu;
 
-extern int xioip6_pton(const char *src, struct in6_addr *dst);
-extern
-int xioparsenetwork_ip6(const char *rangename, struct xiorange *range);
+extern int xioip6_pton(const char *src, struct in6_addr *dst, const int ai_flags[2]);
+extern int xioparsenetwork_ip6(const char *rangename, struct xiorange *range, const int ai_flags[2]);
 extern int xiorange_ip6andmask(struct xiorange *range);
 
 extern
 int xiocheckrange_ip6(struct sockaddr_in6 *pa, struct xiorange *range);
 extern
-int xiolog_ancillary_ip6(struct cmsghdr *cmsg, int *num,
-			 char *typbuff, int typlen,
-			 char *nambuff, int namlen,
-			 char *envbuff, int envlen,
-			 char *valbuff, int vallen);
+int xiolog_ancillary_ip6(struct single *sfd, struct cmsghdr *cmsg, int *num, char *typbuff, int typlen, char *nambuff, int namlen, char *envbuff, int envlen, char *valbuff, int vallen);
 extern int
 xiosetsockaddrenv_ip6(int idx, char *namebuff, size_t namelen,
 		      char *valuebuff, size_t valuelen,
 		      struct sockaddr_in6 *sa, int ipproto);
+extern int xioapply_ipv6_join_group(xiosingle_t *xfd, struct opt *opt);
+
+extern int xiotype_ip6_join_source_group(char* token, const struct optname *ent, struct opt *opt);
+extern int xioapply_ip6_join_source_group(struct single *xfd, struct opt *opt);
 
 #endif /* WITH_IP6 */
 

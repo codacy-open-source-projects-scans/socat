@@ -99,17 +99,22 @@ typedef int sig_atomic_t;
 #endif
 
 #define F_uint8_t "%hu"
+#define F_uint8_x "%02hx"
 #define F_int8_t  "%hd"
 
 #ifndef F_uint16_t
 #  if HAVE_BASIC_UINT16_T==0
 #    define F_uint16_t "%hu"
+#    define F_uint16_x "%04hx"
 #  elif HAVE_BASIC_UINT16_T==2
 #    define F_uint16_t "%hu"
+#    define F_uint16_x "%04hx"
 #  elif HAVE_BASIC_UINT16_T==4
 #    define F_uint16_t "%u"
+#    define F_uint16_x "%04x"
 #  elif HAVE_BASIC_UINT16_T==6
 #    define F_uint16_t "%lu"
+#    define F_uint16_x "%04lx"
 #  else
 #    error "HAVE_BASIC_UINT16_T is out of range:" HAVE_BASIC_UINT16_T
 #  endif
@@ -118,12 +123,16 @@ typedef int sig_atomic_t;
 #ifndef F_uint32_t
 #  if HAVE_BASIC_UINT32_T==0
 #    define F_uint32_t "%hu"
+#    define F_uint32_x "%08hx"
 #  elif HAVE_BASIC_UINT32_T==2
 #    define F_uint32_t "%hu"
+#    define F_uint32_x "%08hx"
 #  elif HAVE_BASIC_UINT32_T==4
 #    define F_uint32_t "%u"
+#    define F_uint32_x "%08x"
 #  elif HAVE_BASIC_UINT32_T==6
 #    define F_uint32_t "%lu"
+#    define F_uint32_x "%08lx"
 #  else
 #    error "HAVE_BASIC_UINT32_T is out of range:" HAVE_BASIC_UINT32_T
 #  endif
@@ -132,14 +141,19 @@ typedef int sig_atomic_t;
 #ifndef F_uint64_t
 #  if HAVE_BASIC_UINT64_T==0
 #    define F_uint64_t "%hu"
+#    define F_uint64_x "%016hx"
 #  elif HAVE_BASIC_UINT64_T==2
 #    define F_uint64_t "%hu"
+#    define F_uint64_x "%016hx"
 #  elif HAVE_BASIC_UINT64_T==4
 #    define F_uint64_t "%u"
+#    define F_uint64_x "%016x"
 #  elif HAVE_BASIC_UINT64_T==6
 #    define F_uint64_t "%lu"
+#    define F_uint64_x "%016lx"
 #  elif HAVE_BASIC_UINT64_T==8
 #    define F_uint64_t "%llu"
+#    define F_uint64_x "%016llx"
 #  else
 #    error "HAVE_BASIC_UINT64_T is out of range:" HAVE_BASIC_UINT64_T
 #  endif
@@ -815,6 +829,13 @@ typedef unsigned long T_sigset;
 #  elif TYPEOF_STRUCT_TIMEVAL_TV_USEC==5
 #     define F_tv_usec "%lu"
 #  endif
+#endif
+
+/* OpenBSD (at least 7.2) does better with this special setting */
+#if __FreeBSD__ || __OpenBSD__
+#  define UNIX_TIGHTSOCKLEN false
+#else
+#  define UNIX_TIGHTSOCKLEN true
 #endif
 
 /* Cygwin 1.3.22 has the prototypes, but not the type... */

@@ -5,6 +5,6 @@
 #ifndef __xio_system_h_included
 #define __xio_system_h_included 1
 
-extern const struct addrdesc addr_system;
+extern const struct addrdesc xioaddr_system;
 
 #endif /* !defined(__xio_system_h_included) */

@@ -61,10 +61,10 @@ multicast address, and the servers may send response packets. Note that the
 servers would also respond to other clients' requests.</p>
 
 <p>Multicast server:</p>
-
-<span class="frame"><span class="shell">
-socat UDP4-RECVFROM:6666,ip-add-membership=224.1.0.1:192.168.10.2,fork EXEC:hostname
-</span></span>
+<div class="shell">socat \
+    UDP4-RECVFROM:6666,ip-add-membership=224.1.0.1:192.168.10.2,fork \
+    EXEC:hostname
+</div>
 <p>
 This command receives multicast packets addressed to 224.1.0.1 and forks a
 child process for each. The child processes may each send one or more reply
@@ -75,9 +75,10 @@ parallel.</p>
 
 <p>Multicast client:</p>
 
-<span class="frame"><span class="shell">
-socat STDIO UDP4-DATAGRAM:224.1.0.1:6666,range=192.168.10.0/24
-</span></span>
+<span class="shell">socat \
+    STDIO \
+    UDP4-DATAGRAM:224.1.0.1:6666,range=192.168.10.0/24
+</span>
 <p>
 This process transfers data from stdin to the multicast address, and transfers 
 packets received from the local network to stdout. It does not matter in which
@@ -101,9 +102,10 @@ Of these packets, socat handles only those matching the following criteria:
 
 <p>Broadcast server:</p>
 
-<span class="frame"><span class="shell">
-socat UDP4-RECVFROM:6666,broadcast,fork EXEC:hostname
-</span></span>
+<span class="shell">socat \
+    UDP4-RECVFROM:6666,broadcast,fork \
+    EXEC:hostname
+</span>
 <p>
 This command receives packets addressed to a local broadcast address and forks
 a child process for each. The child processes may each send one or more reply
@@ -113,9 +115,10 @@ parallel.</p>
 
 <p>Broadcast client:</p>
 
-<span class="frame"><span class="shell">
-socat STDIO UDP4-DATAGRAM:192.168.10.255:6666,broadcast,range=192.168.10.0/24
-</span></span>
+<span class="shell">socat \
+    STDIO \
+    UDP4-DATAGRAM:192.168.10.255:6666,broadcast,range=192.168.10.0/24
+</span>
 <p>
 This process transfers data from stdin to the broadcast address, and transfers 
 packets received from the local network to stdout. It does not matter in which
@@ -143,9 +146,10 @@ address. This allows to start processes on different hosts on the local network
 that will communicate symmetrically, so each process can send messages that are
 received by all the other ones.</p>
 
-<span class="frame"><span class="shell">
-socat STDIO UDP4-DATAGRAM:224.1.0.1:6666,bind=:6666,range=192.168.10.0/24,ip-add-membership=224.1.0.1:192.168.10.2
-</span></span>
+<span class="shell">socat \
+    STDIO \
+    UDP4-DATAGRAM:224.1.0.1:6666,bind=:6666,range=192.168.10.0/24,ip-add-membership=224.1.0.1:192.168.10.2
+</span>
 <p>
 This command is valid for host 192.168.10.2; adapt this address to the
 particular interface addresses of the hosts.
@@ -167,9 +171,10 @@ on the local network.
 <p>Just as with multicast, it is possible to combine broadcast sender and
 receiver in one socat address.</p>
 
-<span class="frame"><span class="shell">
-socat STDIO UDP4-DATAGRAM:255.255.255.255:6666,bind=:6666,range=192.168.10.0/24,broadcast
-</span></span>
+<span class="shell">socat \
+    STDIO \
+    UDP4-DATAGRAM:255.255.255.255:6666,bind=:6666,range=192.168.10.0/24,broadcast
+</span>
 <p>
 Starting this process opens a socket on port 6666 that will receive packets
 directed to a local broadcast addresses. Only packets with matching source
@@ -213,8 +218,9 @@ property of the incoming packet.
 <h3>Routing</h3>
 <p>
 When you receive an error like:</p>
-<table border="1" bgcolor="#e08080"><tr><td><tt>... E sendto(3, 0x80c2e44, 4,
-0, AF=2 224.1.0.1:6666, 16): Network is unreachable</tt></td></tr></table>
+<span class="error">
+  ... E sendto(3, 0x80c2e44, 4, 0, AF=2 224.1.0.1:6666, 16): Network is unreachable
+</span>
 <p>you have a routing problem. The (Linux) IP stack seems to handle multicast
 addresses just like unicast addresses when determining their route (interface
   and gateway), i.e. the routing table needs an entry that somehow matches the
@@ -224,9 +230,8 @@ For the same reason, multicast packets will probably leave your host on the
 interface with the default route if it is specified.</p>
 <p>
 Set a multicast/broadcast route with the following command (Linux):</p>
-<span class="frame"><span class="shell">
-route add -net 224.0.0.0/3 gw 192.168.10.2
-</span></span>
+<span class="shell">route add -net 224.0.0.0/3 gw 192.168.10.2
+</span>
 
 <a name="ALLSYSTEMS"></a>
 <h3>ALL-SYSTEMS multicast address</h3>
@@ -318,17 +323,20 @@ information about incoming packets.
 Example: Start a receiver of the following form (tried on Linux):
 </p>
 
-<span class="frame"><span class="shell">
-socat -u UDP-RECVFROM:8888,reuseaddr,ip-add-membership=224.1.0.1:192.168.10.2,ip-pktinfo,fork SYSTEM:export
-</span></span>
+<span class="shell">socat -u \
+    UDP-RECVFROM:8888,reuseaddr,ip-add-membership=224.1.0.1:192.168.10.2,ip-pktinfo,fork \
+    SYSTEM:export
+</span>
 
 <p>
 Then send a multicast packet from the client:
 </p>
 
-<span class="frame"><span class="shell">
-echo |socat -u STDIO UDP-DATAGRAM:224.1.0.1:8888
-</span></span>
+<span class="shell">echo | \
+    socat -u \
+    STDIO \
+    UDP-DATAGRAM:224.1.0.1:8888
+</span>
 
 <p>
 On the server the following text should appear (only interesting lines shown):

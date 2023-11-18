@@ -89,7 +89,6 @@ int setenv(const char *name, const char *value, int overwrite) {
 #endif /* !HAVE_SETENV */
 
 
-
 /* sanitizes an "untrusted" character. output buffer must provide at least 4
    characters space.
    Does not append \0. returns length of output (currently: max 4) */

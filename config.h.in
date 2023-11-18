@@ -282,11 +282,17 @@
 /* Define if you have the <linux/if_tun.h> header file.  */
 #undef HAVE_LINUX_IF_TUN_H
 
+/* Define if you have the <linux/dccp.h> header file.  */
+#undef HAVE_LINUX_DCCP_H
+
 /* Define if you have the <linux/vm_sockets.h> header file.  */
 #undef HAVE_LINUX_VM_SOCKETS_H
 
-/* Define if you have the <netpacket/packet.h> header file.  */
-#undef HAVE_NETPACKET_PACKET_H
+/* Define if you have the <sched.h> header file.  */
+#undef HAVE_SCHED_H
+
+/* Define if you have the <linux/if_packet.h> header file.  */
+#undef HAVE_LINUX_IF_PACKET_H
 
 /* Define if you have the <netinet/if_ether.h> header file.  */
 #undef HAVE_NETINET_IF_ETHER_H
@@ -388,6 +394,9 @@
 /* Define if you have struct ip_mreq_source */
 #undef HAVE_STRUCT_IP_MREQ_SOURCE
 
+/* Define if you have struct group_source_req */
+#undef HAVE_STRUCT_GROUP_SOURCE_REQ
+
 /* Define if you have struct ifreq */
 #undef HAVE_STRUCT_IFREQ
 
@@ -427,8 +436,17 @@
 /* define if you have struct in6_pktinfo */
 #undef HAVE_STRUCT_IN6_PKTINFO
 
+/* define if you have struct tpacket_auxdata */
+#undef HAVE_STRUCT_TPACKET_AUXDATA
+
+/* define if you have struct tpacket_auxdata and it has tp_vlan_tpid */
+#undef HAVE_STRUCT_TPACKET_AUXDATA_TP_VLAN_TPID
+
 /* define if your struct ip has ip_hl; otherwise assume ip_vhl */
 #undef HAVE_STRUCT_IP_IP_HL
+
+/* Define if you have the setns function */
+#undef HAVE_SETNS
 
 /* Define if you have the setenv function */
 #undef HAVE_SETENV
@@ -453,8 +471,14 @@
 /* Define if you have the OPENSSL_init_ssl function */
 #undef HAVE_OPENSSL_INIT_SSL
 
+/* Define if you have the OPENSSL_INIT_SETTINGS type (guarded for OpenBSD) */
+#undef HAVE_OPENSSL_INIT_SETTINGS
+
 /* Define if you have the SSL_library_init function */
-#undef HAVE_SSL_LIBRARY_INIT
+#undef HAVE_SSL_library_init
+
+/* Define if you have the OPENSSL_INIT_new function */
+#undef HAVE_OPENSSL_INIT_new
 
 /* Define if you have the SSLv2 client and server method functions. not in new openssl */
 #undef HAVE_SSLv2_client_method
@@ -526,6 +550,12 @@
 /* Define if you have the OpenSSL SSL_set_tlsext_host_name define/function */
 #undef HAVE_SSL_set_tlsext_host_name
 
+/* Define if you have the OpenSSL SSL_CTX_set_tlsext_max_fragment_length define/function */
+#undef HAVE_SSL_CTX_set_tlsext_max_fragment_length
+
+/* Define if you have the OpenSSL SSL_CTX_set_max_send_fragment define/function */
+#undef HAVE_SSL_CTX_set_max_send_fragment
+
 /* Define if you have the flock function */
 #undef HAVE_FLOCK
 
@@ -582,6 +612,12 @@
 
 /* is uint64_t already defined? */
 #undef HAVE_TYPE_UINT64
+
+/* Number of bits in a file offset, on hosts where this is settable. */
+#undef _FILE_OFFSET_BITS
+
+/* Define for large files, on AIX-style hosts. */
+#undef _LARGE_FILES
 
 /* Define if snprintf() returns required len on truncation (C-99 conform) */
 #undef HAVE_C99_SNPRINTF
@@ -654,12 +690,19 @@
 #undef HAVE_PROC_DIR_FD
 #undef HAVE_PROC_DIR_PATH
 
+#undef HAVE_DIRENT_D_TYPE
+
+#undef HAVE_RES_RETRANS
+#undef HAVE_RES_RETRY
+#undef HAVE_RES_NSADDR_LIST
+
 #undef HAVE_SETGRENT
 #undef HAVE_GETGRENT
 #undef HAVE_ENDGRENT
 #undef HAVE_GETGROUPLIST
 
 #undef WITH_HELP
+#undef WITH_STATS
 #undef WITH_STDIO
 #undef WITH_FDNUM
 #undef WITH_FILE
@@ -667,6 +710,7 @@
 #undef WITH_GOPEN
 #undef WITH_TERMIOS
 #undef WITH_PIPE
+#undef WITH_SOCKETPAIR
 #undef WITH_UNIX
 #undef WITH_ABSTRACT_UNIXSOCKET
 #undef WITH_IP4
@@ -676,20 +720,27 @@
 #undef WITH_INTERFACE
 #undef WITH_TCP
 #undef WITH_UDP
+#undef WITH_UDPLITE
 #undef WITH_SCTP
+#undef WITH_DCCP
 #undef WITH_LISTEN
+#undef WITH_POSIXMQ
 #undef WITH_SOCKS4
 #undef WITH_SOCKS4A
+#undef WITH_SOCKS5
 #undef WITH_VSOCK
+#undef WITH_NAMESPACES
 #undef WITH_PROXY
 #undef WITH_EXEC
 #undef WITH_SYSTEM
+#undef WITH_SHELL
 #undef WITH_READLINE
 #undef WITH_TUN
 #undef WITH_PTY
 #undef WITH_FS
 #undef WITH_OPENSSL
 #undef WITH_OPENSSL_METHOD
+#undef WITH_RESOLVE
 #undef WITH_RES_DEPRECATED 	/* AAONLY,PRIMARY */
 #define WITH_STREAMS 1
 #undef WITH_FIPS
@@ -703,6 +754,8 @@
 #undef WITH_RETRY
 
 #undef WITH_MSGLEVEL
+
+#undef WITH_DEFAULT_IPV 	/* default IP version: "0", "4", "6" */
 
 #define BUILD_DATE __DATE__ " " __TIME__
 

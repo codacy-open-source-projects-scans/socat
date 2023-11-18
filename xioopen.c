@@ -8,11 +8,11 @@
 
 #include "xioopen.h"
 #include "xiomodes.h"
+#include "xiohelp.h"
 #include "nestlex.h"
 
 static xiofile_t *xioallocfd(void);
 
-xiosingle_t hugo;
 static xiosingle_t *xioparse_single(const char **addr);
 static xiofile_t *xioparse_dual(const char **addr);
 static int xioopen_dual(xiofile_t *xfd, int xioflags);
@@ -20,300 +20,397 @@ static int xioopen_dual(xiofile_t *xfd, int xioflags);
 const struct addrname addressnames[] = {
 #if 1
 #if WITH_STDIO
-   { "-",		&addr_stdio },
+   { "-",			&xioaddr_stdio },
 #endif
 #if defined(WITH_UNIX) && defined(WITH_ABSTRACT_UNIXSOCKET)
-   { "abstract",		&xioaddr_abstract_client },
-   { "abstract-client",		&xioaddr_abstract_client },
-   { "abstract-connect",	&xioaddr_abstract_connect },
+   { "ABSTRACT",		&xioaddr_abstract_client },
+   { "ABSTRACT-CLIENT",		&xioaddr_abstract_client },
+   { "ABSTRACT-CONNECT",	&xioaddr_abstract_connect },
 #if WITH_LISTEN
-   { "abstract-listen",		&xioaddr_abstract_listen },
+   { "ABSTRACT-LISTEN",		&xioaddr_abstract_listen },
 #endif
-   { "abstract-recv",		&xioaddr_abstract_recv },
-   { "abstract-recvfrom",	&xioaddr_abstract_recvfrom },
-   { "abstract-sendto",		&xioaddr_abstract_sendto },
+   { "ABSTRACT-RECV",		&xioaddr_abstract_recv },
+   { "ABSTRACT-RECVFROM",	&xioaddr_abstract_recvfrom },
+   { "ABSTRACT-SENDTO",		&xioaddr_abstract_sendto },
 #endif /* defined(WITH_UNIX) && defined(WITH_ABSTRACT_UNIXSOCKET) */
+#if WITH_LISTEN && WITH_FDNUM
+   { "ACCEPT", 			&xioaddr_accept_fd },
+   { "ACCEPT-FD", 		&xioaddr_accept_fd },
+#endif
 #if WITH_CREAT
-   { "creat",	&addr_creat },
-   { "create",	&addr_creat },
+   { "CREAT",			&xioaddr_creat },
+   { "CREATE",			&xioaddr_creat },
 #endif
 #if WITH_GENERICSOCKET
-   { "datagram",		&xioaddr_socket_datagram },
-   { "dgram",			&xioaddr_socket_datagram },
+   { "DATAGRAM",		&xioaddr_socket_datagram },
 #endif
-#if WITH_OPENSSL
-   { "dtls",		&xioaddr_openssl_dtls_client },
-   { "dtls-c",		&xioaddr_openssl_dtls_client },
-   { "dtls-client",	&xioaddr_openssl_dtls_client },
-   { "dtls-connect",	&xioaddr_openssl_dtls_client },
+#if (WITH_IP4 || WITH_IP6) && WITH_DCCP
+   { "DCCP",			&xioaddr_dccp_connect },
+   { "DCCP-CONNECT",		&xioaddr_dccp_connect },
 #if WITH_LISTEN
-   { "dtls-l",		&xioaddr_openssl_dtls_server },
-   { "dtls-listen",	&xioaddr_openssl_dtls_server },
-   { "dtls-server",	&xioaddr_openssl_dtls_server },
-#endif
-#endif
-#if WITH_PIPE
-   { "echo",		&addr_pipe },
-#endif
-#if WITH_EXEC
-   { "exec",		&addr_exec },
-#endif
-#if WITH_FDNUM
-   { "fd",		&addr_fd },
-#endif
-#if WITH_PIPE
-   { "fifo",		&addr_pipe },
-#endif
-#if WITH_FILE
-   { "file",		&addr_open },
-#endif
-#if WITH_GOPEN
-   { "gopen",	&addr_gopen },
-#endif
-#if WITH_INTERFACE
-   { "if",		&xioaddr_interface },
-#endif
-#if (WITH_IP4 || WITH_IP6) && WITH_TCP
-   { "inet",		&addr_tcp_connect },
-#endif
-#if (WITH_IP4 || WITH_IP6) && WITH_TCP && WITH_LISTEN
-   { "inet-l",	&addr_tcp_listen },
-   { "inet-listen",	&addr_tcp_listen },
-#endif
-#if WITH_IP4 && WITH_TCP
-   { "inet4",	&addr_tcp4_connect },
-#endif
-#if WITH_IP4 && WITH_TCP && WITH_LISTEN
-   { "inet4-l",	&addr_tcp4_listen },
-   { "inet4-listen",	&addr_tcp4_listen },
-#endif
-#if WITH_IP6 && WITH_TCP
-   { "inet6",	&addr_tcp6_connect },
-#endif
-#if WITH_IP6 && WITH_TCP && WITH_LISTEN
-   { "inet6-l",	&addr_tcp6_listen },
-   { "inet6-listen",	&addr_tcp6_listen },
-#endif
-#if WITH_INTERFACE
-   { "interface",	&xioaddr_interface },
-#endif
-#if WITH_RAWIP
-#if (WITH_IP4 || WITH_IP6)
-   { "ip",		&addr_rawip_sendto },
-   { "ip-datagram",	&addr_rawip_datagram },
-   { "ip-dgram",	&addr_rawip_datagram },
-   { "ip-recv",		&addr_rawip_recv },
-   { "ip-recvfrom",	&addr_rawip_recvfrom },
-   { "ip-send",	&addr_rawip_sendto },
-   { "ip-sendto",	&addr_rawip_sendto },
+   { "DCCP-L",			&xioaddr_dccp_listen },
+   { "DCCP-LISTEN",		&xioaddr_dccp_listen },
 #endif
 #if WITH_IP4
-   { "ip4",		&addr_rawip4_sendto },
-   { "ip4-datagram",	&addr_rawip4_datagram },
-   { "ip4-dgram",	&addr_rawip4_datagram },
-   { "ip4-recv",	&addr_rawip4_recv },
-   { "ip4-recvfrom",	&addr_rawip4_recvfrom },
-   { "ip4-send",	&addr_rawip4_sendto },
-   { "ip4-sendto",	&addr_rawip4_sendto },
-#endif
-#if WITH_IP6
-   { "ip6",		&addr_rawip6_sendto },
-   { "ip6-datagram",	&addr_rawip6_datagram },
-   { "ip6-dgram",	&addr_rawip6_datagram },
-   { "ip6-recv",	&addr_rawip6_recv },
-   { "ip6-recvfrom",	&addr_rawip6_recvfrom },
-   { "ip6-send",	&addr_rawip6_sendto },
-   { "ip6-sendto",	&addr_rawip6_sendto },
-#endif
-#endif /* WITH_RAWIP */
-#if WITH_UNIX
-   { "local",	&xioaddr_unix_connect },
-#endif
-#if WITH_FILE
-   { "open",		&addr_open },
-#endif
-#if WITH_OPENSSL
-   { "openssl",		&xioaddr_openssl },
-   { "openssl-connect",		&xioaddr_openssl },
-   { "openssl-dtls-client",	&xioaddr_openssl_dtls_client },
-   { "openssl-dtls-connect",	&xioaddr_openssl_dtls_client },
+   { "DCCP4",			&xioaddr_dccp4_connect },
+   { "DCCP4-CONNECT",		&xioaddr_dccp4_connect },
 #if WITH_LISTEN
-   { "openssl-dtls-listen",		&xioaddr_openssl_dtls_server },
-   { "openssl-dtls-server",		&xioaddr_openssl_dtls_server },
-   { "openssl-listen",		&xioaddr_openssl_listen },
-#endif
-#endif
-#if WITH_PIPE
-   { "pipe",		&addr_pipe },
-#endif
-#if WITH_PROXY
-   { "proxy",		&addr_proxy_connect },
-   { "proxy-connect",	&addr_proxy_connect },
-#endif
-#if WITH_PTY
-   { "pty",		&addr_pty },
-#endif
-#if WITH_READLINE
-   { "readline",	&addr_readline },
-#endif
-#if (WITH_IP4 || WITH_IP6) && WITH_SCTP
-   { "sctp",		&addr_sctp_connect },
-   { "sctp-connect",	&addr_sctp_connect },
-#if WITH_LISTEN
-   { "sctp-l",		&addr_sctp_listen },
-   { "sctp-listen",	&addr_sctp_listen },
-#endif
-#if WITH_IP4
-   { "sctp4",		&addr_sctp4_connect },
-   { "sctp4-connect",	&addr_sctp4_connect },
-#if WITH_LISTEN
-   { "sctp4-l",		&addr_sctp4_listen },
-   { "sctp4-listen",	&addr_sctp4_listen },
+   { "DCCP4-L",			&xioaddr_dccp4_listen },
+   { "DCCP4-LISTEN",		&xioaddr_dccp4_listen },
 #endif
 #endif /* WITH_IP4 */
 #if WITH_IP6
-   { "sctp6",		&addr_sctp6_connect },
-   { "sctp6-connect",	&addr_sctp6_connect },
+   { "DCCP6",			&xioaddr_dccp6_connect },
+   { "DCCP6-CONNECT",		&xioaddr_dccp6_connect },
 #if WITH_LISTEN
-   { "sctp6-l",		&addr_sctp6_listen },
-   { "sctp6-listen",	&addr_sctp6_listen },
+   { "DCCP6-L",			&xioaddr_dccp6_listen },
+   { "DCCP6-LISTEN",		&xioaddr_dccp6_listen },
+#endif
+#endif /* WITH_IP6 */
+#endif /* (WITH_IP4 || WITH_IP6) && WITH_DCCP */
+#if WITH_GENERICSOCKET
+   { "DGRAM",			&xioaddr_socket_datagram },
+#endif
+#if WITH_OPENSSL
+   { "DTLS",		&xioaddr_openssl_dtls_client },
+   { "DTLS-C",		&xioaddr_openssl_dtls_client },
+   { "DTLS-CLIENT",	&xioaddr_openssl_dtls_client },
+   { "DTLS-CONNECT",	&xioaddr_openssl_dtls_client },
+#if WITH_LISTEN
+   { "DTLS-L",		&xioaddr_openssl_dtls_server },
+   { "DTLS-LISTEN",	&xioaddr_openssl_dtls_server },
+   { "DTLS-SERVER",	&xioaddr_openssl_dtls_server },
+#endif
+#endif
+#if WITH_PIPE
+   { "ECHO",			&xioaddr_pipe },
+#endif
+#if WITH_EXEC
+   { "EXEC",			&xioaddr_exec },
+#endif
+#if WITH_FDNUM
+   { "FD",			&xioaddr_fd },
+#endif
+#if WITH_PIPE
+   { "FIFO",			&xioaddr_pipe },
+#endif
+#if WITH_FILE
+   { "FILE",			&xioaddr_open },
+#endif
+#if WITH_GOPEN
+   { "GOPEN",			&xioaddr_gopen },
+#endif
+#if WITH_INTERFACE
+   { "IF",		&xioaddr_interface },
+#endif
+#if (WITH_IP4 || WITH_IP6) && WITH_TCP
+   { "INET",			&xioaddr_tcp_connect },
+#endif
+#if (WITH_IP4 || WITH_IP6) && WITH_TCP && WITH_LISTEN
+   { "INET-L",			&xioaddr_tcp_listen },
+   { "INET-LISTEN",		&xioaddr_tcp_listen },
+#endif
+#if WITH_IP4 && WITH_TCP
+   { "INET4",			&xioaddr_tcp4_connect },
+#endif
+#if WITH_IP4 && WITH_TCP && WITH_LISTEN
+   { "INET4-L",			&xioaddr_tcp4_listen },
+   { "INET4-LISTEN",		&xioaddr_tcp4_listen },
+#endif
+#if WITH_IP6 && WITH_TCP
+   { "INET6",			&xioaddr_tcp6_connect },
+#endif
+#if WITH_IP6 && WITH_TCP && WITH_LISTEN
+   { "INET6-L",			&xioaddr_tcp6_listen },
+   { "INET6-LISTEN",		&xioaddr_tcp6_listen },
+#endif
+#if WITH_INTERFACE
+   { "INTERFACE",	&xioaddr_interface },
+#endif
+#if WITH_RAWIP
+#if (WITH_IP4 || WITH_IP6)
+   { "IP",			&xioaddr_rawip_sendto },
+   { "IP-DATAGRAM",		&xioaddr_rawip_datagram },
+   { "IP-DGRAM",		&xioaddr_rawip_datagram },
+   { "IP-RECV",			&xioaddr_rawip_recv },
+   { "IP-RECVFROM",		&xioaddr_rawip_recvfrom },
+   { "IP-SEND",			&xioaddr_rawip_sendto },
+   { "IP-SENDTO",		&xioaddr_rawip_sendto },
+#endif
+#if WITH_IP4
+   { "IP4",			&xioaddr_rawip4_sendto },
+   { "IP4-DATAGRAM",		&xioaddr_rawip4_datagram },
+   { "IP4-DGRAM",		&xioaddr_rawip4_datagram },
+   { "IP4-RECV",		&xioaddr_rawip4_recv },
+   { "IP4-RECVFROM",		&xioaddr_rawip4_recvfrom },
+   { "IP4-SEND",		&xioaddr_rawip4_sendto },
+   { "IP4-SENDTO",		&xioaddr_rawip4_sendto },
+#endif
+#if WITH_IP6
+   { "IP6",			&xioaddr_rawip6_sendto },
+   { "IP6-DATAGRAM",		&xioaddr_rawip6_datagram },
+   { "IP6-DGRAM",		&xioaddr_rawip6_datagram },
+   { "IP6-RECV",		&xioaddr_rawip6_recv },
+   { "IP6-RECVFROM",		&xioaddr_rawip6_recvfrom },
+   { "IP6-SEND",		&xioaddr_rawip6_sendto },
+   { "IP6-SENDTO",		&xioaddr_rawip6_sendto },
+#endif
+#endif /* WITH_RAWIP */
+#if WITH_UNIX
+   { "LOCAL",	&xioaddr_unix_connect },
+#endif
+#if WITH_FILE
+   { "OPEN",			&xioaddr_open },
+#endif
+#if WITH_OPENSSL
+   { "OPENSSL",		&xioaddr_openssl },
+   { "OPENSSL-CONNECT",		&xioaddr_openssl },
+   { "OPENSSL-DTLS-CLIENT",	&xioaddr_openssl_dtls_client },
+   { "OPENSSL-DTLS-CONNECT",	&xioaddr_openssl_dtls_client },
+#if WITH_LISTEN
+   { "OPENSSL-DTLS-LISTEN",		&xioaddr_openssl_dtls_server },
+   { "OPENSSL-DTLS-SERVER",		&xioaddr_openssl_dtls_server },
+   { "OPENSSL-LISTEN",		&xioaddr_openssl_listen },
+#endif
+#endif
+#if WITH_PIPE
+   { "PIPE",			&xioaddr_pipe },
+#endif
+#if WITH_POSIXMQ
+   { "POSIXMQ-BIDIRECTIONAL", 	&xioaddr_posixmq_bidir },
+   { "POSIXMQ-READ", 		&xioaddr_posixmq_read },
+   { "POSIXMQ-RECEIVE", 	&xioaddr_posixmq_receive },
+   { "POSIXMQ-RECV", 		&xioaddr_posixmq_receive },
+   { "POSIXMQ-SEND", 		&xioaddr_posixmq_send },
+#endif
+#if WITH_PROXY
+   { "PROXY",			&xioaddr_proxy_connect },
+   { "PROXY-CONNECT",		&xioaddr_proxy_connect },
+#endif
+#if WITH_PTY
+   { "PTY",			&xioaddr_pty },
+#endif
+#if WITH_READLINE
+   { "READLINE",		&xioaddr_readline },
+#endif
+#if (WITH_IP4 || WITH_IP6) && WITH_SCTP
+   { "SCTP",			&xioaddr_sctp_connect },
+   { "SCTP-CONNECT",		&xioaddr_sctp_connect },
+#if WITH_LISTEN
+   { "SCTP-L",			&xioaddr_sctp_listen },
+   { "SCTP-LISTEN",		&xioaddr_sctp_listen },
+#endif
+#if WITH_IP4
+   { "SCTP4",			&xioaddr_sctp4_connect },
+   { "SCTP4-CONNECT",		&xioaddr_sctp4_connect },
+#if WITH_LISTEN
+   { "SCTP4-L",			&xioaddr_sctp4_listen },
+   { "SCTP4-LISTEN",		&xioaddr_sctp4_listen },
+#endif
+#endif /* WITH_IP4 */
+#if WITH_IP6
+   { "SCTP6",			&xioaddr_sctp6_connect },
+   { "SCTP6-CONNECT",		&xioaddr_sctp6_connect },
+#if WITH_LISTEN
+   { "SCTP6-L",			&xioaddr_sctp6_listen },
+   { "SCTP6-LISTEN",		&xioaddr_sctp6_listen },
 #endif
 #endif /* WITH_IP6 */
 #endif /* (WITH_IP4 || WITH_IP6) && WITH_SCTP */
 #if WITH_GENERICSOCKET
-   { "sendto",			&xioaddr_socket_sendto },
+   { "SENDTO",			&xioaddr_socket_sendto },
+#endif
+#if WITH_SHELL
+   { "SHELL",			&xioaddr_shell },
 #endif
 #if WITH_GENERICSOCKET
-   { "socket-connect",		&xioaddr_socket_connect },
-   { "socket-datagram",		&xioaddr_socket_datagram },
+   { "SOCKET-CONNECT",		&xioaddr_socket_connect },
+   { "SOCKET-DATAGRAM",		&xioaddr_socket_datagram },
 #if WITH_LISTEN
-   { "socket-listen",		&xioaddr_socket_listen },
+   { "SOCKET-LISTEN",		&xioaddr_socket_listen },
 #endif /* WITH_LISTEN */
-   { "socket-recv",		&xioaddr_socket_recv },
-   { "socket-recvfrom",		&xioaddr_socket_recvfrom },
-   { "socket-sendto",		&xioaddr_socket_sendto },
+   { "SOCKET-RECV",		&xioaddr_socket_recv },
+   { "SOCKET-RECVFROM",		&xioaddr_socket_recvfrom },
+   { "SOCKET-SENDTO",		&xioaddr_socket_sendto },
+#endif
+#if WITH_SOCKETPAIR
+   { "SOCKETPAIR",		&xioaddr_socketpair },
 #endif
 #if WITH_SOCKS4
-   { "socks",	&addr_socks4_connect },
-   { "socks4",	&addr_socks4_connect },
+   { "SOCKS",			&xioaddr_socks4_connect },
+   { "SOCKS4",			&xioaddr_socks4_connect },
 #endif
 #if WITH_SOCKS4A
-   { "socks4a",	&addr_socks4a_connect },
+   { "SOCKS4A",			&xioaddr_socks4a_connect },
+#endif
+#if WITH_SOCKS5
+   { "SOCKS5", 		&xioaddr_socks5_connect },
+   { "SOCKS5-BIND", 	&xioaddr_socks5_listen },
+   { "SOCKS5-CONNECT", 	&xioaddr_socks5_connect },
+   { "SOCKS5-LISTEN", 	&xioaddr_socks5_listen },
 #endif
 #if WITH_OPENSSL
-   { "ssl",		&xioaddr_openssl },
+   { "SSL",		&xioaddr_openssl },
 #if WITH_LISTEN
-   { "ssl-l",		&xioaddr_openssl_listen },
+   { "SSL-L",		&xioaddr_openssl_listen },
 #endif
 #endif
 #if WITH_STDIO
-   { "stderr",	&addr_stderr },
-   { "stdin",	&addr_stdin },
-   { "stdio",	&addr_stdio },
-   { "stdout",	&addr_stdout },
+   { "STDERR",			&xioaddr_stderr },
+   { "STDIN",			&xioaddr_stdin },
+   { "STDIO",			&xioaddr_stdio },
+   { "STDOUT",			&xioaddr_stdout },
 #endif
 #if WITH_SYSTEM
-   { "system",	&addr_system },
+   { "SYSTEM",			&xioaddr_system },
 #endif
 #if (WITH_IP4 || WITH_IP6) && WITH_TCP
-   { "tcp",		&addr_tcp_connect },
-   { "tcp-connect",	&addr_tcp_connect },
+   { "TCP",			&xioaddr_tcp_connect },
+   { "TCP-CONNECT",		&xioaddr_tcp_connect },
 #endif
 #if (WITH_IP4 || WITH_IP6) && WITH_TCP && WITH_LISTEN
-   { "tcp-l",	&addr_tcp_listen },
-   { "tcp-listen",	&addr_tcp_listen },
+   { "TCP-L",			&xioaddr_tcp_listen },
+   { "TCP-LISTEN",		&xioaddr_tcp_listen },
 #endif
 #if WITH_IP4 && WITH_TCP
-   { "tcp4",		&addr_tcp4_connect },
-   { "tcp4-connect",	&addr_tcp4_connect },
+   { "TCP4",			&xioaddr_tcp4_connect },
+   { "TCP4-CONNECT",		&xioaddr_tcp4_connect },
 #endif
 #if WITH_IP4 && WITH_TCP && WITH_LISTEN
-   { "tcp4-l",	&addr_tcp4_listen },
-   { "tcp4-listen",	&addr_tcp4_listen },
+   { "TCP4-L",			&xioaddr_tcp4_listen },
+   { "TCP4-LISTEN",		&xioaddr_tcp4_listen },
 #endif
 #if WITH_IP6 && WITH_TCP
-   { "tcp6",		&addr_tcp6_connect },
-   { "tcp6-connect",	&addr_tcp6_connect },
+   { "TCP6",			&xioaddr_tcp6_connect },
+   { "TCP6-CONNECT",		&xioaddr_tcp6_connect },
 #endif
 #if WITH_IP6 && WITH_TCP && WITH_LISTEN
-   { "tcp6-l",	&addr_tcp6_listen },
-   { "tcp6-listen",	&addr_tcp6_listen },
+   { "TCP6-L",			&xioaddr_tcp6_listen },
+   { "TCP6-LISTEN",		&xioaddr_tcp6_listen },
 #endif
 #if WITH_TUN
-   { "tun",		&xioaddr_tun },
+   { "TUN",		&xioaddr_tun },
 #endif
 #if (WITH_IP4 || WITH_IP6) && WITH_UDP
-   { "udp",		&addr_udp_connect },
+   { "UDP",			&xioaddr_udp_connect },
 #endif
 #if (WITH_IP4 || WITH_IP6) && WITH_UDP
-   { "udp-connect",	&addr_udp_connect },
-   { "udp-datagram",	&addr_udp_datagram },
-   { "udp-dgram",	&addr_udp_datagram },
+   { "UDP-CONNECT",		&xioaddr_udp_connect },
+   { "UDP-DATAGRAM",		&xioaddr_udp_datagram },
+   { "UDP-DGRAM",		&xioaddr_udp_datagram },
 #endif
 #if (WITH_IP4 || WITH_IP6) && WITH_UDP && WITH_LISTEN
-   { "udp-l",	&addr_udp_listen },
-   { "udp-listen",	&addr_udp_listen },
+   { "UDP-L",			&xioaddr_udp_listen },
+   { "UDP-LISTEN",		&xioaddr_udp_listen },
 #endif
 #if (WITH_IP4 || WITH_IP6) && WITH_UDP
-   { "udp-recv",	&addr_udp_recv },
-   { "udp-recvfrom",	&addr_udp_recvfrom },
-   { "udp-send",	&addr_udp_sendto },
-   { "udp-sendto",	&addr_udp_sendto },
+   { "UDP-RECV",		&xioaddr_udp_recv },
+   { "UDP-RECVFROM",		&xioaddr_udp_recvfrom },
+   { "UDP-SEND",		&xioaddr_udp_sendto },
+   { "UDP-SENDTO",		&xioaddr_udp_sendto },
 #endif
 #if WITH_IP4 && WITH_UDP
-   { "udp4",		&addr_udp4_connect },
-   { "udp4-connect",	&addr_udp4_connect },
-   { "udp4-datagram",	&addr_udp4_datagram },
-   { "udp4-dgram",	&addr_udp4_datagram },
+   { "UDP4",			&xioaddr_udp4_connect },
+   { "UDP4-CONNECT",		&xioaddr_udp4_connect },
+   { "UDP4-DATAGRAM",		&xioaddr_udp4_datagram },
+   { "UDP4-DGRAM",		&xioaddr_udp4_datagram },
 #endif
 #if WITH_IP4 && WITH_UDP && WITH_LISTEN
-   { "udp4-l",		&addr_udp4_listen },
-   { "udp4-listen",	&addr_udp4_listen },
+   { "UDP4-L",			&xioaddr_udp4_listen },
+   { "UDP4-LISTEN",		&xioaddr_udp4_listen },
 #endif
 #if WITH_IP4 && WITH_UDP
-   { "udp4-recv",	&addr_udp4_recv },
-   { "udp4-recvfrom",	&addr_udp4_recvfrom },
-   { "udp4-send",	&addr_udp4_sendto },
-   { "udp4-sendto",	&addr_udp4_sendto },
+   { "UDP4-RECV",		&xioaddr_udp4_recv },
+   { "UDP4-RECVFROM",		&xioaddr_udp4_recvfrom },
+   { "UDP4-SEND",		&xioaddr_udp4_sendto },
+   { "UDP4-SENDTO",		&xioaddr_udp4_sendto },
 #endif
 #if WITH_IP6 && WITH_UDP
-   { "udp6",		&addr_udp6_connect },
-   { "udp6-connect",	&addr_udp6_connect },
-   { "udp6-datagram",	&addr_udp6_datagram },
-   { "udp6-dgram",	&addr_udp6_datagram },
+   { "UDP6",			&xioaddr_udp6_connect },
+   { "UDP6-CONNECT",		&xioaddr_udp6_connect },
+   { "UDP6-DATAGRAM",		&xioaddr_udp6_datagram },
+   { "UDP6-DGRAM",		&xioaddr_udp6_datagram },
 #endif
 #if WITH_IP6 && WITH_UDP && WITH_LISTEN
-   { "udp6-l",		&addr_udp6_listen },
-   { "udp6-listen",	&addr_udp6_listen },
+   { "UDP6-L",			&xioaddr_udp6_listen },
+   { "UDP6-LISTEN",		&xioaddr_udp6_listen },
 #endif
 #if WITH_IP6 && WITH_UDP
-   { "udp6-recv",	&addr_udp6_recv },
-   { "udp6-recvfrom",	&addr_udp6_recvfrom },
-   { "udp6-send",	&addr_udp6_sendto },
-   { "udp6-sendto",	&addr_udp6_sendto },
+   { "UDP6-RECV",		&xioaddr_udp6_recv },
+   { "UDP6-RECVFROM",		&xioaddr_udp6_recvfrom },
+   { "UDP6-SEND",		&xioaddr_udp6_sendto },
+   { "UDP6-SENDTO",		&xioaddr_udp6_sendto },
+#endif
+#if (WITH_IP4 || WITH_IP6) && WITH_UDPLITE
+   { "UDPLITE",			&xioaddr_udplite_connect },
+   { "UDPLITE-CONNECT",		&xioaddr_udplite_connect },
+   { "UDPLITE-DATAGRAM",	&xioaddr_udplite_datagram },
+   { "UDPLITE-DGRAM",		&xioaddr_udplite_datagram },
+#endif
+#if (WITH_IP4 || WITH_IP6) && WITH_UDPLITE && WITH_LISTEN
+   { "UDPLITE-L",		&xioaddr_udplite_listen },
+   { "UDPLITE-LISTEN",		&xioaddr_udplite_listen },
+#endif
+#if (WITH_IP4 || WITH_IP6) && WITH_UDPLITE
+   { "UDPLITE-RECV",		&xioaddr_udplite_recv },
+   { "UDPLITE-RECVFROM",	&xioaddr_udplite_recvfrom },
+   { "UDPLITE-SEND",		&xioaddr_udplite_sendto },
+   { "UDPLITE-SENDTO",		&xioaddr_udplite_sendto },
+#endif
+#if WITH_IP4 && WITH_UDPLITE
+   { "UDPLITE4",		&xioaddr_udplite4_connect },
+   { "UDPLITE4-CONNECT",	&xioaddr_udplite4_connect },
+   { "UDPLITE4-DATAGRAM",	&xioaddr_udplite4_datagram },
+   { "UDPLITE4-DGRAM",		&xioaddr_udplite4_datagram },
+#endif
+#if WITH_IP4 && WITH_UDPLITE && WITH_LISTEN
+   { "UDPLITE4-L",		&xioaddr_udplite4_listen },
+   { "UDPLITE4-LISTEN",		&xioaddr_udplite4_listen },
+#endif
+#if WITH_IP4 && WITH_UDPLITE
+   { "UDPLITE4-RECV",		&xioaddr_udplite4_recv },
+   { "UDPLITE4-RECVFROM",	&xioaddr_udplite4_recvfrom },
+   { "UDPLITE4-SEND",		&xioaddr_udplite4_sendto },
+   { "UDPLITE4-SENDTO",		&xioaddr_udplite4_sendto },
+#endif
+#if WITH_IP6 && WITH_UDPLITE
+   { "UDPLITE6",		&xioaddr_udplite6_connect },
+   { "UDPLITE6-CONNECT",	&xioaddr_udplite6_connect },
+   { "UDPLITE6-DATAGRAM",	&xioaddr_udplite6_datagram },
+   { "UDPLITE6-DGRAM",		&xioaddr_udplite6_datagram },
+#endif
+#if WITH_IP6 && WITH_UDPLITE && WITH_LISTEN
+   { "UDPLITE6-L",		&xioaddr_udplite6_listen },
+   { "UDPLITE6-LISTEN",		&xioaddr_udplite6_listen },
+#endif
+#if WITH_IP6 && WITH_UDPLITE
+   { "UDPLITE6-RECV",		&xioaddr_udplite6_recv },
+   { "UDPLITE6-RECVFROM",	&xioaddr_udplite6_recvfrom },
+   { "UDPLITE6-SEND",		&xioaddr_udplite6_sendto },
+   { "UDPLITE6-SENDTO",		&xioaddr_udplite6_sendto },
 #endif
 #if WITH_UNIX
-   { "unix",		&xioaddr_unix_client },
-   { "unix-client",	&xioaddr_unix_client },
-   { "unix-connect",	&xioaddr_unix_connect },
+   { "UNIX",		&xioaddr_unix_client },
+   { "UNIX-CLIENT",	&xioaddr_unix_client },
+   { "UNIX-CONNECT",	&xioaddr_unix_connect },
 #endif
 #if WITH_UNIX && WITH_LISTEN
-   { "unix-l",		&xioaddr_unix_listen },
-   { "unix-listen",	&xioaddr_unix_listen },
+   { "UNIX-L",		&xioaddr_unix_listen },
+   { "UNIX-LISTEN",	&xioaddr_unix_listen },
 #endif
 #if WITH_UNIX
-   { "unix-recv",	&xioaddr_unix_recv },
-   { "unix-recvfrom",	&xioaddr_unix_recvfrom },
-   { "unix-send",	&xioaddr_unix_sendto },
-   { "unix-sendto",	&xioaddr_unix_sendto },
+   { "UNIX-RECV",	&xioaddr_unix_recv },
+   { "UNIX-RECVFROM",	&xioaddr_unix_recvfrom },
+   { "UNIX-SEND",	&xioaddr_unix_sendto },
+   { "UNIX-SENDTO",	&xioaddr_unix_sendto },
 #endif
 #if WITH_VSOCK
-   { "vsock",		&addr_vsock_connect },
-   { "vsock-connect",	&addr_vsock_connect },
+   { "VSOCK",			&xioaddr_vsock_connect },
+   { "VSOCK-CONNECT",		&xioaddr_vsock_connect },
 #endif
 #if WITH_VSOCK && WITH_LISTEN
-   { "vsock-l",		&addr_vsock_listen },
-   { "vsock-listen",	&addr_vsock_listen },
+   { "VSOCK-L",			&xioaddr_vsock_listen },
+   { "VSOCK-LISTEN",		&xioaddr_vsock_listen },
 #endif
 #else /* !0 */
 #  if WITH_INTEGRATE
@@ -363,7 +460,7 @@ static xiofile_t *xioallocfd(void) {
 #endif /* WITH_RETRY */
 /* fd->common.ignoreeof = false; */
 /* fd->common.eof       = 0; */
-
+   fd->stream.triggerfd = -1;
    fd->stream.fd        = -1;
    fd->stream.dtype     = XIODATA_STREAM;
 #if _WITH_SOCKET
@@ -374,7 +471,14 @@ static xiofile_t *xioallocfd(void) {
    fd->stream.escape	= -1;
 /* fd->stream.para.exec.pid = 0; */
    fd->stream.lineterm  = LINETERM_RAW;
-
+#if WITH_RESOLVE
+#if HAVE_RES_RETRANS
+   fd->stream.para.socket.ip.res.retrans = -1;
+#endif
+#if HAVE_RES_RETRY
+   fd->stream.para.socket.ip.res.retry   = -1;
+#endif
+#endif /* WITH_RESOLVE */
    return fd;
 }
 
@@ -385,10 +489,6 @@ static xiofile_t *xioallocfd(void) {
 xiofile_t *xioopen(const char *addr,	/* address specification */
 		   int xioflags) {
    xiofile_t *xfd;
-
-   if (xioinitialize() < 0) {
-      return NULL;
-   }
 
    Debug1("xioopen(\"%s\")", addr);
 
@@ -421,9 +521,9 @@ static xiofile_t *xioparse_dual(const char **addr) {
    }
 
    /* and now we see if we reached a dual-address separator */
-   if (!strncmp(*addr, xioopts.pipesep, strlen(xioopts.pipesep))) {
+   if (!strncmp(*addr, xioparms.pipesep, strlen(xioparms.pipesep))) {
       /* yes we reached it, so we parse the second single address */
-      *addr += strlen(xioopts.pipesep);
+      *addr += strlen(xioparms.pipesep);
 
       if ((xfd = xioallocfd()) == NULL) {
 	 free(sfd1); /*! and maybe have free some if its contents */
@@ -500,10 +600,10 @@ static xiosingle_t *xioparse_single(const char **addr) {
 
    /* init */
    i = 0;
-   /*ends[i++] = xioopts.chainsep;*/	/* default: "|" */
-   ends[i++] = xioopts.pipesep;		/* default: "!!" */
-   ends[i++] = ","/*xioopts.comma*/;		/* default: "," */
-   ends[i++] = ":"/*xioopts.colon*/;		/* default: ":" */
+   /*ends[i++] = xioparms.chainsep;*/	/* default: "|" */
+   ends[i++] = xioparms.pipesep;		/* default: "!!" */
+   ends[i++] = ","/*xioparms.comma*/;		/* default: "," */
+   ends[i++] = ":"/*xioparms.colon*/;		/* default: ":" */
    ends[i++] = NULL;
 
    if ((xfd = xioallocfd()) == NULL) {
@@ -537,7 +637,7 @@ static xiosingle_t *xioparse_single(const char **addr) {
 #if WITH_FDNUM
       } else if (isdigit(token[0]&0xff) && token[1] == '\0') {
 	 Info1("interpreting address \"%s\" as file descriptor", token);
-	 addrdesc = &addr_fd;
+	 addrdesc = &xioaddr_fd;
 	 if ((sfd->argv[sfd->argc++] = strdup("FD")) == NULL) {
 	    Error("strdup(\"FD\"): out of memory");
 	 }
@@ -549,7 +649,7 @@ static xiosingle_t *xioparse_single(const char **addr) {
 #if WITH_GOPEN
       } else if (strchr(token, '/')) {
 	 Info1("interpreting address \"%s\" as file name", token);
-	 addrdesc = &addr_gopen;
+	 addrdesc = &xioaddr_gopen;
 	 if ((sfd->argv[sfd->argc++] = strdup("GOPEN")) == NULL) {
 	    Error("strdup(\"GOPEN\"): out of memory");
 	 }
@@ -567,8 +667,8 @@ static xiosingle_t *xioparse_single(const char **addr) {
    sfd->tag  = XIO_TAG_RDWR;
    sfd->addr = addrdesc;
 
-   while (!strncmp(*addr, xioopts.paramsep, strlen(xioopts.paramsep))) {
-      *addr += strlen(xioopts.paramsep);
+   while (!strncmp(*addr, xioparms.paramsep, strlen(xioparms.paramsep))) {
+      *addr += strlen(xioparms.paramsep);
       len = sizeof(token);  tokp = token;
       result = nestlex(addr, &tokp, &len, ends, hquotes, squotes, nests,
 		       true, true, false);
@@ -592,9 +692,27 @@ static xiosingle_t *xioparse_single(const char **addr) {
 }
 
 int xioopen_single(xiofile_t *xfd, int xioflags) {
+   struct single *sfd = &xfd->stream;
    const struct addrdesc *addrdesc;
+   const char *modetext[4] = { "none", "read-only", "write-only", "read-write" } ;
+   /* Values to be saved until xioopen() is finished */
+   char *orig_dir = NULL;
+   bool have_umask = false;
+   mode_t orig_umask, tmp_umask;
    int result;
+   /* Values to be saved until xioopen() is finished */
+#if WITH_RESOLVE && HAVE_RESOLV_H
+   int do_res;
+   struct __res_state save_res;
+#endif /* WITH_RESOLVE && HAVE_RESOLV_H */
+#if WITH_NAMESPACES
+   int save_netfd = -1;
+#endif
 
+   addrdesc = xfd->stream.addr;
+   if (((xioflags+1)&XIO_ACCMODE) & ~(addrdesc->directions)) {
+      Warn2("address is opened in %s mode but only supports %s", modetext[(xioflags+1)&XIO_ACCMODE], modetext[addrdesc->directions]);
+   }
    if ((xioflags&XIO_ACCMODE) == XIO_RDONLY) {
       xfd->tag = XIO_TAG_RDONLY;
    } else if ((xioflags&XIO_ACCMODE) == XIO_WRONLY) {
@@ -606,11 +724,70 @@ int xioopen_single(xiofile_t *xfd, int xioflags) {
    }
    xfd->stream.flags     &= (~XIO_ACCMODE);
    xfd->stream.flags     |= (xioflags & XIO_ACCMODE);
-   addrdesc = xfd->stream.addr;
+
+   /* Apply "temporary" process properties, save value for later restore */
+
+   if (applyopts_single(sfd, sfd->opts, PH_OFFSET) < 0)
+      return -1;
+
+#if WITH_NAMESPACES
+   if ((save_netfd = xio_apply_namespace(sfd->opts)) < 0)
+      return -1;
+#endif /* WITH_NAMESPACES */
+
+#if WITH_RESOLVE && HAVE_RESOLV_H
+   if ((do_res = xio_res_init(sfd, &save_res)) < 0)
+      return STAT_NORETRY;
+#endif /* WITH_RESOLVE && HAVE_RESOLV_H */
+
+   if (xio_chdir(sfd->opts, &orig_dir) < 0)
+      return STAT_NORETRY;
+
+   if (retropt_mode(xfd->stream.opts, OPT_UMASK, &tmp_umask) >= 0) {
+      Info1("changing umask to 0%3o", tmp_umask);
+      orig_umask = Umask(tmp_umask);
+      have_umask = true;
+   }
+
+   /* Call the specific xioopen function */
    result = (*addrdesc->func)(xfd->stream.argc, xfd->stream.argv,
-			      xfd->stream.opts, xioflags, xfd, 
-			      addrdesc->groups, addrdesc->arg1,
-			      addrdesc->arg2, addrdesc->arg3);
+			      xfd->stream.opts, xioflags, xfd,
+			      addrdesc);
+
+   /* Restore process properties */
+   if (have_umask) {
+      Info1("restoring umask to 0%3o", orig_umask);
+      Umask(orig_umask);
+   }
+
+   if (orig_dir != NULL) {
+      if (Chdir(orig_dir) < 0) {
+	 Error2("chdir(\"%s\"): %s", orig_dir, strerror(errno));
+	 free(orig_dir);
+	 return STAT_NORETRY;
+      }
+      free(orig_dir);
+   }
+
+#if WITH_RESOLVE && HAVE_RESOLV_H
+   if (do_res)
+      xio_res_restore(&save_res);
+#endif /* WITH_RESOLVE && HAVE_RESOLV_H */
+
+#if WITH_NAMESPACES
+   if (save_netfd > 0) {
+      xio_reset_namespace(save_netfd);
+   }
+#endif /* WITH_NAMESPACES */
+
    return result;
 }
 
+int xio_syntax(
+	const char *addr,
+	int expectnum,
+	int isnum,
+	const char *syntax)
+{
+	return xiohelp_syntax(addr, expectnum, isnum, syntax);
+}

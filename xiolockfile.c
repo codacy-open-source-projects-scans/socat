@@ -49,16 +49,16 @@ int xiogetlock(const char *lockfile) {
       Error2("mkstemp(\"%s\"): %s", s, strerror(errno));
       return -1;
    }
-  
+
    pid = Getpid();
-   bytes = sprintf(pidbuf, F_pid, pid);
+   bytes = sprintf(pidbuf, F_pid"\n", pid);
    if (writefull(fd, pidbuf, bytes) < 0) {
       Error4("write(%d, %p, "F_Zu"): %s", fd, pidbuf, bytes, strerror(errno));
       return -1;
    }
+   Fchmod(fd, 0644);
    Close(fd);
 
-   /* Chmod(lockfile, 0600); */
    if (Link(s, lockfile) < 0) {
       int _errno = errno;
       Error3("link(\"%s\", \"%s\"): %s", s, lockfile, strerror(errno));

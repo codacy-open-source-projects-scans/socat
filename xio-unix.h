@@ -18,6 +18,7 @@ extern const struct addrdesc xioaddr_abstract_recvfrom;
 extern const struct addrdesc xioaddr_abstract_recv;
 extern const struct addrdesc xioaddr_abstract_client;
 
+extern const struct optdesc xioopt_unix_bind_tempname;
 extern const struct optdesc xioopt_unix_tightsocklen;
 
 extern socklen_t
@@ -32,7 +33,8 @@ xiosetsockaddrenv_unix(int idx, char *namebuff, size_t namelen,
 		       struct sockaddr_un *sa, socklen_t salen, int ipproto);
 
 extern int
-_xioopen_unix_client(xiosingle_t *xfd, int xioflags, unsigned groups,
-		     int abstract, struct opt *opts, const char *name);
+_xioopen_unix_client(xiosingle_t *xfd, int xioflags, groups_t groups, int abstract, struct opt *opts, const char *name, const struct addrdesc *addrdesc);
+
+extern char *xio_tempnam(const char *pathx, bool donttry);
 
 #endif /* !defined(__xio_unix_h_included) */

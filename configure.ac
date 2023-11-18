@@ -16,7 +16,7 @@ fi
 # find out which defines gcc passes to cpp, so makedepend does not run into
 # (harmless) "error architecture not supported"
 AC_MSG_CHECKING(which defines needed for makedepend)
-__cpp_defs=`gcc -v -E - </dev/null 2>&1 |$FGREP -e '/cpp ' -e '/cc1 '`
+__cpp_defs=`$CC -v -E - </dev/null 2>&1 |$FGREP -e '/cpp ' -e '/cc1 '`
 SYSDEFS=`aa=; for a in $__cpp_defs
 	do case "$a" in -D*) aa="$aa $a";; esac; done; echo "$aa"`
 AC_SUBST(SYSDEFS)
@@ -29,6 +29,8 @@ if test -z "$CFLAGS"; then
    # with this setting, we prevent autoconf from defaulting to "-g -O2"
    export CFLAGS=-O
 fi
+
+AC_SYS_LARGEFILE
 
 dnl Checks for programs.
 AC_PROG_INSTALL(install)
@@ -163,6 +165,14 @@ AC_ARG_ENABLE(help, [  --disable-help          disable help],
 	       esac],
 	       [AC_DEFINE(WITH_HELP) AC_MSG_RESULT(yes)])
 
+AC_MSG_CHECKING(whether to include transfer statistics)
+AC_ARG_ENABLE(stats, [  --disable-stats         disable stats],
+	      [case "$enableval" in
+	       no) AC_MSG_RESULT(no);;
+	       *) AC_DEFINE(WITH_STATS) AC_MSG_RESULT(yes);;
+	       esac],
+	       [AC_DEFINE(WITH_STATS) AC_MSG_RESULT(yes)])
+
 AC_MSG_CHECKING(whether to include STDIO support)
 AC_ARG_ENABLE(stdio, [  --disable-stdio         disable STDIO support],
 	      [case "$enableval" in
@@ -210,6 +220,14 @@ AC_ARG_ENABLE(pipe, [  --disable-pipe          disable pipe support],
 	       *) AC_DEFINE(WITH_PIPE) AC_MSG_RESULT(yes);;
 	       esac],
 	       [AC_DEFINE(WITH_PIPE) AC_MSG_RESULT(yes)])
+
+AC_MSG_CHECKING(whether to include explicit socketpair support)
+AC_ARG_ENABLE(socketpair, [  --disable-socketpair    disable socketpair support],
+	      [case "$enableval" in
+	       no) AC_MSG_RESULT(no);;
+	       *) AC_DEFINE(WITH_SOCKETPAIR) AC_MSG_RESULT(yes);;
+	       esac],
+	       [AC_DEFINE(WITH_SOCKETPAIR) AC_MSG_RESULT(yes)])
 
 AC_MSG_CHECKING(whether to include explicit termios support)
 AC_ARG_ENABLE(termios, [  --disable-termios       disable termios support],
@@ -304,6 +322,7 @@ AC_ARG_ENABLE(genericsocket, [  --disable-genericsocket disable generic socket s
 	       *) AC_DEFINE(WITH_GENERICSOCKET) AC_MSG_RESULT(yes);;
 	       esac],
 	       [AC_DEFINE(WITH_GENERICSOCKET) AC_MSG_RESULT(yes)])
+
 AC_MSG_CHECKING(whether to include generic network interface support)
 AC_ARG_ENABLE(interface, [  --disable-interface  disable network interface support],
 	      [case "$enableval" in
@@ -311,26 +330,6 @@ AC_ARG_ENABLE(interface, [  --disable-interface  disable network interface suppo
 	       *) AC_MSG_RESULT(yes); WITH_INTERFACE=1 ;;
 	       esac],
 	       [AC_MSG_RESULT(yes);  WITH_INTERFACE=1 ])
-if test "$WITH_INTERFACE"; then
-  AC_CHECK_HEADER(netpacket/packet.h,
-    AC_DEFINE(HAVE_NETPACKET_PACKET_H),
-    [WITH_INTERFACE=;
-     AC_MSG_WARN([include file netpacket/packet.h not found, disabling interface])])
-fi
-if test "$WITH_INTERFACE"; then
-  AC_CHECK_HEADER(netinet/if_ether.h,
-    AC_DEFINE(HAVE_NETINET_IF_ETHER_H),
-    [WITH_INTERFACE=;
-     AC_MSG_WARN([include file netinet/if_ether.h not found, disabling interface])],
-     [AC_INCLUDES_DEFAULT
-     #if HAVE_NET_IF_H && HAVE_NETINET_IN_H
-     #include <net/if.h>
-     #include <netinet/in.h>
-     #endif])
-fi
-if test "$WITH_INTERFACE"; then
-   AC_DEFINE(WITH_INTERFACE)
-fi
 
 AC_MSG_CHECKING(whether to include TCP support)
 AC_ARG_ENABLE(tcp, [  --disable-tcp           disable TCP support],
@@ -347,6 +346,25 @@ AC_ARG_ENABLE(udp, [  --disable-udp           disable UDP support],
 	       *) AC_DEFINE(WITH_UDP) AC_MSG_RESULT(yes);;
 	       esac],
 	       [AC_DEFINE(WITH_UDP) AC_MSG_RESULT(yes)])
+
+AC_MSG_CHECKING(whether to include UDP-Lite support)
+AC_ARG_ENABLE(udplite, [  --disable-udplite       disable UDP-Lite support],
+	      [case "$enableval" in
+	       no) AC_MSG_RESULT(no); WITH_UDPLITE= ;;
+	       *) AC_MSG_RESULT(yes); WITH_UDPLITE=1 ;;
+	       esac],
+	       [AC_MSG_RESULT(yes);   WITH_UDPLITE=1 ])
+if test -n "$WITH_UDPLITE"; then
+AC_MSG_CHECKING(for IPPROTO_UDPLITE)
+AC_TRY_COMPILE([#include <sys/types.h>
+#include <netinet/in.h>],
+[IPPROTO_UDPLITE;],
+[ AC_MSG_RESULT(yes); WITH_UDPLITE=1],
+[ AC_MSG_RESULT(no); WITH_UDPLITE=])
+if test "$WITH_UDPLITE"; then
+   AC_DEFINE(WITH_UDPLITE)
+fi
+fi
 
 AC_MSG_CHECKING(whether to include SCTP support)
 AC_ARG_ENABLE(sctp, [  --disable-sctp           disable SCTP support],
@@ -369,6 +387,32 @@ if test $sc_cv_define_ipproto_sctp = yes; then
    AC_DEFINE(WITH_SCTP)
 else
    AC_MSG_WARN([IPPROTO_SCTP undefined, disabling SCTP support])
+fi
+fi
+
+AC_MSG_CHECKING(whether to include DCCP support)
+AC_ARG_ENABLE(dccp, [  --disable-dccp           disable DCCP support],
+	      [case "$enableval" in
+	       no) AC_MSG_RESULT(no); WITH_DCCP= ;;
+	       *) AC_MSG_RESULT(yes); WITH_DCCP=1 ;;
+	       esac],
+	       [AC_MSG_RESULT(yes);   WITH_DCCP=1 ])
+
+if test -n "$WITH_DCCP"; then
+AC_MSG_CHECKING(for IPPROTO_DCCP)
+AC_CACHE_VAL(sc_cv_define_ipproto_dccp,
+[AC_TRY_COMPILE([#include <sys/types.h>
+#include <netinet/in.h>],
+[IPPROTO_DCCP;],
+[sc_cv_define_ipproto_dccp=yes],
+[sc_cv_define_ipproto_dccp=no])])
+AC_MSG_RESULT($sc_cv_define_ipproto_dccp)
+if test $sc_cv_define_ipproto_dccp = yes; then
+   AC_DEFINE(WITH_DCCP)
+   AC_CHECK_HEADER(linux/dccp.h,
+     AC_DEFINE(HAVE_LINUX_DCCP_H))
+else
+   AC_MSG_WARN([IPPROTO_DCCP undefined, disabling DCCP support])
 fi
 fi
 
@@ -395,6 +439,30 @@ if test "$WITH_VSOCK"; then
    AC_DEFINE(WITH_VSOCK)
 fi
 
+AC_ARG_ENABLE(namespaces, [  --disable-namespaces    disable Linux namespaces support],
+	      [case "$enableval" in
+	       no) TRY_NAMESPACES= ;;
+	       *) TRY_NAMESPACES=1 ;;
+	       esac],
+	       [TRY_NAMESPACES=1 ])
+if test "TRY_NAMESPACES"; then
+  AC_TRY_LINK([#include <sched.h>],
+  [int x=setns(0,0);],
+  [],
+  [TRY_NAMESPACES=failed])
+fi
+AC_MSG_CHECKING(whether to include Linux namespaces support)
+if test "$TRY_NAMESPACES" = 1; then
+   AC_MSG_RESULT(YES)
+   AC_DEFINE(WITH_NAMESPACES)
+   AC_DEFINE(HAVE_SCHED_H)
+   AC_DEFINE(HAVE_SETNS)
+elif test "$TRY_NAMESPACES" = yes; then
+   AC_MSG_RESULT(NO (failed))
+else
+   AC_MSG_RESULT(NO)
+fi
+
 AC_MSG_CHECKING(whether to include listen support)
 AC_ARG_ENABLE(listen, [  --disable-listen        disable listen support],
 	      [case "$enableval" in
@@ -402,6 +470,23 @@ AC_ARG_ENABLE(listen, [  --disable-listen        disable listen support],
 	       *) AC_DEFINE(WITH_LISTEN) AC_MSG_RESULT(yes);;
 	       esac],
 	       [AC_DEFINE(WITH_LISTEN) AC_MSG_RESULT(yes)])
+
+AC_MSG_CHECKING(whether to include POSIX MQ support)
+AC_ARG_ENABLE(posixmq, [  --disable-posixmq       disable POSIX MQ support],
+	      [case "$enableval" in
+	       no) AC_MSG_RESULT(no)
+	       WITH_POSIXMQ= ;;
+	       *) WITH_POSIXMQ=1; AC_MSG_RESULT(yes);;
+	       esac],
+	       [WITH_POSIXMQ=1; AC_MSG_RESULT(yes)])
+if test "$WITH_POSIXMQ"; then
+    case "`uname`" in
+    Linux) AC_DEFINE(WITH_POSIXMQ)
+	   LIBS="$LIBS -lrt" ;;
+    *) AC_MSG_WARN([POSIX MQ currently implemented for Linux only])
+       WITH_POSIXMQ= ;;
+    esac
+fi
 
 AC_MSG_CHECKING(whether to include socks4 support)
 AC_ARG_ENABLE(socks4, [  --disable-socks4        disable socks4 support],
@@ -418,6 +503,14 @@ AC_ARG_ENABLE(socks4a, [  --disable-socks4a       disable socks4a support],
 	       *) AC_DEFINE(WITH_SOCKS4A) AC_MSG_RESULT(yes);;
 	       esac],
 	       [AC_DEFINE(WITH_SOCKS4A) AC_MSG_RESULT(yes)])
+
+AC_MSG_CHECKING(whether to include socks5 support)
+AC_ARG_ENABLE(socks5, [  --disable-socks5       disable socks5 support],
+	      [case "$enableval" in
+	       no) AC_MSG_RESULT(no);;
+	       *) AC_DEFINE(WITH_SOCKS5) AC_MSG_RESULT(yes);;
+	       esac],
+	       [AC_DEFINE(WITH_SOCKS5) AC_MSG_RESULT(yes)])
 
 AC_MSG_CHECKING(whether to include proxy connect support)
 AC_ARG_ENABLE(proxy, [  --disable-proxy         disable proxy connect support],
@@ -442,6 +535,14 @@ AC_ARG_ENABLE(system, [  --disable-system        disable system (shell) support]
 	       *) AC_DEFINE(WITH_SYSTEM) AC_MSG_RESULT(yes);;
 	       esac],
 	       [AC_DEFINE(WITH_SYSTEM) AC_MSG_RESULT(yes)])
+
+AC_MSG_CHECKING([whether to include shell invocation support])
+AC_ARG_ENABLE(shell, [  --disable-shell         disable shell invocation support],
+	      [case "$enableval" in
+	       no) AC_MSG_RESULT(no);;
+	       *) AC_DEFINE(WITH_SHELL) AC_MSG_RESULT(yes);;
+	       esac],
+	       [AC_DEFINE(WITH_SHELL) AC_MSG_RESULT(yes)])
 
 AC_MSG_CHECKING(whether to include pty address support)
 AC_ARG_ENABLE(pty, [  --disable-pty           disable pty support],
@@ -472,8 +573,8 @@ if test -n "$WITH_READLINE"; then
   CFLAGS_ORIG=$CFLAGS
   LIBS_ORIG=$LIBS
   sc_usable_readline_found=
-  
-  for D in "" "/usr/local" "/opt/local" "/sw" "/opt/freeware" "/usr/sfw"; do    
+
+  for D in "" "/usr/local" "/opt/local" "/sw" "/opt/freeware" "/usr/sfw"; do
     if test -n "$D" ; then
       CPPFLAGS="$CPPFLAGS -I$D/include"
       CFLAGS="$CFLAGS -L$D/lib"
@@ -482,12 +583,12 @@ if test -n "$WITH_READLINE"; then
       DLOC="in default location"
     fi
     AC_MSG_CHECKING(for usable readline $DLOC)
-    
+
     # Some systems require -lcurses, some require -lncurses.
     # Mac OS X 10.4 (and others) ships with libedit masquerading as readline,
     # but it doesn't work well with socat. It can be recognized by the absence
     # of append_history.
-    
+
     for L in "" "-lcurses" "-lncurses"; do
       LIBS="$LIBS_ORIG -lreadline $L"
       AC_TRY_LINK(
@@ -499,7 +600,7 @@ if test -n "$WITH_READLINE"; then
         [ sc_usable_readline_found=1
           break ])
     done
-    
+
     if test -n "$sc_usable_readline_found"; then
       AC_MSG_RESULT(yes)
       AC_DEFINE(HAVE_READLINE_READLINE_H,1)
@@ -514,7 +615,7 @@ if test -n "$WITH_READLINE"; then
       LIBS=$LIBS_ORIG
     fi
   done
-  
+
   if test -z "$sc_usable_readline_found"; then
     AC_MSG_WARN([no suitable version of readline found; perhaps you need to install a newer version])
   fi
@@ -533,7 +634,8 @@ AC_ARG_ENABLE(openssl_base, [  --enable-openssl-base   specify directory with in
 #
 if test -n "$WITH_OPENSSL"; then
  if test -n "$OPENSSL_BASE"; then
-    sc_cv_have_openssl_ssl_h=yes; OPENSSL_BASE="$D"
+    sc_cv_have_openssl_ssl_h=yes;
+    CPPFLAGS="-I$OPENSSL_BASE/include $CPPFLAGS"
  else
   AC_MSG_NOTICE(checking for components of OpenSSL)
   # first, we need to find the include file <openssl/ssl.h>
@@ -541,7 +643,7 @@ if test -n "$WITH_OPENSSL"; then
     [AC_TRY_COMPILE([#include <openssl/ssl.h>],[;],
       [sc_cv_have_openssl_ssl_h=yes; OPENSSL_BASE=""; ],
       [sc_cv_have_openssl_ssl_h=no
-       if [ "$OPENSSL_BASE" ]; then
+       if test "$OPENSSL_BASE"; then
 	  Ds="$OPENSSL_BASE"
        else
           Ds="/sw /usr/local /opt/freeware /usr/sfw /usr/local/ssl"
@@ -582,7 +684,9 @@ if test -n "$WITH_OPENSSL" -a "$sc_cv_have_openssl_ssl_h" = 'yes'; then
       else
 	LIBS="$LIBS -lssl -lcrypto"
       fi
-      AC_TRY_LINK([#include <openssl/ssl.h>],
+      AC_TRY_LINK([#include <openssl/ssl.h>
+      #include <openssl/err.h>
+      ],
        [SSL_library_init();ERR_error_string()],
        [sc_cv_have_libssl='yes'],
        [ LIBS="$LIBS -lcrypto"
@@ -631,7 +735,9 @@ if test -n "$WITH_OPENSSL"; then
   fi
 fi
 
-AC_CHECK_FUNCS(OPENSSL_init_ssl SSL_library_init)
+# Guarded for OpenBSD
+AC_CHECK_FUNCS(OPENSSL_init_ssl SSL_library_init OPENSSL_INIT_new)
+AC_CHECK_TYPE(OPENSSL_INIT_SETTINGS, AC_DEFINE(HAVE_TYPE_OPENSSL_INIT_SETTINGS),,[#include "openssl.h"])
 
 #; sc_cv_have_SSL_library_init='yes'; AC_DEFINE(HAVE_SSL_library_init)
 #if test -n "$WITH_OPENSSL"; then
@@ -652,6 +758,14 @@ AC_ARG_ENABLE(openssl-method, [  --enable-openssl-method       enable OpenSSL me
 	       esac],
 	       [AC_MSG_RESULT(no)])
 fi
+
+AC_MSG_CHECKING(whether to include undocumented resolver related options)
+AC_ARG_ENABLE(resolve, [  --enable-resolve       enable undocumented resolver options],
+	      [case "$enableval" in
+	       no) AC_MSG_RESULT(no);;
+	       *) AC_DEFINE(WITH_RESOLVE) AC_MSG_RESULT(yes);;
+	       esac],
+	       [AC_DEFINE(WITH_RESOLVE) AC_MSG_RESULT(yes)])
 
 AC_MSG_CHECKING(whether to include deprecated resolver option)
 AC_ARG_ENABLE(res-deprecated, [  --enable-res-deprecated       enable deprecated resolver options],
@@ -767,6 +881,28 @@ if test -n "$WITH_TUN"; then
   AC_DEFINE(WITH_TUN)
 fi
 
+if test "$WITH_INTERFACE"; then
+  AC_CHECK_HEADER(netinet/if_ether.h,
+    AC_DEFINE(HAVE_NETINET_IF_ETHER_H),
+    [WITH_INTERFACE=;
+     AC_MSG_WARN([include file netinet/if_ether.h not found, disabling interface])],
+     [AC_INCLUDES_DEFAULT
+     #if HAVE_NET_IF_H && HAVE_NETINET_IN_H
+     #include <net/if.h>
+     #include <netinet/in.h>
+     #endif])
+fi
+
+if test "$WITH_INTERFACE" || test "$WITH_TUN"; then
+  AC_CHECK_HEADER(linux/if_packet.h,
+    AC_DEFINE(HAVE_LINUX_IF_PACKET_H),
+    [WITH_INTERFACE=;
+     AC_MSG_WARN([include file linux/if_packet.h not found, disabling interface])])
+fi
+if test "$WITH_INTERFACE"; then
+   AC_DEFINE(WITH_INTERFACE)
+fi
+
 AC_MSG_CHECKING(whether to include system call tracing)
 AC_ARG_ENABLE(sycls, [  --disable-sycls         disable system call tracing],
 	      [case "$enableval" in
@@ -808,6 +944,16 @@ AC_ARG_ENABLE(msglevel, [  --enable-msglevel=N     set max verbosity to debug,in
 	       *) AC_DEFINE(WITH_MSGLEVEL,0) AC_MSG_RESULT(debug);;
 	       esac],
 	       [AC_DEFINE(WITH_MSGLEVEL,0) AC_MSG_RESULT(debug)])
+
+AC_MSG_CHECKING(default IP version)
+AC_ARG_ENABLE(default-ipv, [  --enable-default-ipv=N     set default/preferred IP version to "0" (none), "4", "6"],
+	      [case "$enableval" in
+	       "") AC_DEFINE(WITH_DEFAULT_IPV, '0') AC_MSG_RESULT("0");;
+	       4) AC_DEFINE(WITH_DEFAULT_IPV, '4') AC_MSG_RESULT("4");;
+	       6) AC_DEFINE(WITH_DEFAULT_IPV, '6') AC_MSG_RESULT("6");;
+	       *) AC_DEFINE(WITH_DEFAULT_IPV, '0') AC_MSG_RESULT("0");;
+	       esac],
+	       [AC_DEFINE(WITH_DEFAULT_IPV, '0') AC_MSG_RESULT("0")])
 
 #AC_SUBST(V_INCL)
 
@@ -1159,7 +1305,7 @@ if test "$ac_cv___extensions__" = yes; then
  AC_MSG_RESULT($ac_cv__posix_pthread_semantics)
 fi
 
- 
+
 # struct timespec
 AC_MSG_CHECKING(for struct timespec)
 AC_CACHE_VAL(sc_cv_struct_timespec,
@@ -1253,6 +1399,20 @@ if test $sc_cv_struct_ip_mreq_source = yes; then
    AC_DEFINE(HAVE_STRUCT_IP_MREQ_SOURCE)
 fi
 AC_MSG_RESULT($sc_cv_struct_ip_mreqn)
+
+# struct group_source_req (for multicasting options)
+AC_MSG_CHECKING(for struct group_source_req)
+AC_CACHE_VAL(sc_cv_struct_group_source_req,
+[AC_TRY_COMPILE([#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>],[struct group_source_req s;],
+[sc_cv_struct_group_source_req=yes],
+[sc_cv_struct_group_source_req=no])])
+if test $sc_cv_struct_group_source_req = yes; then
+   AC_DEFINE(HAVE_STRUCT_GROUP_SOURCE_REQ)
+fi
+AC_MSG_RESULT($sc_cv_struct_group_source_req)
 
 
 # struct ifreq (for network interfaces)
@@ -1452,6 +1612,29 @@ if test $sc_cv_struct_in6_pktinfo = yes; then
 fi
 AC_MSG_RESULT($sc_cv_struct_in6_pktinfo)
 
+dnl check for struct tpacket_auxdata
+AC_MSG_CHECKING(for struct tpacket_auxdata)
+AC_CACHE_VAL(sc_cv_struct_tpacket_auxdata,
+[AC_TRY_COMPILE([#include "sysincludes.h"],
+[struct tpacket_auxdata s;],
+[sc_cv_struct_tpacket_auxdata=yes],
+[sc_cv_struct_tpacket_auxdata=no])])
+if test $sc_cv_struct_tpacket_auxdata = yes; then
+   AC_DEFINE(HAVE_STRUCT_TPACKET_AUXDATA)
+fi
+AC_MSG_RESULT($sc_cv_struct_tpacket_auxdata)
+
+AC_MSG_CHECKING(for tp_vlan_tpid in struct tpacket_auxdata)
+AC_CACHE_VAL(sc_cv_struct_tpacket_auxdata_tp_vlan_tpid,
+[AC_TRY_COMPILE([#include "sysincludes.h"],
+[struct tpacket_auxdata s; s.tp_vlan_tpid=0],
+[sc_cv_struct_tpacket_auxdata_tp_vlan_tpid=yes],
+[sc_cv_struct_tpacket_auxdata_tp_vlan_tpid=no])])
+if test $sc_cv_struct_tpacket_auxdata_tp_vlan_tpid = yes; then
+   AC_DEFINE(HAVE_STRUCT_TPACKET_AUXDATA_TP_VLAN_TPID)
+fi
+AC_MSG_RESULT($sc_cv_struct_tpacket_auxdata)
+
 dnl check for ip_hl in struct ip
 AC_MSG_CHECKING(for struct ip.ip_hl)
 AC_CACHE_VAL(sc_cv_struct_ip_ip_hl,
@@ -1538,7 +1721,7 @@ if test -n "$WITH_OPENSSL_METHOD" -o -z "$ac_cv_have_tls_client_method" -o -z "$
 dnl Search for SSLv2_client_method, SSLv2_server_method
 AC_CHECK_FUNC(SSLv2_client_method, AC_DEFINE(HAVE_SSLv2_client_method), AC_CHECK_LIB(crypt, SSLv2_client_method, [LIBS=-lcrypt $LIBS]))
 AC_CHECK_FUNC(SSLv2_server_method, AC_DEFINE(HAVE_SSLv2_server_method), AC_CHECK_LIB(crypt, SSLv2_server_method, [LIBS=-lcrypt $LIBS]))
-dnl 
+dnl
 AC_CHECK_FUNC(SSLv3_client_method, AC_DEFINE(HAVE_SSLv3_client_method), AC_CHECK_LIB(crypt, SSLv3_client_method, [LIBS=-lcrypt $LIBS]))
 AC_CHECK_FUNC(SSLv3_server_method, AC_DEFINE(HAVE_SSLv3_server_method), AC_CHECK_LIB(crypt, SSLv3_server_method, [LIBS=-lcrypt $LIBS]))
 AC_CHECK_FUNC(SSLv23_client_method, AC_DEFINE(HAVE_SSLv23_client_method), AC_CHECK_LIB(crypt, SSLv23_client_method, [LIBS=-lcrypt $LIBS]))
@@ -1562,6 +1745,23 @@ AC_CHECK_FUNC(ASN1_STRING_get0_data, AC_DEFINE(HAVE_ASN1_STRING_get0_data), AC_C
 AC_CHECK_FUNC(RAND_status, AC_DEFINE(HAVE_RAND_status))
 AC_CHECK_FUNC(SSL_CTX_clear_mode, AC_DEFINE(HAVE_SSL_CTX_clear_mode))
 AC_CHECK_FUNC(SSL_set_tlsext_host_name, AC_DEFINE(HAVE_SSL_set_tlsext_host_name))
+AC_CHECK_FUNC(SSL_CTX_set_tlsext_max_fragment_length, AC_DEFINE(HAVE_SSL_CTX_set_tlsext_max_fragment_length))
+
+AC_MSG_CHECKING(if SSL_CTX_set_max_send_fragment exists)
+AC_CACHE_VAL(ac_cv_have_SSL_CTX_set_max_send_fragment,
+[AC_TRY_COMPILE([#include <openssl/ssl.h>],[
+#ifndef SSL_CTX_set_max_send_fragment
+#error "SSL_CTX_set_max_send_fragment not found"
+#endif
+],
+[ac_cv_have_SSL_CTX_set_max_send_fragment=yes],
+[ac_cv_have_SSL_CTX_set_max_send_fragment=no])]
+)
+if test $ac_cv_have_SSL_CTX_set_max_send_fragment = yes; then
+   AC_DEFINE(HAVE_SSL_CTX_set_max_send_fragment)
+fi
+AC_MSG_RESULT($ac_cv_have_SSL_CTX_set_max_send_fragment)
+
 AC_CHECK_FUNC(SSL_library_init, AC_DEFINE(HAVE_SSL_library_init))
 AC_CHECK_FUNC(ERR_error_string, AC_DEFINE(HAVE_ERR_error_string))
 
@@ -1673,7 +1873,7 @@ dnl the matching type.
 dnl If this method does not seem to work we run test programs that print the
 dnl length and signedness of the type.
 
-dnl do we have a -Werror option? 
+dnl do we have a -Werror option?
 dnl Does the test code compile with -Werror when types fit?
 CHANCE_TO_TYPECHECK=1
 CFLAGS1="$CFLAGS"; CFLAGS="$ERRONWARN $(echo "$CFLAGS1" | sed -e 's@-Wall@@g')"
@@ -1993,6 +2193,37 @@ else
   AC_MSG_RESULT(no)
 fi
 
+# On Solaris family there is not dirent.d_type
+AC_MSG_CHECKING(for d_type in struct dirent)
+AC_CACHE_VAL(sc_cv_dirent_d_type,
+[AC_TRY_COMPILE([#include <dirent.h>],[struct dirent d; d.d_type],
+[sc_cv_dirent_d_type=yes],
+[sc_cv_dirent_d_type=no])])
+if test $sc_cv_dirent_d_type = yes; then
+   AC_DEFINE(HAVE_DIRENT_D_TYPE)
+fi
+AC_MSG_RESULT($sc_cv_dirent_d_type)
+
+# Some OSes have undocumented _res.retrans, _res.retry components
+AC_MSG_CHECKING(for _res.retrans)
+AC_TRY_COMPILE([#include <resolv.h>],
+[_res.retrans == 0],
+[AC_MSG_RESULT(yes);
+ AC_DEFINE(HAVE_RES_RETRANS, 1)],
+ [AC_MSG_RESULT(no)])
+AC_MSG_CHECKING(for _res.retry)
+AC_TRY_COMPILE([#include <resolv.h>],
+[_res.retry == 0],
+[AC_MSG_RESULT(yes);
+ AC_DEFINE(HAVE_RES_RETRY, 1)],
+ [AC_MSG_RESULT(no)])
+AC_MSG_CHECKING(for _res.nsaddr_list)
+AC_TRY_COMPILE([#include <resolv.h>],
+[_res.nsaddr_list[0].sin_family == 0],
+[AC_MSG_RESULT(yes);
+ AC_DEFINE(HAVE_RES_NSADDR_LIST, 1)],
+ [AC_MSG_RESULT(no)])
+
 
 dnl "tcpd" "tcpwrappers"
 # on some platforms, raw linking with libwrap fails because allow_severity and
@@ -2087,7 +2318,7 @@ if test -n "$WITH_LIBWRAP"; then
   fi
   AC_MSG_RESULT($sc_cv_have_hosts_allow_table)
 fi # test -n "$WITH_LIBWRAP"
-  
+
 
 if test "$GCC" = yes; then
    CFLAGS="$CFLAGS"

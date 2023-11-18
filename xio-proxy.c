@@ -20,18 +20,16 @@
 
 #define PROXYPORT "8080"
 
-static int xioopen_proxy_connect(int argc, const char *argv[], struct opt *opts,
-				 int xioflags, xiofile_t *fd,
-				 unsigned groups, int dummy1, int dummy2,
-				 int dummy3);
+static int xioopen_proxy_connect(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *fd, const struct addrdesc *addrdesc);
 
 const struct optdesc opt_proxyport = { "proxyport", NULL, OPT_PROXYPORT, GROUP_HTTP, PH_LATE, TYPE_STRING, OFUNC_SPEC };
 const struct optdesc opt_ignorecr  = { "ignorecr",  NULL, OPT_IGNORECR,  GROUP_HTTP, PH_LATE, TYPE_BOOL,  OFUNC_SPEC };
+const struct optdesc opt_http_version              = { "http-version",              NULL,            OPT_HTTP_VERSION,              GROUP_HTTP, PH_LATE, TYPE_STRING,  OFUNC_SPEC };
 const struct optdesc opt_proxy_resolve   = { "proxy-resolve",   "resolve", OPT_PROXY_RESOLVE,   GROUP_HTTP, PH_LATE, TYPE_BOOL,  OFUNC_SPEC };
 const struct optdesc opt_proxy_authorization  = { "proxy-authorization",  "proxyauth", OPT_PROXY_AUTHORIZATION,  GROUP_HTTP, PH_LATE, TYPE_STRING,  OFUNC_SPEC };
 const struct optdesc opt_proxy_authorization_file  = { "proxy-authorization-file",  "proxyauthfile", OPT_PROXY_AUTHORIZATION_FILE,  GROUP_HTTP, PH_LATE, TYPE_STRING,  OFUNC_SPEC };
 
-const struct addrdesc addr_proxy_connect = { "proxy", 3, xioopen_proxy_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_HTTP|GROUP_CHILD|GROUP_RETRY, 0, 0, 0 HELP(":<proxy-server>:<host>:<port>") };
+const struct addrdesc xioaddr_proxy_connect = { "PROXY", 3, xioopen_proxy_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_HTTP|GROUP_CHILD|GROUP_RETRY, 0, 0, 0 HELP(":<proxy-server>:<host>:<port>") };
 
 
 /*0#define CONNLEN 40*/	/* "CONNECT 123.156.189.123:65432 HTTP/1.0\r\n\0" */
@@ -56,15 +54,15 @@ enum {
    returns <0 when error occurs
 */
 static ssize_t
-   xioproxy_recvbytes(struct single *xfd, char *buff, size_t buflen, int level) {
+   xioproxy_recvbytes(struct single *sfd, char *buff, size_t buflen, int level) {
    ssize_t result;
    do {
       /* we need at least buflen bytes... */
-      result = Read(xfd->fd, buff, buflen);
+      result = Read(sfd->fd, buff, buflen);
    } while (result < 0 && errno == EINTR);	/*! EAGAIN? */
    if (result < 0) {
       Msg4(level, "read(%d, %p, "F_Zu"): %s",
-	   xfd->fd, buff, buflen, strerror(errno));
+	   sfd->fd, buff, buflen, strerror(errno));
       return result;
    }
    if (result == 0) {
@@ -77,12 +75,16 @@ static ssize_t
 #define BUFLEN 2048
 
 
-static int xioopen_proxy_connect(int argc, const char *argv[], struct opt *opts,
-				 int xioflags, xiofile_t *xxfd,
-				 unsigned groups, int dummy1, int dummy2,
-				 int dummy3) {
+static int xioopen_proxy_connect(
+	int argc,
+	const char *argv[],
+	struct opt *opts,
+	int xioflags,
+	xiofile_t *xxfd,
+	const struct addrdesc *addrdesc)
+{
       /* we expect the form: host:host:port */
-   struct single *xfd = &xxfd->stream;
+   struct single *sfd = &xxfd->stream;
    struct opt *opts0 = NULL;
    struct proxyvars struct_proxyvars = { 0 }, *proxyvars = &struct_proxyvars;
    /* variables to be filled with address option values */
@@ -90,9 +92,10 @@ static int xioopen_proxy_connect(int argc, const char *argv[], struct opt *opts,
    /* */
    int pf = PF_UNSPEC;
    union sockaddr_union us_sa,   *us = &us_sa;
-   union sockaddr_union them_sa, *them = &them_sa;
    socklen_t uslen = sizeof(us_sa);
-   socklen_t themlen = sizeof(them_sa);
+   struct addrinfo *themlist, *themp;
+   struct addrinfo **ai_sorted;
+   int i;
    const char *proxyname; char *proxyport = NULL;
    const char *targetname, *targetport;
    int ipproto = IPPROTO_TCP;
@@ -103,16 +106,18 @@ static int xioopen_proxy_connect(int argc, const char *argv[], struct opt *opts,
    int result;
 
    if (argc != 4) {
-      Error1("%s: 3 parameters required", argv[0]);
+      xio_syntax(argv[0], 3, argc-1, addrdesc->syntax);
       return STAT_NORETRY;
    }
    proxyname = argv[1];
    targetname = argv[2];
    targetport = argv[3];
 
-   xfd->howtoend = END_SHUTDOWN;
-   if (applyopts_single(xfd, opts, PH_INIT) < 0)  return -1;
-   applyopts(-1, opts, PH_INIT);
+   if (sfd->howtoend == END_UNSPEC)
+      sfd->howtoend = END_SHUTDOWN;
+   if (applyopts_single(sfd, opts, PH_INIT) < 0)
+      return -1;
+   applyopts(sfd, 1, opts, PH_INIT);
 
    retropt_int(opts, OPT_SO_TYPE, &socktype);
 
@@ -124,62 +129,97 @@ static int xioopen_proxy_connect(int argc, const char *argv[], struct opt *opts,
       }
    }
 
-   result = _xioopen_proxy_prepare(proxyvars, opts, targetname, targetport);
-   if (result != STAT_OK)  return result;
-
-   result =
-      _xioopen_ipapp_prepare(opts, &opts0, proxyname, proxyport,
-			     &pf, ipproto,
-			     xfd->para.socket.ip.res_opts[1],
-			     xfd->para.socket.ip.res_opts[0],
-			     them, &themlen, us, &uslen,
-			     &needbind, &lowport, socktype);
-   if (result != STAT_OK)  return result;
+   result = _xioopen_proxy_prepare(proxyvars, opts, targetname, targetport,
+				   sfd->para.socket.ip.ai_flags);
+   if (result != STAT_OK)
+      return result;
 
    Notice4("opening connection to %s:%u via proxy %s:%s",
-	   proxyvars->targetaddr, proxyvars->targetport, proxyname, proxyport);
+      proxyvars->targetaddr, proxyvars->targetport, proxyname, proxyport);
 
-   do {	/* loop over failed connect and proxy connect attempts */
+   i = 0;
+   do {      /* loop over retries (failed connect and proxy-request attempts) */
 
+    level = E_INFO;
+
+    result =
+      _xioopen_ipapp_prepare(opts, &opts0, proxyname, proxyport,
+			     &pf, ipproto,
+			     sfd->para.socket.ip.ai_flags,
+			     &themlist, us, &uslen,
+			     &needbind, &lowport, socktype);
+   if (result != STAT_OK)
+       return result;
+
+    /* Count addrinfo entries */
+      themp = themlist;
+      i = 0;
+      while (themp != NULL) {
+	 ++i;
+	 themp = themp->ai_next;
+      }
+      ai_sorted = Calloc((i+1), sizeof(struct addrinfo *));
+      if (ai_sorted == NULL)
+	 return STAT_RETRYLATER;
+      /* Generate a list of addresses sorted by preferred ip version */
+      _xio_sort_ip_addresses(themlist, ai_sorted);
+
+      /* Loop over themlist */
+      i = 0;
+      themp = ai_sorted[i++];
+      while (themp != NULL) {
+	 Notice4("opening connection to %s:%u via proxy %s:%s",
+		 proxyvars->targetaddr, proxyvars->targetport, proxyname, proxyport);
 #if WITH_RETRY
-      if (xfd->forever || xfd->retry) {
-         level = E_INFO;
-      } else
+	 if (sfd->forever || sfd->retry || ai_sorted[i] != NULL) {
+	    level = E_INFO;
+	 } else
 #endif /* WITH_RETRY */
-         level = E_ERROR;
+	    level = E_ERROR;
 
    result =
-      _xioopen_connect(xfd,
-		       needbind?us:NULL, sizeof(*us),
-		       (struct sockaddr *)them, themlen,
-		       opts, pf, socktype, IPPROTO_TCP, lowport, level);
+      _xioopen_connect(sfd,
+		       needbind?us:NULL, uslen,
+		       themp->ai_addr, themp->ai_addrlen,
+		       opts, pf?pf:themp->ai_family, socktype, IPPROTO_TCP, lowport, level);
+       if (result == STAT_OK)
+	  break;
+       themp = ai_sorted[i++];
+       if (themp == NULL) {
+	  result = STAT_RETRYLATER;
+      }
       switch (result) {
       case STAT_OK: break;
 #if WITH_RETRY
       case STAT_RETRYLATER:
       case STAT_RETRYNOW:
-	 if (xfd->forever || xfd->retry--) {
-	    if (result == STAT_RETRYLATER)  Nanosleep(&xfd->intervall, NULL);
+	 if (sfd->forever || sfd->retry) {
+	    --sfd->retry;
+	    if (result == STAT_RETRYLATER)
+	       Nanosleep(&sfd->intervall, NULL);
 	    continue;
 	 }
 #endif /* WITH_RETRY */
       default:
+	 free(ai_sorted);
+	 xiofreeaddrinfo(themlist);
 	 return result;
       }
+      }
+      xiofreeaddrinfo(themlist);
+      applyopts(sfd, -1, opts, PH_ALL);
 
-      applyopts(xfd->fd, opts, PH_ALL);
-
-      if ((result = _xio_openlate(xfd, opts)) < 0)
+      if ((result = _xio_openlate(sfd, opts)) < 0)
 	 return result;
 
-      result = _xioopen_proxy_connect(xfd, proxyvars, level);
+      result = _xioopen_proxy_connect(sfd, proxyvars, level);
       switch (result) {
       case STAT_OK: break;
 #if WITH_RETRY
       case STAT_RETRYLATER:
       case STAT_RETRYNOW:
-	 if (xfd->forever || xfd->retry--) {
-	    if (result == STAT_RETRYLATER)  Nanosleep(&xfd->intervall, NULL);
+	 if (sfd->forever || sfd->retry--) {
+	    if (result == STAT_RETRYLATER)  Nanosleep(&sfd->intervall, NULL);
 	    continue;
 	 }
 #endif /* WITH_RETRY */
@@ -195,32 +235,33 @@ static int xioopen_proxy_connect(int argc, const char *argv[], struct opt *opts,
       if (dofork) {
 	 pid_t pid;
 	 int level = E_ERROR;
-	 if (xfd->forever || xfd->retry) {
+	 if (sfd->forever || sfd->retry) {
 	    level = E_WARN;
 	 }
-	 while ((pid = xio_fork(false, level)) < 0) {
-	    if (xfd->forever || --xfd->retry) {
-	       Nanosleep(&xfd->intervall, NULL); continue;
+	 while ((pid = xio_fork(false, level, sfd->shutup)) < 0) {
+	    if (sfd->forever || --sfd->retry) {
+	       Nanosleep(&sfd->intervall, NULL); continue;
 	    }
 	    return STAT_RETRYLATER;
 	 }
 
 	 if (pid == 0) {	/* child process */
-	    xfd->forever = false;  xfd->retry = 0;
+	    sfd->forever = false;  sfd->retry = 0;
 	    break;
 	 }
 
 	 /* parent process */
-	 Close(xfd->fd);
-	 Nanosleep(&xfd->intervall, NULL);
-	 dropopts(opts, PH_ALL);  opts = copyopts(opts0, GROUP_ALL);
+	 Close(sfd->fd);
+	 Nanosleep(&sfd->intervall, NULL);
+	 dropopts(opts, PH_ALL);
+	 opts = copyopts(opts0, GROUP_ALL);
 	 continue;
       } else
 #endif /* WITH_RETRY */
       {
 	 break;
       }
-  
+
    } while (true);	/* end of complete open loop - drop out on success */
 
    Notice4("successfully connected to %s:%u via proxy %s:%s",
@@ -231,14 +272,19 @@ static int xioopen_proxy_connect(int argc, const char *argv[], struct opt *opts,
 }
 
 
-int _xioopen_proxy_prepare(struct proxyvars *proxyvars, struct opt *opts,
-			   const char *targetname, const char *targetport) {
+int _xioopen_proxy_prepare(
+	struct proxyvars *proxyvars,
+	struct opt *opts,
+	const char *targetname,
+	const char *targetport,
+	const int ai_flags[2]) {
    union sockaddr_union host;
    socklen_t socklen = sizeof(host);
    int rc;
 
    retropt_bool(opts, OPT_IGNORECR, &proxyvars->ignorecr);
    retropt_bool(opts, OPT_PROXY_RESOLVE, &proxyvars->doresolve);
+   retropt_string(opts, OPT_HTTP_VERSION,             &proxyvars->version);
    retropt_string(opts, OPT_PROXY_AUTHORIZATION, &proxyvars->authstring);
    retropt_string(opts, OPT_PROXY_AUTHORIZATION_FILE, &proxyvars->authfile);
 
@@ -258,7 +304,7 @@ int _xioopen_proxy_prepare(struct proxyvars *proxyvars, struct opt *opts,
 	 Error2("open(\"%s\", O_RDONLY): %s", proxyvars->authfile, strerror(errno));
 	 return STAT_NORETRY;
       }
-      /* go to the end of our proxy auth file to 
+      /* go to the end of our proxy auth file to
 	 figure out how long our proxy auth is */
       if ((length = Lseek(authfd, 0, SEEK_END)) < 0) {
 	 Error2("lseek(<%s>, 0, SEEK_END): %s",
@@ -288,10 +334,10 @@ int _xioopen_proxy_prepare(struct proxyvars *proxyvars, struct opt *opts,
    if (proxyvars->doresolve) {
       /* currently we only resolve to IPv4 addresses. This is in accordance to
 	 RFC 2396; however once it becomes clear how IPv6 addresses should be
-	 represented in CONNECT commands this code might be extended */
-      rc = xiogetaddrinfo(targetname, targetport, PF_UNSPEC,
-			  SOCK_STREAM, IPPROTO_TCP,
-			  &host, &socklen, 0, 0);
+	 represented in CONNECT commands this code might need to be extended */
+      rc = xioresolve(targetname, targetport, PF_INET/*!?*/,
+		      SOCK_STREAM, IPPROTO_TCP,
+		      &host, &socklen, ai_flags);
       if (rc != STAT_OK) {
 	 proxyvars->targetaddr = strdup(targetname);
       } else {
@@ -315,7 +361,7 @@ int _xioopen_proxy_prepare(struct proxyvars *proxyvars, struct opt *opts,
    return STAT_OK;
 }
 
-int _xioopen_proxy_connect(struct single *xfd,
+int _xioopen_proxy_connect(struct single *sfd,
 			   struct proxyvars *proxyvars,
 			   int level) {
    size_t offset;
@@ -323,7 +369,7 @@ int _xioopen_proxy_connect(struct single *xfd,
    int rv;
    char buff[BUFLEN+1];		/* for receiving HTTP reply headers */
 #if CONNLEN > BUFLEN
-#error not enough buffer space 
+#error not enough buffer space
 #endif
    char textbuff[2*BUFLEN+1];	/* just for sanitizing print data */
    char *eol = buff;
@@ -331,8 +377,11 @@ int _xioopen_proxy_connect(struct single *xfd,
    ssize_t sresult;
 
    /* generate proxy request header - points to final target */
-   rv = snprintf(request, CONNLEN, "CONNECT %s:%u HTTP/1.0\r\n",
-		 proxyvars->targetaddr, proxyvars->targetport);
+   if (proxyvars->version == NULL) {
+      proxyvars->version = "1.0";
+   }
+   rv = snprintf(request, CONNLEN, "CONNECT %s:%u HTTP/%s\r\n",
+		 proxyvars->targetaddr, proxyvars->targetport, proxyvars->version);
    if (rv >= CONNLEN || rv < 0) {
       Error("_xioopen_proxy_connect(): PROXY CONNECT buffer too small");
       return -1;
@@ -342,11 +391,11 @@ int _xioopen_proxy_connect(struct single *xfd,
    * xiosanitize(request, strlen(request), textbuff) = '\0';
    Info1("sending \"%s\"", textbuff);
    /* write errors are assumed to always be hard errors, no retry */
-   if (writefull(xfd->fd, request, strlen(request)) < 0) {
+   if (writefull(sfd->fd, request, strlen(request)) < 0) {
       Msg4(level, "write(%d, %p, "F_Zu"): %s",
-	   xfd->fd, request, strlen(request), strerror(errno));
-      if (Close(xfd->fd) < 0) {
-	 Info2("close(%d): %s", xfd->fd, strerror(errno));
+	   sfd->fd, request, strlen(request), strerror(errno));
+      if (Close(sfd->fd) < 0) {
+	 Info2("close(%d): %s", sfd->fd, strerror(errno));
       }
       return STAT_RETRYLATER;
    }
@@ -372,11 +421,11 @@ int _xioopen_proxy_connect(struct single *xfd,
       *next = '\0';
       Info1("sending \"%s\\r\\n\"", header);
       *next++ = '\r';  *next++ = '\n'; *next++ = '\0';
-      if (writefull(xfd->fd, header, strlen(header)) < 0) {
+      if (writefull(sfd->fd, header, strlen(header)) < 0) {
 	 Msg4(level, "write(%d, %p, "F_Zu"): %s",
-	      xfd->fd, header, strlen(header), strerror(errno));
-	 if (Close(xfd->fd) < 0) {
-	    Info2("close(%d): %s", xfd->fd, strerror(errno));
+	      sfd->fd, header, strlen(header), strerror(errno));
+	 if (Close(sfd->fd) < 0) {
+	    Info2("close(%d): %s", sfd->fd, strerror(errno));
 	 }
 	 return STAT_RETRYLATER;
       }
@@ -385,11 +434,11 @@ int _xioopen_proxy_connect(struct single *xfd,
    }
 
    Info("sending \"\\r\\n\"");
-   if (writefull(xfd->fd, "\r\n", 2) < 0) {
+   if (writefull(sfd->fd, "\r\n", 2) < 0) {
       Msg2(level, "write(%d, \"\\r\\n\", 2): %s",
-	   xfd->fd, strerror(errno));
-      if (Close(xfd->fd) < 0) {
-	 Info2("close(%d): %s", xfd->fd, strerror(errno));
+	   sfd->fd, strerror(errno));
+      if (Close(sfd->fd) < 0) {
+	 Info2("close(%d): %s", sfd->fd, strerror(errno));
       }
       return STAT_RETRYLATER;
    }
@@ -405,12 +454,12 @@ int _xioopen_proxy_connect(struct single *xfd,
    offset = 0;	/* up to where the buffer is filled (relative) */
    /*eol;*/	/* points to the first lineterm of the current line */
    do {
-      sresult = xioproxy_recvbytes(xfd, buff+offset, 1, level);
+      sresult = xioproxy_recvbytes(sfd, buff+offset, 1, level);
       if (sresult <= 0) {
 	 state = XIOSTATE_ERROR;
 	 break;	/* leave read cycles */
       }
-      
+
       switch (state) {
 
       case XIOSTATE_HTTP1:
@@ -448,7 +497,7 @@ int _xioopen_proxy_connect(struct single *xfd,
 	 }
 	 state = XIOSTATE_HTTP4;
 	 break;
-	 
+
       case XIOSTATE_HTTP4:
 	 /* within header */
 	 if (*(buff+offset) == '\r') {
@@ -564,7 +613,7 @@ int _xioopen_proxy_connect(struct single *xfd,
 	    */
 	    ptr += 3;
 	    while (*ptr == ' ')  ++ptr;
-	    
+
 	    Msg2(level, "%s: %s", request, ptr);
 	    return STAT_RETRYLATER;
 	 }

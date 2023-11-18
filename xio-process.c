@@ -70,4 +70,3 @@ int _xioopen_setdelayeduser(void) {
    }
    return 0;
 }
-

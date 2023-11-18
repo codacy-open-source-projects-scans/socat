@@ -7,8 +7,8 @@
 # accepts and answers correct HTTP CONNECT requests on stdio, and tries to
 # establish the connection to the given server.
 # it is required for socats test.sh
-# for TCP, use this script as:
-# socat tcp-l:8080,reuseaddr,fork exec:"proxy.sh",nofork
+# for TCP, use this script like:
+# socat TCP-L:8080,reuseaddr,fork EXEC:"proxy.sh",nofork
 
 # 20130622  GR allow hostnames, not only IP addresses
 

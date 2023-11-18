@@ -13,30 +13,35 @@
 
 #if WITH_SYSTEM
 
-static int xioopen_system(int arg, const char *argv[], struct opt *opts,
-		int xioflags,	/* XIO_RDONLY etc. */
-		xiofile_t *fd,
-		unsigned groups,
-		int dummy1, int dummy2, int dummy3
-		);
+static int xioopen_system(int arg, const char *argv[], struct opt *opts, int xioflags, xiofile_t *xfd, const struct addrdesc *addrdesc);
 
-const struct addrdesc addr_system = { "system", 3, xioopen_system, GROUP_FD|GROUP_FORK|GROUP_EXEC|GROUP_SOCKET|GROUP_SOCK_UNIX|GROUP_TERMIOS|GROUP_FIFO|GROUP_PTY|GROUP_PARENT, 1, 0, 0 HELP(":<shell-command>") };
+const struct addrdesc xioaddr_system = { "SYSTEM", 3, xioopen_system, GROUP_FD|GROUP_FORK|GROUP_EXEC|GROUP_SOCKET|GROUP_SOCK_UNIX|GROUP_TERMIOS|GROUP_FIFO|GROUP_PTY|GROUP_PARENT, 1, 0, 0 HELP(":<shell-command>") };
 
 
-static int xioopen_system(int argc, const char *argv[], struct opt *opts,
-		int xioflags,	/* XIO_RDONLY etc. */
-		xiofile_t *fd,
-		unsigned groups,
-		int dummy1, int dummy2, int dummy3
-		) {
+static int xioopen_system(
+	int argc,
+	const char *argv[],
+	struct opt *opts,
+	int xioflags,	/* XIO_RDONLY etc. */
+	xiofile_t *xfd,
+	const struct addrdesc *addrdesc)
+{
+   struct single *sfd = &xfd->stream;
    int status;
    char *path = NULL;
    int duptostderr;
    int result;
    const char *string = argv[1];
 
-   status = _xioopen_foxec(xioflags, &fd->stream, groups, &opts, &duptostderr);
-   if (status < 0)  return status;
+   if (argc != 2) {
+      xio_syntax(argv[0], 1, argc-1, addrdesc->syntax);
+      return STAT_NORETRY;
+   }
+
+   status =
+      _xioopen_foxec(xioflags, sfd, addrdesc->groups, &opts, &duptostderr);
+   if (status < 0)
+      return status;
    if (status == 0) {	/* child */
       int numleft;
 
@@ -50,8 +55,8 @@ static int xioopen_system(int argc, const char *argv[], struct opt *opts,
       }
 
       if ((numleft = leftopts(opts)) > 0) {
-	 Error1("%d option(s) could not be used", numleft);
 	 showleft(opts);
+	 Error1("INTERNAL: %d option(s) remained unused", numleft);
 	 return STAT_NORETRY;
       }
 
@@ -72,6 +77,7 @@ static int xioopen_system(int argc, const char *argv[], struct opt *opts,
    }
 
    /* parent */
+   _xio_openlate(sfd, opts);
    return 0;
 }
 

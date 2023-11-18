@@ -21,6 +21,7 @@ const struct optdesc opt_openpty = { "openpty",   NULL, OPT_OPENPTY,     GROUP_P
 #if HAVE_DEV_PTMX || HAVE_DEV_PTC
 const struct optdesc opt_ptmx    = { "ptmx",      NULL, OPT_PTMX,        GROUP_PTY,   PH_BIGEN, TYPE_BOOL, 	OFUNC_SPEC };
 #endif
+const struct optdesc opt_sitout_eio = { "sitout-eio", NULL, OPT_SITOUT_EIO, GROUP_PTY, PH_OFFSET, TYPE_TIMEVAL, OFUNC_OFFSET, XIO_OFFSETOF(para.exec.sitout_eio), XIO_SIZEOF(para.exec.sitout_eio) };
 
 #if WITH_EXEC || WITH_SYSTEM
 
@@ -46,12 +47,14 @@ const struct optdesc opt_sigquit = { "sigquit",   NULL, OPT_SIGQUIT,     GROUP_P
    return<0: error occurred, assume parent process and no child exists !!!
  */
 int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
-		struct single *fd,
-		unsigned groups,
-		   struct opt **copts,	/* in: opts; out: opts for child */
+		struct single *sfd,
+		   groups_t groups,
+		   struct opt **optsp,	/* in: opts; out: opts for parent/child */
 		   int *duptostderr	/* out: redirect stderr to output fd */
 		) {
-   struct opt *popts;	/* parent process options */
+   struct opt *opts;		/* common options */
+   struct opt *popts = NULL;	/* parent options */
+   struct opt *copts;		/* child options */
    int numleft;
    int d, sv[2], rdpip[2], wrpip[2];
    int rw = (xioflags & XIO_ACCMODE);
@@ -75,23 +78,23 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
    bool nofork = false;
    bool withfork;
    char *tn = NULL;
-   int trigger[2];
+   int trigger[2]; 	/* [0] watched by parent, [1] closed by child when ready */
 
-   popts = moveopts(*copts, GROUP_ALL);
-   if (applyopts_single(fd, popts, PH_INIT) < 0)  return -1;
-   applyopts2(-1, popts, PH_INIT, PH_EARLY);
+   opts = *optsp;
+   if (applyopts_single(sfd, opts, PH_INIT) < 0)  return -1;
+   applyopts2(sfd, -1, opts, PH_INIT, PH_EARLY);
 
-   retropt_bool(popts, OPT_NOFORK, &nofork);
+   retropt_bool(opts, OPT_NOFORK, &nofork);
    withfork = !nofork;
 
-   retropt_bool(popts, OPT_PIPES, &usepipes);
+   retropt_bool(opts, OPT_PIPES, &usepipes);
 #if HAVE_PTY
-   retropt_bool(popts, OPT_PTY, &usebestpty);
+   retropt_bool(opts, OPT_PTY, &usebestpty);
 #if HAVE_OPENPTY
-   retropt_bool(popts, OPT_OPENPTY, &useopenpty);
+   retropt_bool(opts, OPT_OPENPTY, &useopenpty);
 #endif
 #if defined(HAVE_DEV_PTMX) || defined(HAVE_DEV_PTC)
-   retropt_bool(popts, OPT_PTMX, &useptmx);
+   retropt_bool(opts, OPT_PTMX, &useptmx);
 #endif
    usepty = (usebestpty
 #if HAVE_OPENPTY
@@ -107,12 +110,12 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
    }
 #endif /* HAVE_PTY */
 
-   if (retropt_ushort(popts, OPT_FDIN,  (unsigned short *)&fdi) >= 0) {
+   if (retropt_ushort(opts, OPT_FDIN,  (unsigned short *)&fdi) >= 0) {
       if ((xioflags&XIO_ACCMODE) == XIO_RDONLY) {
 	 Error("_xioopen_foxec(): option fdin is useless in read-only mode");
       }
    }
-   if (retropt_ushort(popts, OPT_FDOUT, (unsigned short *)&fdo) >= 0) {
+   if (retropt_ushort(opts, OPT_FDOUT, (unsigned short *)&fdo) >= 0) {
       if ((xioflags&XIO_ACCMODE) == XIO_WRONLY) {
 	 Error("_xioopen_foxec(): option fdout is useless in write-only mode");
       }
@@ -124,7 +127,7 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 	 /*!! free something */
 	 return -1;
       }
-      fd->flags |= XIO_DOESCHILD;
+      sfd->flags |= XIO_DOESCHILD;
 
 #if HAVE_PTY
       Notice2("forking off child, using %s for %s",
@@ -136,7 +139,7 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 	      ddirection[rw]);
 #endif /* HAVE_PTY */
    }
-   applyopts(-1, popts, PH_PREBIGEN);
+   applyopts(sfd, -1, opts, PH_PREBIGEN);
 
    if (!withfork) {
       /*0 struct single *stream1, *stream2;*/
@@ -146,10 +149,13 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 	 /*!! free something */
 	 return -1;
       }
-      fd->flags |= XIO_DOESEXEC;
+      sfd->flags |= XIO_DOESEXEC;
 
-      free(*copts);
-      *copts = moveopts(popts, GROUP_ALL);
+      /* Only one process, no parent,child */
+      if ((copts = moveopts(opts, GROUP_ALL)) == NULL) {
+	 /*!! free something */
+	 return -1;
+      }
 
 #if 0 /*!! */
       if (sock1->tag == XIO_TAG_DUAL) {
@@ -206,7 +212,8 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 	    /*0 Info2("dup2(%d, %d)", XIO_GETWRFD(sock[0]), fdo);*/
 	 }
       }
-   } else
+      /* !withfork */
+   } else /* withfork */
 #if HAVE_PTY
    if (usepty) {
 
@@ -215,7 +222,7 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 #elif HAVE_DEV_PTC
 #  define PTMX "/dev/ptc"	/* AIX 4.3.3 */
 #endif
-      fd->dtype = XIODATA_PTY;
+      sfd->dtype = XIODATA_PTY;
 #if HAVE_DEV_PTMX || HAVE_DEV_PTC
       if (usebestpty || useptmx) {
 	 if ((ptyfd = Open(PTMX, O_RDWR|O_NOCTTY, 0620)) < 0) {
@@ -263,30 +270,31 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 	 }
       }
 #endif /* HAVE_OPENPTY */
-      free(*copts);
-      if ((*copts = moveopts(popts, GROUP_TERMIOS|GROUP_FORK|GROUP_EXEC|GROUP_PROCESS|GROUP_NAMED)) == NULL) {
+      /* withfork use_pty */
+      if ((copts = moveopts(opts, GROUP_TERMIOS|GROUP_FORK|GROUP_EXEC|GROUP_PROCESS|GROUP_NAMED)) == NULL) {
 	 return -1;
       }
+      popts = opts;
       applyopts_cloexec(ptyfd, popts);/*!*/
       /* exec:...,pty did not kill child process under some circumstances */
-      if (fd->howtoend == END_UNSPEC) {
-	 fd->howtoend = END_CLOSE_KILL;
+      if (sfd->howtoend == END_UNSPEC) {
+	 sfd->howtoend = END_CLOSE_KILL;
       }
 
       /* this for parent, was after fork */
-      applyopts(ptyfd, popts, PH_FD);
-      applyopts(ptyfd, popts, PH_LATE);
-      if (applyopts_single(fd, popts, PH_LATE) < 0)  return -1;
+      applyopts(sfd, ptyfd, popts, PH_FD);
+      sfd->fd = ptyfd;
 
-      fd->fd = ptyfd;
-
-   } else
+      /* end withfork, use_pty */
+   } else /* end withfork, use_pty */
 #endif /* HAVE_PTY */
+
    if (usepipes) {
-      struct opt *popts2, *copts2;
+      /* withfork usepipes */
+      struct opt *popts2 = NULL;
 
       if (rw == XIO_RDWR)
-	 fd->dtype = XIODATA_2PIPE;
+	 sfd->dtype = XIODATA_2PIPE;
       if (rw != XIO_WRONLY) {
 	 if (Pipe(rdpip) < 0) {
 	    Error2("pipe(%p): %s", rdpip, strerror(errno));
@@ -295,19 +303,20 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
       }
       /*0 Info2("pipe({%d,%d})", rdpip[0], rdpip[1]);*/
       /* rdpip[0]: read by socat; rdpip[1]: write by child */
-      free(*copts);
-      if ((*copts = moveopts(popts, GROUP_FORK|GROUP_EXEC|GROUP_PROCESS))
+
+      /* withfork usepipes */
+      if ((copts = moveopts(opts, GROUP_FORK|GROUP_EXEC|GROUP_PROCESS))
 	  == NULL) {
 	 return -1;
       }
-
-      popts2 = copyopts(popts, GROUP_ALL);
-      copts2 = copyopts(*copts, GROUP_ALL);
+      popts = opts;
+      if (sfd->dtype == XIODATA_2PIPE)
+	 popts2 = copyopts(popts, GROUP_ALL);
 
       if (rw != XIO_WRONLY) {
 	 applyopts_cloexec(rdpip[0], popts);
-	 applyopts(rdpip[0], popts, PH_FD);
-	 applyopts(rdpip[1], *copts, PH_FD);
+	 applyopts(sfd, rdpip[0], popts, PH_FD);
+	 applyopts(sfd, rdpip[1], copts, PH_FD);
       }
 
       if (rw != XIO_RDONLY) {
@@ -316,93 +325,98 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 	    return -1;
 	 }
       }
-      /*0 Info2("pipe({%d,%d})", wrpip[0], wrpip[1]);*/
 
       /* wrpip[1]: write by socat; wrpip[0]: read by child */
       if (rw != XIO_RDONLY) {
-	 applyopts_cloexec(wrpip[1], popts2);
-	 applyopts(wrpip[1], popts2, PH_FD);
-	 applyopts(wrpip[0], copts2, PH_FD);
+	 applyopts_cloexec(wrpip[1], popts);
+	 if (sfd->dtype == XIODATA_2PIPE)
+	    applyopts(NULL, wrpip[1], popts2, PH_FD);
+	 else
+	    applyopts(NULL, wrpip[1], popts, PH_FD);
+	 applyopts(NULL, wrpip[0], copts, PH_FD);
       }
-      if (fd->howtoend == END_UNSPEC) {
-	 fd->howtoend = END_CLOSE_KILL;
+      if (sfd->howtoend == END_UNSPEC) {
+	 sfd->howtoend = END_CLOSE_KILL;
       }
 
       /* this for parent, was after fork */
       switch (rw) {
-      case XIO_RDONLY: fd->fd = rdpip[0]; break;
-      case XIO_WRONLY: fd->fd = wrpip[1]; break;
-      case XIO_RDWR:   fd->fd = rdpip[0];
-	 fd->para.exec.fdout = wrpip[1];
+      case XIO_RDONLY: sfd->fd = rdpip[0]; break;
+      case XIO_WRONLY: sfd->fd = wrpip[1]; break;
+      case XIO_RDWR:   sfd->fd = rdpip[0];
+	 sfd->para.exec.fdout = wrpip[1];
 	 break;
       }
-      applyopts(fd->fd, popts, PH_FD);
-      applyopts(fd->fd, popts, PH_LATE);
-      if (applyopts_single(fd, popts, PH_LATE) < 0)  return -1;
+      applyopts(sfd, -1, popts, PH_FD);
+      applyopts(sfd, -1, popts, PH_LATE);
+      if (applyopts_single(sfd, popts, PH_LATE) < 0)
+	 return -1;
+
+      /* end withfork, use_pipes */
    } else {
+      /* withfork, socketpair */
+
       d = AF_UNIX;
-      retropt_int(popts, OPT_PROTOCOL_FAMILY, &d);
-      result = xiosocketpair(popts, d, SOCK_STREAM, 0, sv);
+      retropt_int(opts, OPT_PROTOCOL_FAMILY, &d);
+      result = xiosocketpair(opts, d, SOCK_STREAM, 0, sv);
       if (result < 0) {
 	 return -1;
       }
-      /*0 Info5("socketpair(%d, %d, %d, {%d,%d})",
-	d, type, protocol, sv[0], sv[1]);*/
-      free(*copts);
-      if ((*copts = moveopts(popts, GROUP_FORK|GROUP_EXEC|GROUP_PROCESS)) == NULL) {
+
+      /* withfork socketpair */
+      if ((copts = moveopts(opts, GROUP_FORK|GROUP_EXEC|GROUP_PROCESS)) == NULL) {
 	 return -1;
       }
-      applyopts(sv[0], *copts, PH_PASTSOCKET);
-      applyopts(sv[1], popts, PH_PASTSOCKET);
+      popts = opts;
+      applyopts(sfd, sv[0], copts, PH_PASTSOCKET);
+      applyopts(sfd, sv[1], popts, PH_PASTSOCKET);
 
-      applyopts_cloexec(sv[0], *copts);
-      applyopts(sv[0], *copts, PH_FD);
-      applyopts(sv[1], popts, PH_FD);
+      applyopts_cloexec(sv[0], copts);
+      applyopts(sfd, sv[0], copts, PH_FD);
+      applyopts(sfd, sv[1], popts, PH_FD);
 
-      applyopts(sv[0], *copts, PH_PREBIND);
-      applyopts(sv[0], *copts, PH_BIND);
-      applyopts(sv[0], *copts, PH_PASTBIND);
-      applyopts(sv[1], popts, PH_PREBIND);
-      applyopts(sv[1], popts, PH_BIND);
-      applyopts(sv[1], popts, PH_PASTBIND);
+      applyopts(sfd, sv[0], copts, PH_PREBIND);
+      applyopts(sfd, sv[0], copts, PH_BIND);
+      applyopts(sfd, sv[0], copts, PH_PASTBIND);
+      applyopts(sfd, sv[1], popts, PH_PREBIND);
+      applyopts(sfd, sv[1], popts, PH_BIND);
+      applyopts(sfd, sv[1], popts, PH_PASTBIND);
 
-      if (fd->howtoend == END_UNSPEC) {
-	 fd->howtoend = END_SHUTDOWN_KILL;
+      if (sfd->howtoend == END_UNSPEC) {
+	 sfd->howtoend = END_SHUTDOWN_KILL;
       }
 
       /* this for parent, was after fork */
-      fd->fd = sv[0];
-      applyopts(fd->fd, popts, PH_FD);
-      applyopts(fd->fd, popts, PH_LATE);
-      if (applyopts_single(fd, popts, PH_LATE) < 0)  return -1;
+      sfd->fd = sv[0];
+      applyopts(sfd, -1, popts, PH_FD);
+      /* end withfork, socketpair */
    }
-   /*0   if ((optpr = copyopts(*copts, GROUP_PROCESS)) == NULL)
-     return -1;*/
-   retropt_bool(*copts, OPT_STDERR, &withstderr);
+   retropt_bool(copts, OPT_STDERR, &withstderr);
 
    xiosetchilddied();	/* set SIGCHLD handler */
 
    if (withfork) {
       Socketpair(PF_UNIX, SOCK_STREAM, 0, trigger);
-      pid = xio_fork(true, E_ERROR);
+      pid = xio_fork(true, E_ERROR, 0);
       if (pid < 0) {
 	 return -1;
       }
    }
-   if (!withfork || pid == 0) {	/* child */
+   if (!withfork || pid == 0) {	/* in single process, or in child */
+      applyopts_optgroup(sfd, -1, copts, GROUP_PROCESS);
       if (withfork) {
+	 Close(trigger[0]); 	/* in child: not needed here */
 	 /* The child should have default handling for SIGCHLD. */
 	 /* In particular, it's not defined whether ignoring SIGCHLD is inheritable. */
 	 if (Signal(SIGCHLD, SIG_DFL) == SIG_ERR) {
 	    Warn1("signal(SIGCHLD, SIG_DFL): %s", strerror(errno));
-	    Close(trigger[0]);
 	 }
 
 #if HAVE_PTY
 	 if (usepty) {
-	    applyopts_named(tn, *copts, PH_PREOPEN);
-	    applyopts_named(tn, *copts, PH_EARLY);
-	    applyopts_named(tn, *copts, PH_FD);
+	    applyopts_named(tn, copts, PH_PREOPEN);
+	    applyopts_named(tn, copts, PH_EARLY);
+	    applyopts_named(tn, copts, PH_FD);
 
 	   if (ttyfd < 0) {
 	    if ((ttyfd = Open(tn, O_RDWR|O_NOCTTY, 0620)) < 0) {
@@ -429,7 +443,7 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 #endif
 
 	    /* this for child, was after fork */
-	    applyopts(ttyfd, *copts, PH_FD);
+	    applyopts(sfd, ttyfd, copts, PH_FD);
 
 	    Info1("opened pseudo terminal %s", tn);
 	    Close(ptyfd);
@@ -453,11 +467,11 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 	    }
 	    if ((rw == XIO_RDONLY || fdi != ttyfd) &&
 		(rw == XIO_WRONLY || fdo != ttyfd)) {
-	       applyopts_cloexec(ttyfd, *copts);
+	       applyopts_cloexec(ttyfd, copts);
 	    }
 
-	    applyopts(ttyfd, *copts, PH_LATE);
-	    applyopts(ttyfd, *copts, PH_LATE2);
+	    applyopts(sfd, ttyfd, copts, PH_LATE);
+	    applyopts(sfd, ttyfd, copts, PH_LATE2);
 	 } else
 #endif /* HAVE_PTY */
 	    if (usepipes) {
@@ -484,7 +498,7 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 		  /*0 Info2("dup(%d) -> %d", rdpip[1], tmpo);*/
 		  wrpip[0] = tmpo;
 	       }
-	       
+
 	       if (rw != XIO_WRONLY && rdpip[1] != fdo) {
 		  /* make sure that the internal diagnostic socket pair fds do not conflict
 		     with our choices */
@@ -494,8 +508,6 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 		     return -1;
 		  }
 		  Close(rdpip[1]);
-		  /*0 Info2("dup2(%d, %d)", rdpip[1], fdo);*/
-		  /*0 applyopts_cloexec(fdo, *copts);*/
 	       }
 	       if (rw != XIO_RDONLY && wrpip[0] != fdi) {
 		  /* make sure that the internal diagnostic socket pair fds do not conflict
@@ -506,15 +518,13 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 		     return -1;
 		  }
 		  Close(wrpip[0]);
-		  /*0 Info2("dup2(%d, %d)", wrpip[0], fdi);*/
-		  /*0 applyopts_cloexec(wrpip[0], *copts);*/	/* option is already consumed! */
 		  /* applyopts_cloexec(fdi, *copts);*/	/* option is already consumed! */
 	       }
 
-	       applyopts(fdi, *copts, PH_LATE);
-	       applyopts(fdo, *copts, PH_LATE);
-	       applyopts(fdi, *copts, PH_LATE2);
-	       applyopts(fdo, *copts, PH_LATE2);
+	       applyopts(sfd, fdi, copts, PH_LATE);
+	       applyopts(sfd, fdo, copts, PH_LATE);
+	       applyopts(sfd, fdi, copts, PH_LATE2);
+	       applyopts(sfd, fdo, copts, PH_LATE2);
 
 	    } else {	/* socketpair */
 	       Close(sv[0]);
@@ -537,21 +547,21 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 		  /*0 Info2("dup2(%d, %d)", sv[1], fdo);*/
 	       }
 	       if (fdi != sv[1] && fdo != sv[1]) {
-		  applyopts_cloexec(sv[1], *copts);
+		  applyopts_cloexec(sv[1], copts);
 		  Close(sv[1]);
 	       }
 
-	       applyopts(fdi, *copts, PH_LATE);
-	       applyopts(fdi, *copts, PH_LATE2);
+	       applyopts(sfd, fdi, copts, PH_LATE);
+	       applyopts(sfd, fdi, copts, PH_LATE2);
 	    }
 	 if (withfork) {
-	    Info("Signalling parent ready");
-	    Close(trigger[1]);
+	    Info("notifying parent that child process is ready");
+	    Close(trigger[1]); 	/* in child, notify parent that ready */
 	 }
       } /* withfork */
       else {
-	 applyopts(-1, *copts, PH_LATE);
-	 applyopts(-1, *copts, PH_LATE2);
+	 applyopts(sfd, -1, copts, PH_LATE);
+	 applyopts(sfd, -1, copts, PH_LATE2);
       }
       _xioopen_setdelayeduser();
       if (withstderr) {
@@ -560,18 +570,13 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 	 *duptostderr = -1;
       }
 
+      *optsp = copts;
       return 0;	/* indicate child process */
    }
 
    /* for parent (this is our socat process) */
    Notice1("forked off child process "F_pid, pid);
-   Close(trigger[1]);
-
-#if 0
-   if ((popts = copyopts(*copts,
-			 GROUP_FD|GROUP_TERMIOS|GROUP_FORK|GROUP_SOCKET|GROUP_SOCK_UNIX|GROUP_FIFO)) == NULL)
-      return STAT_RETRYLATER;
-#endif
+   Close(trigger[1]); 	/* in parent */
 
 #if HAVE_PTY
    if (usepty) {
@@ -588,13 +593,15 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
    } else {
       Close(sv[1]);
    }
-   fd->para.exec.pid = pid;
+   sfd->para.exec.pid = pid;
 
-   if (applyopts_single(fd, popts, PH_LATE) < 0)  return -1;
-   applyopts_signal(fd, popts);
+   if (applyopts_single(sfd, popts, PH_LATE) < 0)  return -1;
+   applyopts(sfd, -1, popts, PH_LATE);
+   applyopts(sfd, -1, popts, PH_LATE2);
+   applyopts(sfd, -1, popts, PH_PASTEXEC);
    if ((numleft = leftopts(popts)) > 0) {
-      Error1("%d option(s) could not be used", numleft);
       showleft(popts);
+      Error1("INTERNAL: %d option(s) remained unused", numleft);
       return STAT_NORETRY;
    }
 
@@ -603,9 +610,16 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
       fds[0].fd = trigger[0];
       fds[0].events = POLLIN|POLLHUP;
       Poll(fds, 1, -1);
-      Info("Child process signalled ready");
+      Info("child process notified parent that it is ready");
    }
 
+#if HAVE_PTY
+   applyopts(sfd, ptyfd, popts, PH_LATE);
+#endif /* HAVE_PTY */
+   if (applyopts_single(sfd, popts, PH_LATE) < 0)
+      return -1;
+
+   *optsp = popts;
    return pid;	/* indicate parent (main) process */
 }
 #endif /* WITH_EXEC || WITH_SYSTEM */

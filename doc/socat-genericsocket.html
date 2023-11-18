@@ -62,17 +62,19 @@ href="#GENERIC_ADDRESSES">generic socket addresses</a>.
   returns it to the client: 
 </p>
 
-<span class="frame"><span class="shell">
-socat TCP4-LISTEN:4096,reuseaddr,type=6,prototype=33 exec:'tr A-Z a-z',pty,raw,echo=0
-</span></span>
+<span class="shell">socat \
+    TCP4-LISTEN:4096,reuseaddr,type=6,prototype=33 \
+    EXEC:'tr A-Z a-z',pty,raw,echo=0
+</span>
 
 <p>A simple client that sends some upper case characters to the server via DCCP
   and prints what the server returns:
 </p>
 
-<span class="frame"><span class="shell">
-echo ABCD |socat - TCP4-CONNECT:localhost:4096,type=6,prototype=33
-</span></span>
+<span class="shell">echo ABCD | \
+    socat - \
+    TCP4-CONNECT:localhost:4096,type=6,prototype=33
+</span>
 
 <p>We choose the TCP4 addresses as base because it best matches the DCCP
   requirements:
@@ -98,7 +100,7 @@ echo ABCD |socat - TCP4-CONNECT:localhost:4096,type=6,prototype=33
   If the service codes on server and client do not match the <tt>connect()</tt>
   operation fails with error:<p>
 
-<table border="1" bgcolor="e08080"><tr><td><tt>... E connect(3, AF=2 127.0.0.1:4096, 16): Invalid request code</tt></td></tr></table>
+<span class="error">... E connect(3, AF=2 127.0.0.1:4096, 16): Invalid request code</span>
 
 <p>Please note that this examples works with IPv6 as well, you just need to
   replace the TCP4 words with TCP6, and the IPv4 socket address with an
@@ -132,20 +134,18 @@ echo ABCD |socat - TCP4-CONNECT:localhost:4096,type=6,prototype=33
   ping command:
 </p>
 
-<span class="frame"><span class="shell">
-aecho 65280.243
-</span></span>
+<span class="shell">aecho 65280.243
+</span>
 
 <p>If you get an error like:
 </p>
 
-<table border="1" bgcolor="#e08080"><tr><td><tt>Device or resource busy</tt></td></tr></table>
+<span class="error">Device or resource busy</span>
 
 <p>then try to restart <tt>atalkd</tt>:</p>
 
-<span class="frame"><span class="shell">
-/etc/init.d/atalkd restart
-</span></span>
+<span class="shell">/etc/init.d/atalkd restart
+</span>
 
 <p>When <tt>aecho</tt> works like <tt>ping</tt> you are ready for the next step.
 </p>  
@@ -155,17 +155,19 @@ aecho 65280.243
 <p>We start a socat process with a receiver and echo service:
 </p>
 
-<span class="frame"><span class="shell">
-socat SOCKET-RECVFROM:5:2:0:x40x00x0000x00x00x0000000000000000 PIPE
-</span></span>
+<span class="shell">socat \
+    SOCKET-RECVFROM:5:2:0:x40x00x0000x00x00x0000000000000000 \
+    PIPE
+</span>
 
 <p>Then, in another shell on the same host, we start a client socket process
   that sends data to the server and gets the answer:
 </p>
 
-<span class="frame"><span class="shell">
-echo ABCD |socat - SOCKET-DATAGRAM:5:2:0:x40x00xff00xf3x00x0000000000000000 
-</span></span>
+<span class="shell">echo ABCD | \
+    socat - \
+    SOCKET-DATAGRAM:5:2:0:x40x00xff00xf3x00x0000000000000000 
+</span>
 
 <p>The client process should print the data.
 </p>
@@ -314,9 +316,8 @@ x7f000001 x0000000000000000</td></tr>
 see what is available on your system:
 </p>
 
-<span class="frame"><span class="shell">
-nmap -sO localhost
-</span></span>
+<span class="shell">nmap -sO localhost
+</span>
 
 <p>
 <small>Copyright: Gerhard Rieger 2008</small><br>

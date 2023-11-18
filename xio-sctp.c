@@ -17,23 +17,23 @@
 /****** SCTP addresses ******/
 
 #if WITH_IP4 || WITH_IP6
-const struct addrdesc addr_sctp_connect = { "sctp-connect", 1+XIO_RDWR, xioopen_ipapp_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_SCTP|GROUP_CHILD|GROUP_RETRY, SOCK_STREAM, IPPROTO_SCTP, PF_UNSPEC HELP(":<host>:<port>") };
+const struct addrdesc xioaddr_sctp_connect = { "SCTP-CONNECT", 1+XIO_RDWR, xioopen_ipapp_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_SCTP|GROUP_CHILD|GROUP_RETRY, SOCK_STREAM, IPPROTO_SCTP, PF_UNSPEC HELP(":<host>:<port>") };
 #if WITH_LISTEN
-const struct addrdesc addr_sctp_listen  = { "sctp-listen",  1+XIO_RDWR, xioopen_ipapp_listen,  GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_SCTP|GROUP_LISTEN|GROUP_CHILD|GROUP_RANGE|GROUP_RETRY, SOCK_STREAM, IPPROTO_SCTP, PF_UNSPEC HELP(":<port>") };
+const struct addrdesc xioaddr_sctp_listen  = { "SCTP-LISTEN",  1+XIO_RDWR, xioopen_ipapp_listen,  GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_SCTP|GROUP_LISTEN|GROUP_CHILD|GROUP_RANGE|GROUP_RETRY, SOCK_STREAM, IPPROTO_SCTP, PF_UNSPEC HELP(":<port>") };
 #endif
 #endif
 
 #if WITH_IP4
-const struct addrdesc addr_sctp4_connect = { "sctp4-connect", 1+XIO_RDWR, xioopen_ipapp_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_IP_SCTP|GROUP_CHILD|GROUP_RETRY, SOCK_STREAM, IPPROTO_SCTP, PF_INET HELP(":<host>:<port>") };
+const struct addrdesc xioaddr_sctp4_connect = { "SCTP4-CONNECT", 1+XIO_RDWR, xioopen_ipapp_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_IP_SCTP|GROUP_CHILD|GROUP_RETRY, SOCK_STREAM, IPPROTO_SCTP, PF_INET HELP(":<host>:<port>") };
 #if WITH_LISTEN
-const struct addrdesc addr_sctp4_listen  = { "sctp4-listen", 1+XIO_RDWR, xioopen_ipapp_listen, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_IP_SCTP|GROUP_LISTEN|GROUP_CHILD|GROUP_RANGE|GROUP_RETRY, SOCK_STREAM, IPPROTO_SCTP, PF_INET HELP(":<port>") };
+const struct addrdesc xioaddr_sctp4_listen  = { "SCTP4-LISTEN", 1+XIO_RDWR, xioopen_ipapp_listen, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_IP_SCTP|GROUP_LISTEN|GROUP_CHILD|GROUP_RANGE|GROUP_RETRY, SOCK_STREAM, IPPROTO_SCTP, PF_INET HELP(":<port>") };
 #endif
 #endif /* WITH_IP4 */
 
 #if WITH_IP6
-const struct addrdesc addr_sctp6_connect = { "sctp6-connect", 1+XIO_RDWR, xioopen_ipapp_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP6|GROUP_IP_SCTP|GROUP_CHILD|GROUP_RETRY, SOCK_STREAM, IPPROTO_SCTP, PF_INET6 HELP(":<host>:<port>") };
+const struct addrdesc xioaddr_sctp6_connect = { "SCTP6-CONNECT", 1+XIO_RDWR, xioopen_ipapp_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP6|GROUP_IP_SCTP|GROUP_CHILD|GROUP_RETRY, SOCK_STREAM, IPPROTO_SCTP, PF_INET6 HELP(":<host>:<port>") };
 #if WITH_LISTEN
-const struct addrdesc addr_sctp6_listen  = { "sctp6-listen", 1+XIO_RDWR, xioopen_ipapp_listen, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP6|GROUP_IP_SCTP|GROUP_LISTEN|GROUP_CHILD|GROUP_RANGE|GROUP_RETRY, SOCK_STREAM, IPPROTO_SCTP, PF_INET6 HELP(":<port>") };
+const struct addrdesc xioaddr_sctp6_listen  = { "SCTP6-LISTEN", 1+XIO_RDWR, xioopen_ipapp_listen, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP6|GROUP_IP_SCTP|GROUP_LISTEN|GROUP_CHILD|GROUP_RANGE|GROUP_RETRY, SOCK_STREAM, IPPROTO_SCTP, PF_INET6 HELP(":<port>") };
 #endif
 #endif /* WITH_IP6 */
 

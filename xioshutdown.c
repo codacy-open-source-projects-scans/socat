@@ -25,7 +25,7 @@ static void signal_kill_pid(int dummy) {
 int xioshutdown(xiofile_t *sock, int how) {
    int result = 0;
 
-   if (sock->tag == XIO_TAG_INVALID) {
+   if (sock->tag == XIO_TAG_INVALID || sock->tag & XIO_TAG_CLOSED) {
       Error("xioshutdown(): invalid file descriptor");
       errno = EINVAL;
       return -1;
@@ -52,19 +52,34 @@ int xioshutdown(xiofile_t *sock, int how) {
       }
       return 0;
    case XIOSHUT_DOWN:
-      if ((result = Shutdown(sock->stream.fd, how)) < 0) {
-	 Info3("shutdown(%d, %d): %s",
-	       sock->stream.fd, how, strerror(errno));
+      result = Shutdown(sock->stream.fd, how);
+      if (result < 0) {
+	 int level, _errno = errno;
+	 switch (_errno) {
+	 case EPIPE:
+	 case ECONNRESET:
+	    level = E_ERROR;
+	    break;
+	 default:
+	    level = E_INFO; /* old behaviour */
+	    break;
+	 }
+	 Msg3(level, "shutdown(%d, %d): %s",
+	      sock->stream.fd, how, strerror(_errno));
+	 errno = _errno;
+	 return -1;
       }
       return 0;
 #if _WITH_SOCKET
    case XIOSHUT_NULL:
+      writenull = '\0'; 	/* assign something to make gcc happy */
       /* send an empty packet; only useful on datagram sockets? */
       xiowrite(sock, &writenull, 0);
       return 0;
 #endif /* _WITH_SOCKET */
    default: ;
    }
+   /* XIOSHUT_UNSPEC passes on */
 
    if (false) {
       ;
@@ -84,9 +99,9 @@ int xioshutdown(xiofile_t *sock, int how) {
 	 if (Close(sock->stream.para.bipipe.fdout) < 0) {
 	    Info2("close(%d): %s",
 		  sock->stream.para.bipipe.fdout, strerror(errno));
-	 } 
+	 }
       }
-      
+
    } else if ((sock->stream.dtype & XIODATA_MASK) == XIODATA_2PIPE) {
       if ((how+1)&1) {
 	 if (Close(sock->stream.fd) < 0) {
@@ -98,7 +113,7 @@ int xioshutdown(xiofile_t *sock, int how) {
 	 if (Close(sock->stream.para.exec.fdout) < 0) {
 	    Info2("close(%d): %s",
 		  sock->stream.para.exec.fdout, strerror(errno));
-	 } 
+	 }
       }
 #if _WITH_SOCKET
    } else if (sock->stream.howtoend == END_SHUTDOWN) {
@@ -112,6 +127,9 @@ int xioshutdown(xiofile_t *sock, int how) {
 	       sock->stream.fd, how, strerror(errno));
       }
       if ((sock->stream.flags&XIO_ACCMODE) == XIO_WRONLY) {
+	 pid_t pid;
+	 int level;
+
 	 /* the child process might want to flush some data before terminating
 	    */
 	 int status = 0;
@@ -133,9 +151,14 @@ int xioshutdown(xiofile_t *sock, int how) {
 #else
 	 Alarm(1 /*! sock->stream.para.exec.waitdie */);
 #endif /* !HAVE_SETITIMER */
-	 if (Waitpid(sock->stream.para.exec.pid, &status, 0) < 0) {
-	    Warn3("waitpid("F_pid", %p, 0): %s",
-		  sock->stream.para.exec.pid, &status, strerror(errno));
+	 pid = Waitpid(sock->stream.para.exec.pid, &status, 0);
+	 if (pid < 0) {
+	    if (errno == EINTR)
+	       level = E_INFO;
+	    else
+	       level = E_WARN;
+	    Msg3(level, "waitpid("F_pid", %p, 0): %s",
+		 sock->stream.para.exec.pid, &status, strerror(errno));
 	 }
 	 Alarm(0);
       }
@@ -164,7 +187,7 @@ int xioshutdown(xiofile_t *sock, int how) {
    }
 #if WITH_TERMIOS
    if (sock->stream.ttyvalid) {
-      if (Tcsetattr(sock->stream.fd, 0, &sock->stream.savetty) < 0) {
+      if (Tcsetattr(sock->stream.fd, TCSAFLUSH, &sock->stream.savetty) < 0) {
 	 Warn2("cannot restore terminal settings on fd %d: %s",
 	       sock->stream.fd, strerror(errno));
       }

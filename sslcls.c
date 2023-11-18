@@ -22,7 +22,8 @@
 #include "sycls.h"
 
 #if HAVE_OPENSSL_INIT_SSL
-int sycOPENSSL_init_ssl(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings) {
+/* OpenBSD 7.2 does not know OPENSSL_INIT_SETTING */
+int sycOPENSSL_init_ssl(uint64_t opts, const void *settings) {
    int result;
    Debug2("OPENSSL_init_ssl("F_uint64_t", %p)", opts, settings);
    result = OPENSSL_init_ssl(opts, settings);
@@ -31,7 +32,7 @@ int sycOPENSSL_init_ssl(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings) {
 }
 #endif
 
-#if !HAVE_OPENSSL_INIT_SSL
+#if !(defined(HAVE_OPENSSL_INIT_SSL) && defined(HAVE_OPENSSL_INIT_new))
 void sycSSL_load_error_strings(void) {
    Debug("SSL_load_error_strings()");
    SSL_load_error_strings();
@@ -39,7 +40,7 @@ void sycSSL_load_error_strings(void) {
 }
 #endif
 
-#if !HAVE_OPENSSL_INIT_SSL
+#if HAVE_SSL_library_init
 int sycSSL_library_init(void) {
    int result;
    Debug("SSL_library_init()");
@@ -319,6 +320,26 @@ int sycSSL_CTX_set_tmp_dh(SSL_CTX *ctx, DH *dh) {
    return result;
 }
 
+#if HAVE_SSL_CTX_set_tlsext_max_fragment_length || defined(SSL_CTX_set_tlsext_max_fragment_length)
+int sycSSL_CTX_set_tlsext_max_fragment_length(SSL_CTX *ctx, uint8_t mode) {
+   int result;
+   Debug2("SSL_CTX_set_tlsext_max_fragment_length(%p, %u)", ctx, mode);
+   result = SSL_CTX_set_tlsext_max_fragment_length(ctx, mode);
+   Debug1("SSL_CTX_set_tlsext_max_fragment_length() -> %d", result);
+   return result;
+}
+#endif
+
+#if HAVE_SSL_CTX_set_max_send_fragment || defined(SSL_CTX_set_max_send_fragment)
+int sycSSL_CTX_set_max_send_fragment(SSL_CTX *ctx, long msf) {
+   int result;
+   Debug2("SSL_CTX_set_max_send_fragment(%p, %ld)", ctx, msf);
+   result = SSL_CTX_set_max_send_fragment(ctx, msf);
+   Debug1("SSL_CTX_set_max_send_fragment() -> %d", result);
+   return result;
+}
+#endif
+
 int sycSSL_set_cipher_list(SSL *ssl, const char *str) {
    int result;
    Debug2("SSL_set_cipher_list(%p, \"%s\")", ssl, str);
@@ -348,7 +369,7 @@ int sycSSL_connect(SSL *ssl) {
    Debug1("SSL_connect(%p)", ssl);
    result = SSL_connect(ssl);
    Debug1("SSL_connect() -> %d", result);
-   return result;   
+   return result;
 }
 
 int sycSSL_accept(SSL *ssl) {
@@ -356,7 +377,7 @@ int sycSSL_accept(SSL *ssl) {
    Debug1("SSL_accept(%p)", ssl);
    result = SSL_accept(ssl);
    Debug1("SSL_accept() -> %d", result);
-   return result;   
+   return result;
 }
 
 int sycSSL_read(SSL *ssl, void *buf, int num) {
@@ -392,7 +413,7 @@ X509 *sycSSL_get_peer_certificate(SSL *ssl) {
    } else {
       Debug("SSL_get_peer_certificate() -> NULL");
    }
-   return result;   
+   return result;
 }
 
 int sycSSL_shutdown(SSL *ssl) {

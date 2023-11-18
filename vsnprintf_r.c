@@ -78,11 +78,11 @@ static char *diag_ulong_to_dec(char *field, size_t n, unsigned long ulo, int lea
       while (--i >= 0) {
 	 *--np = c;
       }
-   }	     
+   }
    return np;
 }
 
-/* this function converts a signed long number to decimal ASCII  
+/* this function converts a signed long number to decimal ASCII
    and pads it with space or '0' when size and leading0 are set appropriately
    it is async signal safe and thread safe
    it returns NULL if n==0
@@ -110,7 +110,7 @@ static char *diag_long_to_dec(char *field, size_t n, long lo, int leading0, int 
       if (size >= n)  size = n-1;
       i = size - strlen(np);
       if (leading0) {
-	 if (minus) --i; 
+	 if (minus) --i;
 	 while (--i >= 0) {
 	    *--np = '0';
 	 }
@@ -156,7 +156,7 @@ static char *diag_ulong_to_hex(char *field, size_t n, unsigned long ulo, int lea
       while (--i >= 0) {
 	 *--np = c;
       }
-   }	     
+   }
    return np;
 }
 
@@ -188,7 +188,7 @@ static char *diag_ulong_to_oct(char *field, size_t n, unsigned long ulo, int lea
       while (--i >= 0) {
 	 *--np = c;
       }
-   }	     
+   }
    return np;
 }
 
@@ -240,11 +240,11 @@ static char *diag_ulonglong_to_dec(char *field, size_t n, unsigned long long ull
       while (i-- > 0) {
 	 *--np = c;
       }
-   }	     
+   }
    return np;
 }
 
-/* this function converts a signed long long number to decimal ASCII  
+/* this function converts a signed long long number to decimal ASCII
    and pads it with space or '0' when size and leading0 are set appropriately
    it is async signal safe and thread safe
    it returns NULL if n==0
@@ -272,7 +272,7 @@ static char *diag_longlong_to_dec(char *field, size_t n, long long ll, int leadi
       if (size >= n)  size = n-1;
       i = size - strlen(np);
       if (leading0) {
-	 if (minus) --i; 
+	 if (minus) --i;
 	 while (--i >= 0) {
 	    *--np = '0';
 	 }
@@ -283,7 +283,7 @@ static char *diag_longlong_to_dec(char *field, size_t n, long long ll, int leadi
 	    *--np = ' ';
 	 }
       }
-   }	     
+   }
    return np;
 }
 
@@ -316,7 +316,7 @@ static char *diag_ulonglong_to_hex(char *field, size_t n, unsigned long long ull
       while (i-- > 0) {
 	 *--np = c;
       }
-   }	     
+   }
    return np;
 }
 
@@ -348,7 +348,7 @@ static char *diag_ulonglong_to_oct(char *field, size_t n, unsigned long long ull
       while (--i >= 0) {
 	 *--np = c;
       }
-   }	     
+   }
    return np;
 }
 
@@ -369,7 +369,7 @@ int vsnprintf_r(char *str, size_t size, const char *format, va_list ap) {
    --size;	/* without trailing \0 */
    while (c = *format++) {
       if (c == '\\') {
-	 
+
       } else if (c == '%') {
 #if HAVE_TYPE_LONGLONG
 #	 define num_buff_len ((sizeof(unsigned long long)*8+2)/3+1)	/* hold up to u long long in octal w/ \0 */
@@ -389,7 +389,7 @@ int vsnprintf_r(char *str, size_t size, const char *format, va_list ap) {
 
 	 c = *format++;
 	 if (c == '\0')  { break; }
-	 
+
 	 /* flag characters */
 	 switch (c) {
 	 case '0': leading0 = 1;  c = *format++;  break;
@@ -423,13 +423,13 @@ int vsnprintf_r(char *str, size_t size, const char *format, va_list ap) {
 	 case 'h':
 	    lengthmod = c;
 	    if ((c = *format++) == 'h') {
-	       lengthmod = 'H'; c = *format++; 
+	       lengthmod = 'H'; c = *format++;
 	    }
 	    break;
-	 case 'l': 
+	 case 'l':
 	    lengthmod = c;
 	    if ((c = *format++) == 'l') {
-	       lengthmod = 'L'; c = *format++; 
+	       lengthmod = 'L'; c = *format++;
 	    }
 	    break;
 	 }

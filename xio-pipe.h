@@ -5,8 +5,10 @@
 #ifndef __xio_pipe_h_included
 #define __xio_pipe_h_included 1
 
-const extern struct addrdesc addr_pipe;
+extern const struct addrdesc xioaddr_pipe;
 
-extern int xioopen_fifo_unnamed(char *arg, xiofile_t *sock);
+extern const struct optdesc opt_f_setpipe_sz;
+
+extern int xio_chk_pipesz(int fd);
 
 #endif /* !defined(__xio_pipe_h_included) */

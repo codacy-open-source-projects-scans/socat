@@ -91,7 +91,7 @@ else
 fi
 if [ "$u" != "nobody" ]; then
     $ECHO "$SOCKSREPLY_FAILED"
-    echo "wrong socks user requested" >&2
+    echo "wrong socks user requested (expected \"nobody\")" >&2
     exit
 fi
 

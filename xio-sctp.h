@@ -5,12 +5,12 @@
 #ifndef __xio_sctp_h_included
 #define __xio_sctp_h_included 1
 
-extern const struct addrdesc addr_sctp_connect;
-extern const struct addrdesc addr_sctp_listen;
-extern const struct addrdesc addr_sctp4_connect;
-extern const struct addrdesc addr_sctp4_listen;
-extern const struct addrdesc addr_sctp6_connect;
-extern const struct addrdesc addr_sctp6_listen;
+extern const struct addrdesc xioaddr_sctp_connect;
+extern const struct addrdesc xioaddr_sctp_listen;
+extern const struct addrdesc xioaddr_sctp4_connect;
+extern const struct addrdesc xioaddr_sctp4_listen;
+extern const struct addrdesc xioaddr_sctp6_connect;
+extern const struct addrdesc xioaddr_sctp6_listen;
 
 extern const struct optdesc opt_sctp_nodelay;
 extern const struct optdesc opt_sctp_maxseg;

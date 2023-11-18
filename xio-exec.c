@@ -13,35 +13,37 @@
 
 #if WITH_EXEC
 
-static int xioopen_exec(int argc, const char *argv[], struct opt *opts,
-		int xioflags,	/* XIO_RDONLY etc. */
-		xiofile_t *fd,
-		unsigned groups,
-		int dummy1, int dummy2, int dummy3
-		);
+static int xioopen_exec(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *xfd, const struct addrdesc *addrdesc);
 
-const struct addrdesc addr_exec = { "exec",   3, xioopen_exec, GROUP_FD|GROUP_FORK|GROUP_EXEC|GROUP_SOCKET|GROUP_SOCK_UNIX|GROUP_TERMIOS|GROUP_FIFO|GROUP_PTY|GROUP_PARENT, 0, 0, 0 HELP(":<command-line>") };
+const struct addrdesc xioaddr_exec = { "EXEC",   3, xioopen_exec, GROUP_FD|GROUP_FORK|GROUP_EXEC|GROUP_SOCKET|GROUP_SOCK_UNIX|GROUP_TERMIOS|GROUP_FIFO|GROUP_PTY|GROUP_PARENT, 0, 0, 0 HELP(":<command-line>") };
 
 const struct optdesc opt_dash = { "dash", "login", OPT_DASH, GROUP_EXEC, PH_PREEXEC, TYPE_BOOL, OFUNC_SPEC };
 
-static int xioopen_exec(int argc, const char *argv[], struct opt *opts,
-		int xioflags,	/* XIO_RDONLY, XIO_MAYCHILD etc. */
-		xiofile_t *fd,
-		unsigned groups,
-		int dummy1, int dummy2, int dummy3
-		) {
+static int xioopen_exec(
+	int argc,
+	const char *argv[],
+	struct opt *opts,
+	int xioflags,	/* XIO_RDONLY, XIO_MAYCHILD etc. */
+	xiofile_t *xfd,
+	const struct addrdesc *addrdesc)
+{
+   struct single *sfd = &xfd->stream;
    int status;
    bool dash = false;
    int duptostderr;
+   int numleft;
 
    if (argc != 2) {
-      Error3("\"%s:%s\": wrong number of parameters (%d instead of 1)", argv[0], argv[1], argc-1);
+      xio_syntax(argv[0], 1, argc-1, addrdesc->syntax);
+      return STAT_NORETRY;
    }
-      
+
    retropt_bool(opts, OPT_DASH, &dash);
 
-   status = _xioopen_foxec(xioflags, &fd->stream, groups, &opts, &duptostderr);
-   if (status < 0)  return status;
+   status =
+      _xioopen_foxec(xioflags, sfd, addrdesc->groups, &opts, &duptostderr);
+   if (status < 0)
+      return status;
    if (status == 0) {	/* child */
       const char *ends[] = { " ", NULL };
       const char *hquotes[] = { "'", NULL };
@@ -61,7 +63,6 @@ static int xioopen_exec(int argc, const char *argv[], struct opt *opts,
       char *tokp;
       char *path = NULL;
       char *tmp;
-      int numleft;
 
       /*! Close(something) */
       /* parse command line */
@@ -111,9 +112,10 @@ static int xioopen_exec(int argc, const char *argv[], struct opt *opts,
 	 Exit(1);
       }
 
+      dropopts(opts, PH_PASTEXEC);
       if ((numleft = leftopts(opts)) > 0) {
-	 Error1("%d option(s) could not be used", numleft);
 	 showleft(opts);
+	 Error1("INTERNAL: %d option(s) remained unused", numleft);
 	 return STAT_NORETRY;
       }
 
@@ -126,16 +128,23 @@ static int xioopen_exec(int argc, const char *argv[], struct opt *opts,
       Execvp(token, pargv);
       /* here we come only if execvp() failed */
       switch (pargc) {
-      case 1: Error3("execvp(\"%s\", \"%s\"): %s", token, pargv[0], strerror(errno)); break; 
-      case 2: Error4("execvp(\"%s\", \"%s\", \"%s\"): %s", token, pargv[0], pargv[1], strerror(errno)); break; 
+      case 1:
+	 Error3("execvp(\"%s\", \"%s\"): %s",
+		token, pargv[0], strerror(errno)); break;
+      case 2:
+	 Error4("execvp(\"%s\", \"%s\", \"%s\"): %s",
+		token, pargv[0], pargv[1], strerror(errno)); break;
       case 3:
       default:
-	 Error5("execvp(\"%s\", \"%s\", \"%s\", \"%s\", ...): %s", token, pargv[0], pargv[1], pargv[2], strerror(errno)); break; 
+	 Error5("execvp(\"%s\", \"%s\", \"%s\", \"%s\", ...): %s", token,
+		pargv[0], pargv[1], pargv[2], strerror(errno));
+	 break;
       }
       Exit(1);	/* this child process */
    }
 
    /* parent */
+   _xio_openlate(sfd, opts);
    return 0;
 }
 #endif /* WITH_EXEC */

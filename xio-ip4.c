@@ -14,7 +14,11 @@
 #include "xio-ip4.h"
 
 
-int xioparsenetwork_ip4(const char *rangename, struct xiorange *range) {
+int xioparsenetwork_ip4(
+	const char *rangename,
+	struct xiorange *range,
+	const int ai_flags[2])
+{
    struct in_addr *netaddr_in = &range->netaddr.ip4.sin_addr;
    struct in_addr *netmask_in = &range->netmask.ip4.sin_addr;
    char *rangename1;	/* a copy of rangename with writing allowed */
@@ -33,10 +37,10 @@ int xioparsenetwork_ip4(const char *rangename, struct xiorange *range) {
       char *endptr;
       bits = strtoul(delimpos+1, &endptr, 10);
       if (! ((*(delimpos+1) != '\0') && (*endptr == '\0'))) {
-	 Error1("not a valid netmask in \"%s\"", rangename);
+	 Error1("not a valid IPv4 netmask in \"%s\"", rangename);
 	 bits = 32;	/* most secure selection */
       } else if (bits > 32) {
-	 Error1("netmask \"%s\" is too large", rangename);
+	 Error1("IPv4 netmask \"%s\" is too large", rangename);
 	 bits = 32;
       }
       if (bits <= 0) {
@@ -45,8 +49,8 @@ int xioparsenetwork_ip4(const char *rangename, struct xiorange *range) {
 	 netmask_in->s_addr = htonl((0xffffffff << (32-bits)));
       }
    } else if (delimpos = strchr(rangename1, ':')) {
-      if ((rc = xiogetaddrinfo(delimpos+1, NULL, PF_UNSPEC, 0, 0,
-			       &sau, &socklen, 0, 0))
+      if ((rc = xioresolve(delimpos+1, NULL, PF_INET, 0, 0,
+			   &sau, &socklen, ai_flags))
 	  != STAT_OK) {
 	 return rc;
       }
@@ -58,8 +62,8 @@ int xioparsenetwork_ip4(const char *rangename, struct xiorange *range) {
    }
    {
       *delimpos = 0;
-      if ((rc = xiogetaddrinfo(rangename1, NULL, PF_UNSPEC, 0, 0,
-			       &sau, &socklen, 0, 0))
+      if ((rc = xioresolve(rangename1, NULL, PF_INET, 0, 0,
+			   &sau, &socklen, ai_flags))
 	  != STAT_OK) {
 	 return rc;
       }

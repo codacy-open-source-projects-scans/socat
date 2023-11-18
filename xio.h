@@ -45,15 +45,17 @@ struct opt;
 #define XIOREAD_STREAM		0x1000	/* read() (default) */
 #define XIOREAD_RECV		0x2000	/* recvfrom() */
 #define XIOREAD_PTY		0x4000	/* handle EIO */
-#define XIOREAD_READLINE	0x5000	/* ... */
-#define XIOREAD_OPENSSL		0x6000	/* SSL_read() */
+#define XIOREAD_POSIXMQ		0x5000	/* POSIX MQ */
+#define XIOREAD_READLINE	0x6000	/* ... */
+#define XIOREAD_OPENSSL		0x7000	/* SSL_read() */
 #define XIODATA_WRITEMASK	0x0f00	/* mask for basic r/w method */
 #define XIOWRITE_STREAM		0x0100	/* write() (default) */
 #define XIOWRITE_SENDTO		0x0200	/* sendto() */
 #define XIOWRITE_PIPE		0x0300	/* write() to alternate (pipe) Fd */
 #define XIOWRITE_2PIPE		0x0400	/* write() to alternate (2pipe) Fd */
-#define XIOWRITE_READLINE	0x0500	/* check for prompt */
-#define XIOWRITE_OPENSSL	0x0600	/* SSL_write() */
+#define XIOWRITE_POSIXMQ	0x0500  /* POSIX MQ */
+#define XIOWRITE_READLINE	0x0600	/* check for prompt */
+#define XIOWRITE_OPENSSL	0x0700	/* SSL_write() */
 /* modifiers to XIODATA_READ_RECV */
 #define XIOREAD_RECV_CHECKPORT	0x0001	/* recv, check peer port */
 #define XIOREAD_RECV_CHECKADDR	0x0002	/* recv, check peer address */
@@ -61,6 +63,7 @@ struct opt;
 #define XIOREAD_RECV_ONESHOT	0x0008	/* give EOF after first packet */
 #define XIOREAD_RECV_SKIPIP	0x0010	/* recv, skip IPv4 header */
 #define XIOREAD_RECV_FROM	0x0020	/* remember peer for replying */
+#define XIOREAD_RECV_NOCHECK	0x0040	/* do not check peer */
 
 /* combinations */
 #define XIODATA_MASK		(XIODATA_READMASK|XIODATA_WRITEMASK)
@@ -73,6 +76,7 @@ struct opt;
 #define XIODATA_RECV_SKIPIP	(XIODATA_RECV|XIOREAD_RECV_SKIPIP)
 #define XIODATA_PIPE		(XIOREAD_STREAM|XIOWRITE_PIPE)
 #define XIODATA_2PIPE		(XIOREAD_STREAM|XIOWRITE_2PIPE)
+#define XIODATA_POSIXMQ		(XIOREAD_POSIXMQ|XIOWRITE_POSIXMQ)
 #define XIODATA_PTY		(XIOREAD_PTY|XIOWRITE_STREAM)
 #define XIODATA_READLINE	(XIOREAD_READLINE|XIOWRITE_STREAM)
 #define XIODATA_OPENSSL		(XIOREAD_OPENSSL|XIOWRITE_OPENSSL)
@@ -85,12 +89,22 @@ enum xiotag {
    XIO_TAG_RDONLY,	/* this is a single read-only stream */
    XIO_TAG_WRONLY,	/* this is a single write-only stream */
    XIO_TAG_RDWR,	/* this is a single read-write stream */
-   XIO_TAG_DUAL		/* this is a dual stream, consisting of two single
+   XIO_TAG_DUAL,	/* this is a dual stream, consisting of two single
 			   streams */
+   XIO_TAG_CLOSED=8,	/* close, additional bit */
 } ;
 
+/* Keep condition consistent with xioopts.h:GROUP_*! */
+#if WITH_POSIXMQ || WITH_SCTP || WITH_DCCP || WITH_UDPLITE
+typedef uint64_t groups_t;
+#define F_groups_t F_uint64_x
+#else
+typedef uint32_t groups_t;
+#define F_groups_t F_uint32_x
+#endif
+
 /* global XIO options/parameters */
-typedef struct {
+typedef struct xioparms {
    bool strictopts;
    const char *pipesep;
    const char *paramsep;
@@ -99,10 +113,14 @@ typedef struct {
    char ip6portsep;	/* do not change, might be hardcoded somewhere! */
    char logopt;	/* 'm' means "switch to syslog when entering daemon mode" */
    const char *syslogfac;	/* syslog facility (only with mixed mode) */
-   char default_ip;	/* default prot.fam for IP based listen ('4' or '6') */
+   char default_ip;	/* default prot.fam for IP based listen ('4' '6' or '\0') */
    char preferred_ip;	/* preferred prot.fam. for name resolution ('0' for
 			   unspecified, '4', or '6') */
-} xioopts_t;
+   bool experimental;	/* enable some features */
+   const char *sniffleft_name; 		/* file name with -r */
+   const char *sniffright_name; 	/* file name with -R */
+   size_t bufsiz;
+} xioparms_t;
 
 /* pack the description of a lock file */
 typedef struct {
@@ -111,14 +129,33 @@ typedef struct {
    struct timespec intervall;	/* polling intervall */
 } xiolock_t;
 
-extern xioopts_t xioopts;
+extern xioparms_t xioparms;
 
 #define MAXARGV 8
 
 #if _WITH_IP4 || _WITH_IP6
+#if WITH_RESOLVE && HAVE_RESOLV_H
+struct para_ip_res {
+	unsigned int opts[2];	/* bits to be set in _res.options are in [0],
+				   bits to be cleared are in [1] */
+#if HAVE_RES_RETRANS
+	int	 retrans;
+#endif
+#if HAVE_RES_RETRY
+	int	 retry;
+#endif
+#if HAVE_RES_NSADDR_LIST
+#	undef nsaddr 	/* resolv.h might define this, breaks debugger */
+	struct sockaddr_in nsaddr;
+#endif
+} ;
+#endif /* WITH_RESOLVE && HAVE_RESOLV_H */
+
 struct para_ip {
-	unsigned int res_opts[2];	/* bits to be set in _res.options are
-					   at [0], bits to be cleared are at [1] */
+	int	     ai_flags[2]; 	/* flags for getaddrinfo() ai_flags (set/unset) */
+#if WITH_RESOLVE && HAVE_RESOLV_H
+	struct para_ip_res res;
+#endif
 	bool     dosourceport; 	/* check the source port of incoming connection or packets */
 	uint16_t sourceport;		/* host byte order */
 	bool     lowport;
@@ -132,7 +169,7 @@ struct para_ip {
 } ;
 #endif /* _WITH_IP4 || _WITH_IP6 */
 
-/* a non-dual file descriptor */ 
+/* a non-dual file descriptor */
 typedef struct single {
    enum xiotag tag;	/* see  enum xiotag  */
    const struct addrdesc *addr;
@@ -145,7 +182,7 @@ typedef struct single {
 #endif /* WITH_RETRY */
    bool   ignoreeof;	/* option ignoreeof; do not pass eof condition to app*/
    int    eof;		/* 1..exec'd child has died, but no explicit eof
-			   occurred 
+			   occurred
 			   2..fd0 has reached EOF, but check for ignoreeof
 			   3..fd0 has reached EOF (definitely; never with
 			   ignoreeof! */
@@ -154,6 +191,7 @@ typedef struct single {
    size_t actbytes;	/* so many bytes still to be read (when readbytes!=0)*/
    xiolock_t lock;	/* parameters of lockfile */
    bool      havelock;	/* we are happy owner of the above lock */
+   int       triggerfd; 	/* in child process close this FD to notify parent */
    bool	     cool_write;	/* downlevel EPIPE, ECONNRESET to notice */
    /* until here, keep consistent with bipipe.dual ! */
    int argc;		/* number of fields in argv */
@@ -178,7 +216,8 @@ typedef struct single {
       END_SHUTDOWN,	/* shutdown() */
       END_KILL,		/* has subprocess */
       END_CLOSE_KILL,	/* first close fd, then kill subprocess */
-      END_SHUTDOWN_KILL	/* first shutdown fd, then kill subprocess */
+      END_SHUTDOWN_KILL,/* first shutdown fd, then kill subprocess */
+      END_INTERFACE	/* restore interface flags, then close fd */
    } howtoend;
 #if _WITH_SOCKET
    union sockaddr_union peersa;
@@ -189,12 +228,13 @@ typedef struct single {
    struct termios savetty;	/* save orig tty settings for later restore */
 #endif /* WITH_TERMIOS */
    int (*sigchild)(struct single *);	/* callback after sigchild */
-   pid_t ppid;			/* parent pid, only if we send it signals */
    int escape;			/* escape character; -1 for no escape */
    bool actescape;		/* escape character found in input data */
+   int 	shutup; 		/* children-shutup option */
    union {
       struct {
 	 int fdout;		/* use fd for output */
+	 int socktype;
       } bipipe;
 #if _WITH_SOCKET
       struct {
@@ -210,7 +250,16 @@ typedef struct single {
 #if _WITH_IP4 || _WITH_IP6
 	 struct para_ip ip;
 #endif /* _WITH_IP4 || _WITH_IP6 */
-	 /* up to here, keep consistent copy in openssl part !!! */
+	 /* Copy in openssl part up to here ! */
+#if HAVE_STRUCT_TPACKET_AUXDATA
+	 struct {
+	    int     packet_auxdata;
+	 } ancill_flag;
+#endif
+#if HAVE_STRUCT_TPACKET_AUXDATA
+	 struct tpacket_auxdata ancill_data_packet_auxdata;
+	 bool retrieve_vlan;
+#endif
 #if WITH_UNIX
 	 struct {
 	    bool     tight;
@@ -218,9 +267,16 @@ typedef struct single {
 #endif /* WITH_UNIX */
       } socket;
 #endif /* _WITH_SOCKET */
+#if WITH_POSIXMQ
       struct {
-	 pid_t pid;		/* child PID, with EXEC: */
+	 const char *name;
+	 unsigned int prio; 		/* POSIX message queue */
+      } posixmq;
+#endif /* WITH_POSIXMQ */
+      struct {
 	 int fdout;		/* use fd for output if two pipes */
+	 pid_t pid;		/* child PID, with EXEC: */
+	 struct timeval sitout_eio;
       } exec;
 #if WITH_READLINE
       struct {
@@ -260,12 +316,20 @@ typedef struct single {
 #endif
       } openssl;
 #endif /* WITH_OPENSSL */
-#if WITH_TUN
+#if _WITH_INTERFACE
       struct {
+	 char name[IFNAMSIZ];	/* name of interface */
+	 short save_iff; 	/* for restoring old settings on exit */
 	 short iff_opts[2];	/* ifr flags, using OFUNC_OFFSET_MASKS */
-      } tun;
-#endif /* WITH_TUN */
+      } interface;
+#endif /* _WITH_INTERFACE */
    } para;
+#if WITH_STATS
+   unsigned long long blocks_read;
+   unsigned long long bytes_read;
+   unsigned long long blocks_written;
+   unsigned long long bytes_written;
+#endif /* WITH_STATS */
 } xiosingle_t;
 
 /* rw: 0..read, 1..write, 2..r/w */
@@ -284,7 +348,8 @@ typedef union bipipe {
       enum xiotag tag;
       const struct addrdesc *addr;
       int         flags;
-   } common;
+      /* until here, keep consistent with struct single, and with .dual */
+   } common; 	/* "bipipe.common" */
    struct single  stream;
    struct {
       enum xiotag tag;
@@ -302,7 +367,10 @@ typedef union bipipe {
       size_t actbytes;	/* so many bytes still to be read */
       xiolock_t lock;	/* parameters of lockfile */
       bool      havelock;	/* we are happy owner of the above lock */
-      xiosingle_t *stream[2];	/* input stream, output stream */
+      int 	triggerfd; 	/* close this FD in child process to notify parent */
+      bool      cool_write;	/* downlevel EPIPE, ECONNRESET to notice */
+      /* until here, keep consistent with struct single ! */
+      struct single *stream[2];	/* input stream, output stream */
    } dual;
 } xiofile_t;
 
@@ -310,9 +378,8 @@ typedef union bipipe {
 struct addrdesc {
    const char *defname;	/* main (canonical) name of address */
    int directions;	/* 1..read, 2..write, 3..both */
-   int (*func)(int argc, const char *argv[], struct opt *opts, int rw, xiofile_t *fd, unsigned groups,
-	       int arg1, int arg2, int arg3);
-   unsigned groups;
+   int (*func)(int argc, const char *argv[], struct opt *opts, int rw, xiofile_t *fd, const struct addrdesc *addrdesc);
+   groups_t groups;
    int arg1;
    int arg2;
    int arg3;
@@ -360,27 +427,12 @@ union integral {
 #if HAVE_STRUCT_LINGER
    struct linger  u_linger;
 #endif /* HAVE_STRUCT_LINGER */
-#if HAVE_STRUCT_TIMESPEC	
+#if HAVE_STRUCT_TIMESPEC
    struct timespec u_timespec;
 #endif /* HAVE_STRUCT_TIMESPEC */
-#if HAVE_STRUCT_IP_MREQ || HAVE_STRUCT_IP_MREQN
-   struct {
-      char *multiaddr;
-      char *param2;	/* address, interface */
-#if HAVE_STRUCT_IP_MREQN
-      char ifindex[IF_NAMESIZE+1];
-#endif
-   } u_ip_mreq;
-#endif
-#if HAVE_STRUCT_IP_MREQ_SOURCE
-   struct {
-      char *mcaddr;
-      char *ifaddr;	/* address, interface */
-      char *srcaddr;	/* source address */
-   } u_ip_mreq_source;
-#endif
 #if WITH_IP4
    struct in_addr  u_ip4addr;
+   struct sockaddr_in  u_ip4sock;
 #endif
 } ;
 
@@ -434,7 +486,7 @@ extern int num_child;
 
 extern int xioinitialize(void);
 extern int xioinitialize2(void);
-extern pid_t xio_fork(bool subchild, int level);
+extern pid_t xio_fork(bool subchild, int level, int shutup);
 extern int xio_forked_inchild(void);
 extern int xiosetopt(char what, const char *arg);
 extern int xioinqopt(char what, char *arg, size_t n);
@@ -444,6 +496,8 @@ extern int xioopenhelp(FILE *of, int level);
 
 /* must be outside function for use by childdied handler */
 extern xiofile_t *sock1, *sock2;
+extern int sniffleft, sniffright;
+
 #define NUMUNKNOWN 4
 extern pid_t diedunknown[NUMUNKNOWN];	/* child died before it is registered */
 #define diedunknown1 (diedunknown[0])
@@ -451,6 +505,7 @@ extern pid_t diedunknown[NUMUNKNOWN];	/* child died before it is registered */
 #define diedunknown3 (diedunknown[2])
 #define diedunknown4 (diedunknown[3])
 extern int   statunknown[NUMUNKNOWN]; 	/* exit state of unknown dead child */
+extern int engine_result; 		/* here signal handler overrides OK */
 
 extern int xiosetsigchild(xiofile_t *xfd, int (*callback)(struct single *));
 extern int xiosetchilddied(void);

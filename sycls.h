@@ -61,6 +61,7 @@ int Pipe(int filedes[2]);
 ssize_t Read(int fd, void *buf, size_t count);
 ssize_t Write(int fd, const void *buf, size_t count);
 int Fcntl(int fd, int cmd);
+int Fcntl_i(int fd, int cmd, int arg);
 int Fcntl_l(int fd, int cmd, long arg);
 int Fcntl_lock(int fd, int cmd, struct flock *l);
 #if WITH_SYCLS
@@ -167,6 +168,7 @@ void Abort(void);
 int Mkstemp(char *template);
 int Setenv(const char *name, const char *value, int overwrite);
 void Unsetenv(const char *name);
+int Setns(int fd, int nstype);
 #endif /* WITH_SYCLS */
 #if WITH_SYCLS
 
@@ -271,6 +273,7 @@ void Add_history(const char *string);
 #define Mkstemp(t) mkstemp(t)
 #define Setenv(n,v,o) setenv(n,v,o)
 #define Unsetenv(n) unsetenv(n)
+#define Setns(f,n) setns(f,n)
 
 #define Readline(p) readline(p)
 #define Using_history() using_history()

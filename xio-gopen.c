@@ -14,12 +14,20 @@
 
 #if WITH_GOPEN
 
-static int xioopen_gopen(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *fd, unsigned groups, int dummy1, int dummy2, int dummy3);
+static int xioopen_gopen(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *fd, const struct addrdesc *addrdesc);
 
 
-const struct addrdesc addr_gopen  = { "gopen",  3, xioopen_gopen, GROUP_FD|GROUP_FIFO|GROUP_CHR|GROUP_BLK|GROUP_REG|GROUP_NAMED|GROUP_OPEN|GROUP_FILE|GROUP_TERMIOS|GROUP_SOCKET|GROUP_SOCK_UNIX, 0, 0, 0 HELP(":<filename>") };
+const struct addrdesc xioaddr_gopen  = { "GOPEN",  3, xioopen_gopen, GROUP_FD|GROUP_FIFO|GROUP_CHR|GROUP_BLK|GROUP_REG|GROUP_NAMED|GROUP_OPEN|GROUP_FILE|GROUP_TERMIOS|GROUP_SOCKET|GROUP_SOCK_UNIX, 0, 0, 0 HELP(":<filename>") };
 
-static int xioopen_gopen(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *fd, unsigned groups, int dummy1, int dummy2, int dummy3) {
+static int xioopen_gopen(
+	int argc,
+	const char *argv[],
+	struct opt *opts,
+	int xioflags,
+	xiofile_t *xxfd,
+	const struct addrdesc *addrdesc)
+{
+   struct single *sfd = &xxfd->stream;
    const char *filename = argv[1];
    flags_t openflags = (xioflags & XIO_ACCMODE);
    mode_t st_mode;
@@ -28,7 +36,9 @@ static int xioopen_gopen(int argc, const char *argv[], struct opt *opts, int xio
    int result;
 
    if ((result =
-	  _xioopen_named_early(argc, argv, fd, GROUP_NAMED|groups, &exists, opts)) < 0) {
+	_xioopen_named_early(argc, argv, xxfd, GROUP_NAMED|addrdesc->groups, &exists,
+			     opts, addrdesc->syntax))
+       < 0) {
       return result;
    }
    st_mode = result;
@@ -52,15 +62,16 @@ static int xioopen_gopen(int argc, const char *argv[], struct opt *opts, int xio
       Info1("\"%s\" is a socket, connecting to it", filename);
 
       result =
-	 _xioopen_unix_client(&fd->stream, xioflags, groups, 0, opts, filename);
+	 _xioopen_unix_client(sfd, xioflags, addrdesc->groups, 0, opts,
+			      filename, addrdesc);
       if (result < 0) {
 	 return result;
       }
       applyopts_named(filename, opts, PH_PASTOPEN);	/* unlink-late */
 
-      if (Getsockname(fd->stream.fd, (struct sockaddr *)&us, &uslen) < 0) {
+      if (Getsockname(sfd->fd, (struct sockaddr *)&us, &uslen) < 0) {
 	 Warn4("getsockname(%d, %p, {%d}): %s",
-	       fd->stream.fd, &us, uslen, strerror(errno));
+	       sfd->fd, &us, uslen, strerror(errno));
       } else {
 	 Notice1("successfully connected via %s",
 		 sockaddr_unix_info(&us.un, uslen,
@@ -78,10 +89,10 @@ static int xioopen_gopen(int argc, const char *argv[], struct opt *opts, int xio
 
       retropt_bool(opts, OPT_UNLINK_CLOSE, &opt_unlink_close);
       if (opt_unlink_close) {
-	 if ((fd->stream.unlink_close = strdup(filename)) == NULL) {
+	 if ((sfd->unlink_close = strdup(filename)) == NULL) {
 	    Error1("strdup(\"%s\"): out of memory", filename);
 	 }
-	 fd->stream.opt_unlink_close = true;
+	 sfd->opt_unlink_close = true;
       }
 
       Notice3("opening %s \"%s\" for %s",
@@ -95,27 +106,27 @@ static int xioopen_gopen(int argc, const char *argv[], struct opt *opts, int xio
 	 Ioctl(result, I_PUSH, "ttcompat");	/* ... AdressSanitizer */
       }
 #endif
-      fd->stream.fd = result;
+      sfd->fd = result;
 
 #if WITH_TERMIOS
-      if (Isatty(fd->stream.fd)) {
-	 if (Tcgetattr(fd->stream.fd, &fd->stream.savetty) < 0) {
+      if (Isatty(sfd->fd)) {
+	 if (Tcgetattr(sfd->fd, &sfd->savetty) < 0) {
 	    Warn2("cannot query current terminal settings on fd %d: %s",
-		  fd->stream.fd, strerror(errno));
+		  sfd->fd, strerror(errno));
 	 } else {
-	    fd->stream.ttyvalid = true;
+	    sfd->ttyvalid = true;
 	 }
       }
 #endif /* WITH_TERMIOS */
       applyopts_named(filename, opts, PH_FD);
-      applyopts(fd->stream.fd, opts, PH_FD);
-      applyopts_cloexec(fd->stream.fd, opts);
+      applyopts(sfd, -1, opts, PH_FD);
+      applyopts_cloexec(sfd->fd, opts);
    }
 
-   if ((result = applyopts2(fd->stream.fd, opts, PH_PASTSOCKET, PH_CONNECTED)) < 0) 
+   if ((result = applyopts2(sfd, -1, opts, PH_PASTSOCKET, PH_CONNECTED)) < 0)
       return result;
 
-   if ((result = _xio_openlate(&fd->stream, opts)) < 0)
+   if ((result = _xio_openlate(sfd, opts)) < 0)
       return result;
    return 0;
 }

@@ -32,7 +32,7 @@ int main(int argc, const char *argv[]) {
    const char *outfname = NULL;
    unsigned long fildes;
 
-   diag_set('I', false);
+   diag_set('I', NULL);
    diag_set('p', strchr(argv[0], '/') ? strrchr(argv[0], '/')+1 : argv[0]);
 
    arg1 = argv+1;  --argc;
@@ -61,10 +61,10 @@ int main(int argc, const char *argv[]) {
 	 }
          m = strtoul(a, (char **)&a, 0);
 	 if (a == a0) {
-	    Error1("not a numerical arg in \"-b %s\"", a0);
+	    Error1("not a numerical arg in \"-i %s\"", a0);
 	 }
 	 if (*a != '\0') {
-	    Error1("trailing garbage in \"-b %s\"", a0);
+	    Error1("trailing garbage in \"-i %s\"", a0);
 	 }
 	 n = m;
 	 break;
@@ -79,10 +79,10 @@ int main(int argc, const char *argv[]) {
 	 }
          n = strtoul(a, (char **)&a, 0);
 	 if (a == a0) {
-	    Error1("not a numerical arg in \"-b %s\"", a0);
+	    Error1("not a numerical arg in \"-n %s\"", a0);
 	 }
 	 if (*a != '\0') {
-	    Error1("trailing garbage in \"-b %s\"", a0);
+	    Error1("trailing garbage in \"-n %s\"", a0);
 	 }
 	 break;
       case 'f': if (arg1[0][2]) {

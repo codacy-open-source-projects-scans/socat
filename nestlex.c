@@ -73,7 +73,7 @@ static int _nestlex(const char **addr,
 
       /* is this end of input string? */
       if (*in == 0)  {
-	 
+
 	 break; /* end of string */
       }
 
@@ -123,7 +123,7 @@ static int _nestlex(const char **addr,
 		  if (--*len <= 0) { *addr = in; *token = out; return -1; }
 	       }
 	    }
-	       
+
 	    break;
 	 }
 	 ++quotx;

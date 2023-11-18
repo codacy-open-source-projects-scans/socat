@@ -5,7 +5,7 @@
 #ifndef __xio_exec_h_included
 #define __xio_exec_h_included 1
 
-extern const struct addrdesc addr_exec;
+extern const struct addrdesc xioaddr_exec;
 
 extern const struct optdesc opt_dash;
 

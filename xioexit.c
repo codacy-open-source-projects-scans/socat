@@ -11,14 +11,15 @@
 
 
 /* this function closes all open xio sockets on exit, if they are still open.
-   It must be registered with atexit(). */ 
+   It must be registered with atexit(). */
 void xioexit(void) {
    int i;
 
    diag_in_handler = 0;
    Debug("starting xioexit()");
    for (i = 0; i < XIO_MAXSOCK; ++i) {
-      if (sock[i] != NULL && sock[i]->tag != XIO_TAG_INVALID) {
+      if (sock[i] != NULL && sock[i]->tag != XIO_TAG_INVALID &&
+	  !(sock[i]->tag & XIO_TAG_CLOSED)) {
 	 xioclose(sock[i]);
       }
    }

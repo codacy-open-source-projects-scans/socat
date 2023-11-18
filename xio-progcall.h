@@ -10,6 +10,7 @@ extern const struct optdesc opt_fdout;
 extern const struct optdesc opt_path;
 extern const struct optdesc opt_pipes;
 extern const struct optdesc opt_pty;
+extern const struct optdesc opt_sitout_eio;
 extern const struct optdesc opt_openpty;
 extern const struct optdesc opt_ptmx;
 extern const struct optdesc opt_stderr;
@@ -20,7 +21,7 @@ extern const struct optdesc opt_sigquit;
 
 extern int _xioopen_foxec(int rw,	/* O_RDONLY etc. */
 		struct single *fd,
-		unsigned groups,
+			  groups_t groups,
 		struct opt **opts,
 			  int *duptostderr
 		);
