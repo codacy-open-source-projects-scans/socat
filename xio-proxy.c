@@ -93,8 +93,7 @@ static int xioopen_proxy_connect(
    int pf = PF_UNSPEC;
    union sockaddr_union us_sa,   *us = &us_sa;
    socklen_t uslen = sizeof(us_sa);
-   struct addrinfo *themlist, *themp;
-   struct addrinfo **ai_sorted;
+   struct addrinfo **themarr, *themp;
    int i;
    const char *proxyname; char *proxyport = NULL;
    const char *targetname, *targetport;
@@ -146,32 +145,19 @@ static int xioopen_proxy_connect(
       _xioopen_ipapp_prepare(opts, &opts0, proxyname, proxyport,
 			     &pf, ipproto,
 			     sfd->para.socket.ip.ai_flags,
-			     &themlist, us, &uslen,
+			     &themarr, us, &uslen,
 			     &needbind, &lowport, socktype);
    if (result != STAT_OK)
        return result;
 
-    /* Count addrinfo entries */
-      themp = themlist;
-      i = 0;
-      while (themp != NULL) {
-	 ++i;
-	 themp = themp->ai_next;
-      }
-      ai_sorted = Calloc((i+1), sizeof(struct addrinfo *));
-      if (ai_sorted == NULL)
-	 return STAT_RETRYLATER;
-      /* Generate a list of addresses sorted by preferred ip version */
-      _xio_sort_ip_addresses(themlist, ai_sorted);
-
       /* Loop over themlist */
       i = 0;
-      themp = ai_sorted[i++];
+      themp = themarr[i++];
       while (themp != NULL) {
 	 Notice4("opening connection to %s:%u via proxy %s:%s",
 		 proxyvars->targetaddr, proxyvars->targetport, proxyname, proxyport);
 #if WITH_RETRY
-	 if (sfd->forever || sfd->retry || ai_sorted[i] != NULL) {
+	 if (sfd->forever || sfd->retry || themarr[i] != NULL) {
 	    level = E_INFO;
 	 } else
 #endif /* WITH_RETRY */
@@ -184,7 +170,7 @@ static int xioopen_proxy_connect(
 		       opts, pf?pf:themp->ai_family, socktype, IPPROTO_TCP, lowport, level);
        if (result == STAT_OK)
 	  break;
-       themp = ai_sorted[i++];
+       themp = themarr[i++];
        if (themp == NULL) {
 	  result = STAT_RETRYLATER;
       }
@@ -201,12 +187,11 @@ static int xioopen_proxy_connect(
 	 }
 #endif /* WITH_RETRY */
       default:
-	 free(ai_sorted);
-	 xiofreeaddrinfo(themlist);
+	 xiofreeaddrinfo(themarr);
 	 return result;
       }
       }
-      xiofreeaddrinfo(themlist);
+      xiofreeaddrinfo(themarr);
       applyopts(sfd, -1, opts, PH_ALL);
 
       if ((result = _xio_openlate(sfd, opts)) < 0)

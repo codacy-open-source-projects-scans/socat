@@ -66,7 +66,6 @@ static int xioopen_rawip_sendto(
       return STAT_NORETRY;
    }
 
-   xioinit_ip(&pf, xioparms.preferred_ip);
    if ((result = _xioopen_rawip_sendto(argv[1], argv[2], opts, xioflags, xxfd,
 				       addrdesc->groups, &pf)) != STAT_OK) {
       return result;
@@ -108,7 +107,7 @@ int _xioopen_rawip_sendto(const char *hostname, const char *protname,
 
    if (sfd->howtoend == END_UNSPEC)
       sfd->howtoend = END_SHUTDOWN;
-   retropt_int(opts, OPT_PROTOCOL_FAMILY, pf);
+   retropt_socket_pf(opts, pf);
 
    if (applyopts_single(sfd, opts, PH_INIT) < 0)  return -1;
    applyopts(sfd, -1, opts, PH_INIT);
@@ -159,7 +158,6 @@ static int xioopen_rawip_datagram(
       return STAT_NORETRY;
    }
 
-   xioinit_ip(&pf, xioparms.preferred_ip);
    if ((result =
 	_xioopen_rawip_sendto(argv[1], argv[2], opts, xioflags, xxfd,
 			      addrdesc->groups, &pf)) != STAT_OK) {

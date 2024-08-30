@@ -241,11 +241,10 @@ static int xioopen_openssl_connect(
    bool dofork = false;
    union sockaddr_union us_sa,  *us = &us_sa;
    socklen_t uslen = sizeof(us_sa);
-   struct addrinfo *themlist, *themp;
+   struct addrinfo **themarr, *themp;
    bool needbind = false;
    bool lowport = false;
    int level = E_ERROR;
-   struct addrinfo **ai_sorted;
    int i;
    SSL_CTX* ctx;
    bool opt_ver = true;	/* verify peer certificate */
@@ -274,7 +273,6 @@ static int xioopen_openssl_connect(
       return STAT_NORETRY;
    }
 
-   xioinit_ip(&pf, xioparms.default_ip);
    if (sfd->howtoend == END_UNSPEC)
       sfd->howtoend = END_SHUTDOWN;
    if (applyopts_single(sfd, opts, PH_INIT) < 0)
@@ -324,7 +322,7 @@ static int xioopen_openssl_connect(
    result =
       _xioopen_ipapp_prepare(opts, &opts0, hostname, portname, &pf, ipproto,
 			     sfd->para.socket.ip.ai_flags,
-			     &themlist, us, &uslen,
+			     &themarr, us, &uslen,
 			     &needbind, &lowport, socktype);
    if (result != STAT_OK)  return STAT_NORETRY;
 
@@ -335,28 +333,15 @@ static int xioopen_openssl_connect(
       Info("starting connect loop");
    }
 
-   /* Count addrinfo entries */
-   themp = themlist;
-   i = 0;
-   while (themp != NULL) {
-      ++i;
-      themp = themp->ai_next;
-   }
-   ai_sorted = Calloc((i+1), sizeof(struct addrinfo *));
-   if (ai_sorted == NULL)
-      return STAT_RETRYLATER;
-   /* Generate a list of addresses sorted by preferred ip version */
-   _xio_sort_ip_addresses(themlist, ai_sorted);
-
    do {	/* loop over failed connect and SSL handshake attempts */
 
-      /* Loop over ai_sorted list */
+      /* Loop over themarr (which had been "ai_sorted") */
       i = 0;
-      themp = ai_sorted[i++];
+      themp = themarr[i++];
       while (themp != NULL) {
 
 #if WITH_RETRY
-	 if (sfd->forever || sfd->retry || ai_sorted[i] != NULL) {
+	 if (sfd->forever || sfd->retry || themarr[i] != NULL) {
 	    level = E_INFO;
 	 } else
 #endif /* WITH_RETRY */
@@ -370,7 +355,7 @@ static int xioopen_openssl_connect(
 			  opts, pf?pf:themp->ai_addr->sa_family, socktype, ipproto, lowport, level);
        if (result == STAT_OK)
 	  break;
-       themp = ai_sorted[i++];
+       themp = themarr[i++];
        if (themp == NULL) {
 	  result = STAT_RETRYLATER;
       }
@@ -388,16 +373,16 @@ static int xioopen_openssl_connect(
 	    --sfd->retry;
 	    continue;
 	 }
-	 free(ai_sorted);
+	 xiofreeaddrinfo(themarr);
 	 return STAT_NORETRY;
 #endif /* WITH_RETRY */
       default:
-	 free(ai_sorted);
+	 xiofreeaddrinfo(themarr);
 	 return result;
       }
       /*! isn't this too early? */
       if ((result = _xio_openlate(sfd, opts)) < 0) {
-	 free(ai_sorted);
+	 xiofreeaddrinfo(themarr);
 	 return result;
       }
 
@@ -419,7 +404,7 @@ static int xioopen_openssl_connect(
 	 }
 #endif /* WITH_RETRY */
       default:
-	 xiofreeaddrinfo(themlist);
+	 xiofreeaddrinfo(themarr);
 	 return STAT_NORETRY;
       }
 
@@ -438,7 +423,7 @@ static int xioopen_openssl_connect(
 	    if (sfd->forever || --sfd->retry) {
 	       Nanosleep(&sfd->intervall, NULL); continue;
 	    }
-	    xiofreeaddrinfo(themlist);
+	    xiofreeaddrinfo(themarr);
 	    return STAT_RETRYLATER;
 	 }
 
@@ -459,8 +444,7 @@ static int xioopen_openssl_connect(
 #endif /* WITH_RETRY */
       break;
    } while (true);	/* drop out on success */
-   free(ai_sorted);
-   xiofreeaddrinfo(themlist);
+   xiofreeaddrinfo(themarr);
 
    openssl_conn_loginfo(sfd->para.openssl.ssl);
 
@@ -1121,7 +1105,7 @@ int
 #elif HAVE_DTLSv1_client_method
 	 method = sycDTLSv1_client_method();
 #else
-#        error "OpenSSL does not seem to provide DTLS client methods"
+#        warning "OpenSSL does not seem to provide DTLS client methods"
 #endif
 	 *use_dtls = true;
       }
@@ -1192,10 +1176,15 @@ int
 #elif HAVE_DTLSv1_server_method
 	 method = sycDTLSv1_server_method();
 #else
-#        error "OpenSSL does not seem to provide DTLS server methods"
+#        warning "OpenSSL does not seem to provide DTLS server methods"
 #endif
 	 *use_dtls = true;
       }
+   }
+
+   if (method == NULL) {
+      Error("no OpenSSL method available");
+      return STAT_NORETRY;
    }
 
    if (opt_egd) {
@@ -1467,7 +1456,10 @@ cont_out:
       sycSSL_CTX_set_verify(ctx,
 			    SSL_VERIFY_PEER| SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
 			    NULL);
-      Warn("OpenSSL: Warning: this implementation does not check CRLs");
+      if (first_child) {
+	 /* The first forked off process, print the warning only once */
+	 Warn("OpenSSL: Warning: this implementation does not check CRLs");
+      }
    } else {
       sycSSL_CTX_set_verify(ctx,
 			    SSL_VERIFY_NONE,

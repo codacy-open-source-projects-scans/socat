@@ -45,7 +45,7 @@ struct socat_opts {
    false,	/* verbhex */
    {1,0},	/* pollintv */
    {0,500000},	/* closwait */
-   {0,0},	/* total_timeout */
+   {0,1000000},	/* total_timeout (this invalid default means no timeout)*/
    0,		/* debug */
    0,		/* strictopts */
    's',		/* logopt */
@@ -274,9 +274,14 @@ int main(int argc, const char *argv[]) {
 	    }
 	 }
 	 rto = Strtod(a, (char **)&a, "-T");
-	 socat_opts.total_timeout.tv_sec = rto;
-	 socat_opts.total_timeout.tv_usec =
-	    (rto-socat_opts.total_timeout.tv_sec) * 1000000;
+	 if (rto < 0) {
+	    socat_opts.total_timeout.tv_sec = 0; 	/* infinite */
+	    socat_opts.total_timeout.tv_usec = 1000000;	/* by invalid */
+	 } else {
+	    socat_opts.total_timeout.tv_sec = rto;
+	    socat_opts.total_timeout.tv_usec =
+	       (rto-socat_opts.total_timeout.tv_sec) * 1000000;
+	 }
 	 break;
       case 'u':  if (arg1[0][2])  { socat_opt_hint(stderr, arg1[0][1], arg1[0][2]); Exit(1); }
 	 socat_opts.lefttoright = true; break;
@@ -313,6 +318,7 @@ int main(int argc, const char *argv[]) {
 	 socat_opts.lock.intervall.tv_nsec = 0;
 	 break;
 #if WITH_IP4 || WITH_IP6
+      case '0':
 #if WITH_IP4
       case '4':
 #endif
@@ -427,6 +433,13 @@ int main(int argc, const char *argv[]) {
    }
 #endif /* WITH_STATS */
 
+   /* Display important info, values may be set by:
+      ./configure --enable-default-ipv=0|4|6
+      env SOCAT_PREFERRED_RESOLVE_IP, SOCAT_DEFAULT_LISTEN_IP
+      options -0 -4 -6  */
+   Info1("default listen IP version is %c", xioparms.default_ip);
+   Info1("preferred resolve IP version is %c", xioparms.preferred_ip);
+
    result = socat(arg1[0], arg1[1]);
    if (result == EXIT_SUCCESS && engine_result != EXIT_SUCCESS) {
       result = engine_result; 	/* a signal handler reports failure */
@@ -476,6 +489,9 @@ void socat_usage(FILE *fd) {
    fputs("      -g     do not check option groups\n", fd);
    fputs("      -L <lockfile>  try to obtain lock, or fail\n", fd);
    fputs("      -W <lockfile>  try to obtain lock, or wait\n", fd);
+#if WITH_IP4 || WITH_IP6
+   fputs("      -0     do not prefer an IP version\n", fd);
+#endif
 #if WITH_IP4
    fputs("      -4     prefer IPv4 if version is not explicitly specified\n", fd);
 #endif
@@ -708,6 +724,11 @@ void socat_version(FILE *fd) {
    fprintf(fd, "  #define WITH_RETRY %d\n", WITH_RETRY);
 #else
    fputs("  #undef WITH_RETRY\n", fd);
+#endif
+#ifdef WITH_DEVTESTS
+   fprintf(fd, "  #define WITH_DEVTESTS %d\n", WITH_DEVTESTS);
+#else
+   fputs("  #undef WITH_DEVTESTS\n", fd);
 #endif
 #ifdef WITH_MSGLEVEL
    fprintf(fd, "  #define WITH_MSGLEVEL %d /*%s*/\n", WITH_MSGLEVEL,
@@ -992,8 +1013,7 @@ int _socat(void) {
       /* for ignoreeof */
       if (polling) {
 	 if (!wasaction) {
-	    if (socat_opts.total_timeout.tv_sec != 0 ||
-		socat_opts.total_timeout.tv_usec != 0) {
+	    if (socat_opts.total_timeout.tv_usec <= 1000000) {
 	       if (total_timeout.tv_usec < socat_opts.pollintv.tv_usec) {
 		  total_timeout.tv_usec += 1000000;
 		  total_timeout.tv_sec  -= 1;
@@ -1017,8 +1037,7 @@ int _socat(void) {
 	 /* there is a ignoreeof poll timeout, use it */
 	 timeout = socat_opts.pollintv;
 	 to = &timeout;
-      } else if (socat_opts.total_timeout.tv_sec != 0 ||
-		 socat_opts.total_timeout.tv_usec != 0) {
+      } else if (socat_opts.total_timeout.tv_usec < 1000000) {
 	 /* there might occur a total inactivity timeout */
 	 timeout = socat_opts.total_timeout;
 	 to = &timeout;
@@ -1134,8 +1153,7 @@ int _socat(void) {
 	 } else if (polling && wasaction) {
 	    wasaction = 0;
 
-	 } else if (socat_opts.total_timeout.tv_sec != 0 ||
-		    socat_opts.total_timeout.tv_usec != 0) {
+	 } else if (socat_opts.total_timeout.tv_usec < 1000000) {
 	    /* there was a total inactivity timeout */
 	    Notice("inactivity timeout triggered");
 		  free(buff);

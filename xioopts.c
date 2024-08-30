@@ -199,6 +199,9 @@ const struct optname optionnames[] = {
 #if defined(AI_ADDRCONFIG)
 	IF_IP	  ("ai-addrconfig", 		&opt_ai_addrconfig)
 #endif
+#if defined(AI_ALL)
+	IF_IP	  ("ai-all", 			&opt_ai_all)
+#endif
 #if defined(AI_PASSIVE	)
 	IF_IP	  ("ai-passive", 		&opt_ai_passive)
 #endif
@@ -3335,7 +3338,7 @@ int retropt_bind(struct opt *opts,
 	 return STAT_NORETRY;
       }
       break;
-#endif /* WITH_IP4 || WITH_IP6 */
+#endif /* WITH_IP4 || WITH_IP6 || WITH_VSOCK */
 
 #if WITH_UNIX
    case AF_UNIX:
@@ -3364,6 +3367,52 @@ int retropt_bind(struct opt *opts,
    }
    return STAT_OK;
 }
+
+#if 0
+#if _WITH_IP4 || _WITH_IP6
+/* Looks for a bind option and, if found, calls xiogetaddrinfo and provides the
+   results list in bindlist.
+   returns STAT_OK if option exists and could be resolved,
+   STAT_NORETRY if option exists but had error,
+   or STAT_NOACTION if it does not exist */
+int retropt_bind_gai(struct opt *opts,
+	int af,
+	int socktype,
+	int ipproto,
+	struct addrinfo **bindlist,
+	int feats,	/* TCP etc: 1..address allowed,
+				    3..address and port allowed
+			*/
+	const int ai_flags[2])
+{
+
+   if (retropt_string(opts, OPT_BIND, &bindname) < 0) {
+      return STAT_NOACTION;
+   }
+   bindp = bindname;
+
+   switch (af) {
+
+#if WITH_IP4 || WITH_IP6
+   case AF_UNSPEC:
+#if WITH_IP4
+   case AF_INET:
+#endif
+#if WITH_IP6
+   case AF_INET6:
+#endif /*WITH_IP6 */
+      break;
+#endif /* WITH_IP4 || WITH_IP6 */
+
+   default:
+      Error1("bind: unknown address family %d", af);
+      return STAT_NORETRY;
+   }
+   return STAT_OK;
+}
+#endif /* _WITH_IP4 || _WITH_IP6 */
+#endif /* 0 */
+
 #endif /* _WITH_SOCKET */
 
 
@@ -4041,6 +4090,7 @@ int applyopt_spec(
 	return 0;
 }
 
+#if WITH_TERMIOS
 int applyopts_termios_value(
 	int fd,
 	struct opt *opt)
@@ -4057,6 +4107,7 @@ int applyopts_termios_value(
 	 }
 	return 0;
 }
+#endif /* WITH_TERMIOS */
 
 /* Note: not all options can be applied this way (e.g. OFUNC_SPEC with PH_OPEN)
    implemented are: OFUNC_FCNTL, OFUNC_SOCKOPT (probably not all types),
@@ -4191,7 +4242,8 @@ int applyopts_fchown(int fd, struct opt *opts) {
    return 0;
 }
 
-/* caller must make sure that option is not yet consumed */
+/* Offset means a position in the sfd record where value is written.
+   Caller must make sure that option is not yet consumed */
 static int applyopt_offset(struct single *sfd, struct opt *opt) {
    unsigned char *ptr;
 

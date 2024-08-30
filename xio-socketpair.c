@@ -7,6 +7,7 @@
 #include "xiosysincludes.h"
 #include "xioopen.h"
 
+#include "xio-socket.h"
 #include "xio-named.h"
 
 #include "xio-socketpair.h"
@@ -44,7 +45,7 @@ static int xioopen_socketpair(
    sfd->para.bipipe.socktype = SOCK_DGRAM;
    if (applyopts_single(sfd, opts, PH_INIT) < 0)  return -1;
    applyopts(sfd, -1, opts, PH_INIT);
-   retropt_int(opts, OPT_PROTOCOL_FAMILY, &pf);
+   retropt_socket_pf(opts, &pf);
    retropt_int(opts, OPT_SO_TYPE, &sfd->para.bipipe.socktype);
    retropt_int(opts, OPT_SO_PROTOTYPE, &protocol);
 

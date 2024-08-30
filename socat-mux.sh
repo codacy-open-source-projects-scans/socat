@@ -28,7 +28,7 @@ usage () {
     $ECHO "data provided by 10.2.3.4 is sent to ALL clients"
     $ECHO "    <options>:"
     $ECHO "\t-h\tShow this help text and exit"
-    $ECHO "\t-V\tShow Socat commands"
+    $ECHO "\t-V\tShows executed Socat commands and some infos"
     $ECHO "\t-q\tSuppress most messages"
     $ECHO "\t-d*\tOptions beginning with -d are passed to Socat processes"
     $ECHO "\t-l*\tOptions beginning with -l are passed to Socat processes"
@@ -67,19 +67,46 @@ if ! [[ "$LISTENER" =~ .*,fork ]] || [[ "$LISTENER" =~ .*,fork, ]]; then
 fi
 
 case "$0" in
-    */*) SOCAT=${0%/*}/socat ;;
-    *) SOCAT=socat ;;
+    */*) if [ -x ${0%/*}/socat ]; then SOCAT=${0%/*}/socat; fi ;;
 esac
+if [ -z "$SOCAT" ]; then SOCAT=socat; fi
+[ "$VERBOSE" ] && echo "# $0: Using executable $SOCAT" >&2
 
-PORT1=$($SOCAT -d -d -T 0.000001 UDP4-RECV:0 /dev/null 2>&1 |grep bound |sed 's/.*:\([1-9][0-9]*\)$/\1/')
-PORT2=$($SOCAT -d -d -T 0.000001 UDP4-RECV:0 /dev/null 2>&1 |grep bound |sed 's/.*:\([1-9][0-9]*\)$/\1/')
+# When run as root we try low ports
+LOWPORT=
+PATTERN=bound
+if [ "$(id -u)" = 0 ]; then
+    LOWPORT="lowport"
+    PATTERN="successfully prepared local socket"
+fi
+
+# We need two free UDP ports (on loopback)
+if [ -z "$LOWPORT" ]; then
+    PORT1=$($SOCAT -d -d -T 0.000001 UDP4-RECV:0 /dev/null 2>&1 |grep "$PATTERN" |sed 's/.*:\([1-9][0-9]*\)$/\1/')
+    PORT2=$($SOCAT -d -d -T 0.000001 UDP4-RECV:0 /dev/null 2>&1 |grep "$PATTERN" |sed 's/.*:\([1-9][0-9]*\)$/\1/')
+fi
 if [ -z "$PORT1" -o -z "$PORT2" ]; then
-    echo "$0: Failed to determine free UDP ports" >&2
-    exit 1
+    # Probably old Socat version, use a different approach
+    if type ss >/dev/null 2>&1; then
+	:
+    elif type netstat >/dev/null 2>&1; then
+	alias ss=netstat
+    else
+	echo "$0: Failed to determine free UDP ports (old Socat version, no ss, no netstat?)" >&2
+	exit 1
+    fi
+    PORT1= PORT2=
+    while [ -z "$PORT1" -o -z "$PORT2" -o "$PORT1" = "$PORT2" ] || ss -aun |grep -e ":$PORT1\>" -e ":$PORT2\>" >/dev/null; do
+	if [ -z "$LOWPORT" ]; then
+	    PORT1=$((16384+RANDOM))
+	    PORT2=$((16384+RANDOM))
+	else
+	    PORT1=$((512+(RANDOM>>6) ))
+	    PORT2=$((512+(RANDOM>>6) ))
+	fi
+    done
 fi
-if [ "$PORT1" = "$PORT2" ]; then 	# seen on etch
-    PORT2=$((PORT1+1))
-fi
+[ "$VERBOSE" ] && echo "# $0: Using UDP ports $PORT1, $PORT2" >&2
 
 IFADDR=127.0.0.1
 BCADDR=127.255.255.255

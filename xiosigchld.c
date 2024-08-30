@@ -113,7 +113,7 @@ void childdied(int signum) {
       }
    /*! indent */
    if (num_child) {
-      num_child--;
+      --num_child;
       Info1("number of children decreased to %d", num_child);
    }
    /* check if it was a registered child process */

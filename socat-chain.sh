@@ -56,7 +56,7 @@ usage () {
     $ECHO "	<address3> is typically a client address with protocol like OPENSSL"
     $ECHO "	<options>:"
     $ECHO "		-d*  -S <sigmask>  -t <timeout>  -T <timeout> 	are passed to socat"
-    $ECHO "		-V	prints the socat commands before starting them"
+    $ECHO "		-V	Shows executed Socat commands and some infos"
     $ECHO "Example to drive SOCKS over TLS:"
     $ECHO "	$0 \\"
     $ECHO "		TCP4-L:1234,reuseaddr,fork \\"
@@ -130,10 +130,12 @@ else
 fi
 
 case "$0" in
-    */*) SOCAT=${0%/*}/socat ;;
-    *) SOCAT=socat ;;
+    */*) if [ -x ${0%/*}/socat ]; then SOCAT=${0%/*}/socat; fi ;;
 esac
+if [ -z "$SOCAT" ]; then SOCAT=socat; fi
+[ "$VERBOSE" ] && echo "# $0: Using executable $SOCAT" >&2
 
+# We need a free TCP port (on loopback)
 PORT=$($SOCAT -d -d TCP4-L:0,accept-timeout=0.000001 /dev/null 2>&1 |grep listening |sed 's/.*:\([1-9][0-9]*\)$/\1/')
 if [ -z "$PORT" ]; then
     echo "$0: Failed to determine free TCP port" >&2

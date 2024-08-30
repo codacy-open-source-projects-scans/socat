@@ -10,7 +10,7 @@ AC_CONFIG_HEADER(config.h)
 if test -f /usr/xpg4/bin/fgrep; then
    FGREP=/usr/xpg4/bin/fgrep   # Solaris
 else
-   FGREP=fgrep
+   FGREP="grep -F"
 fi
 
 # find out which defines gcc passes to cpp, so makedepend does not run into
@@ -86,7 +86,7 @@ AC_CHECK_HEADERS(linux/types.h)
 AC_CHECK_HEADER(linux/errqueue.h, AC_DEFINE(HAVE_LINUX_ERRQUEUE_H), [], [#include <sys/time.h>
 #include <linux/types.h>])
 AC_CHECK_HEADERS(sys/utsname.h sys/select.h sys/file.h)
-AC_CHECK_HEADERS(util.h bsd/libutil.h libutil.h sys/stropts.h regex.h)
+AC_CHECK_HEADERS(util.h bsd/libutil.h libutil.h stropts.h regex.h)
 AC_CHECK_HEADERS(linux/fs.h linux/ext2_fs.h)
 
 dnl Checks for setgrent, getgrent and endgrent.
@@ -304,6 +304,16 @@ if test "$ac_cv_apple_use_rfc_2292" = yes; then
   AC_DEFINE(__APPLE_USE_RFC_2292)
 fi
 AC_MSG_RESULT($ac_cv_apple_use_rfc_2292)
+
+AC_MSG_CHECKING(if including netinet/in.h suffices)
+AC_TRY_COMPILE([#include <sys/types.h>
+#include <netinet/in.h>],
+[struct sockaddr_in6 s;],
+[ AC_MSG_RESULT(yes); WITH_IP6=1],
+[ AC_MSG_RESULT(no); WITH_IP6=])
+if test "$WITH_IP6"; then
+   AC_DEFINE(WITH_IP6)
+fi
 
 fi
 
@@ -932,6 +942,15 @@ AC_ARG_ENABLE(retry, [  --disable-retry         disable retry support],
 	       esac],
 	       [AC_DEFINE(WITH_RETRY) AC_MSG_RESULT(yes)])
 
+AC_MSG_CHECKING(whether to include devtests support)
+AC_ARG_ENABLE(devtests, [  --enable-devtests          enable devtests support],
+	      [case "$enableval" in
+	       yes) AC_DEFINE(WITH_DEVTESTS) AC_MSG_RESULT(yes);;
+	       *)  AC_MSG_RESULT(no) ;;
+	       esac],
+	       [AC_MSG_RESULT(no)])
+
+
 AC_MSG_CHECKING(included message level)
 AC_ARG_ENABLE(msglevel, [  --enable-msglevel=N     set max verbosity to debug,info,notice,warn,error,fatal],
 	      [case "$enableval" in
@@ -948,12 +967,14 @@ AC_ARG_ENABLE(msglevel, [  --enable-msglevel=N     set max verbosity to debug,in
 AC_MSG_CHECKING(default IP version)
 AC_ARG_ENABLE(default-ipv, [  --enable-default-ipv=N     set default/preferred IP version to "0" (none), "4", "6"],
 	      [case "$enableval" in
-	       "") AC_DEFINE(WITH_DEFAULT_IPV, '0') AC_MSG_RESULT("0");;
+	       "") AC_DEFINE(WITH_DEFAULT_IPV, '4') AC_MSG_RESULT("0");;
+	       0) AC_DEFINE(WITH_DEFAULT_IPV, '0') AC_MSG_RESULT("4");;
 	       4) AC_DEFINE(WITH_DEFAULT_IPV, '4') AC_MSG_RESULT("4");;
 	       6) AC_DEFINE(WITH_DEFAULT_IPV, '6') AC_MSG_RESULT("6");;
-	       *) AC_DEFINE(WITH_DEFAULT_IPV, '0') AC_MSG_RESULT("0");;
+	       *) AC_DEFINE(WITH_DEFAULT_IPV, '4') AC_MSG_RESULT("0");;
 	       esac],
-	       [AC_DEFINE(WITH_DEFAULT_IPV, '0') AC_MSG_RESULT("0")])
+	       [AC_DEFINE(WITH_DEFAULT_IPV, '4') AC_MSG_RESULT("0")])
+
 
 #AC_SUBST(V_INCL)
 

@@ -1362,6 +1362,7 @@ int _xioopen_dgram_recvfrom(struct single *sfd, int xioflags,
 	    char buf[1];
 	    while (Read(trigger[0], buf, 1) < 0 && errno == EINTR) ;
 	 }
+	 Close(trigger[0]);
 
 	 Info("continue listening");
       } else {
@@ -1459,15 +1460,13 @@ int retropt_socket_pf(struct opt *opts, int *pf) {
       } else if (!strcasecmp("inet", pfname) ||
 	  !strcasecmp("inet4", pfname) ||
 	  !strcasecmp("ip4", pfname) ||
-	  !strcasecmp("ipv4", pfname) ||
-	  !strcasecmp("2", pfname)) {
+	  !strcasecmp("ipv4", pfname)) {
 	 *pf = PF_INET;
 #endif /* WITH_IP4 */
 #if WITH_IP6
       } else if (!strcasecmp("inet6", pfname) ||
 		 !strcasecmp("ip6", pfname) ||
-		 !strcasecmp("ipv6", pfname) ||
-		 !strcasecmp("10", pfname)) {
+		 !strcasecmp("ipv6", pfname)) {
 	 *pf = PF_INET6;
 #endif /* WITH_IP6 */
       } else {

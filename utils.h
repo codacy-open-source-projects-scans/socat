@@ -15,6 +15,9 @@ struct wordent {
 extern void *memrchr(const void *s, int c, size_t n);
 #endif
 extern void *memdup(const void *src, size_t n);
+#if !HAVE_PROTOTYPE_LIB_strndup
+extern char *strndup(const char *s, size_t n);
+#endif
 #if !HAVE_SETENV
 extern int setenv(const char *name, const char *value, int overwrite);
 #endif /* !HAVE_SETENV */

@@ -46,7 +46,7 @@ static const char *addressgroupnames[] = {
 	"LISTEN",	"SHELL",	"CHILD",	"RETRY",
 	"TERMIOS",	"RANGE",	"PTY",		"PARENT",
 	"UNIX",		"IP4",		"IP6",		"INTERFACE",
-	"UDP",		"TCP",		"SOCKS4",	"OPENSSL",
+	"UDP",		"TCP",		"SOCKS",	"OPENSSL",
 	"PROCESS",	"APPL",		"HTTP",		"undef",
 	"POSIXMQ",	"SCTP",		"DCCP",		"UDPLITE"
 } ;

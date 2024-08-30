@@ -6,14 +6,19 @@
 #define __xio_socket_h_included 1
 
 /* SO_PROTOTYPE is defined on Solaris, HP-UX
-   SO_PROTOCOL in Linux, is the better name, but came much later */
+   SO_PROTOCOL in Linux, is the better name, but came much later, now
+   standardised in POSIX 2024
+   illumos defines both, with SO_PROTOCOL as an alias of SO_PROTOTYPE */
 #ifdef SO_PROTOCOL
-#  undef SO_PROTOTYPE
+#  ifndef SO_PROTOTYPE
 #    define SO_PROTOTYPE SO_PROTOCOL
+#  endif
 #else
 #  ifdef SO_PROTOTYPE
 #    define SO_PROTOCOL SO_PROTOTYPE
 #  else
+/* Even when SO_PROTOCOL is not available for setsockopt() Socat uses it
+   internally as option for 3rd arg of socket() e.a. */
 #    define SO_PROTOCOL 0x9999
 #    define SO_PROTOTYPE SO_PROTOCOL
 #  endif

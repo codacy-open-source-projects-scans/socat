@@ -1,5 +1,119 @@
 ﻿
-####################### V 1.8.0.0
+####################### V 1.8.0.1:
+
+Corrections:
+	When no IP version was preferred by environment, option -4/-6, or
+	address option pf, Socat version 1.8.0.0 address TCP-LISTEN did not
+	accept TCP4 connections under BSD family operating systems, but only
+	TCP6. To regain previous behaviour, preferring IP version 4 is now the
+	default. This also fixes some other issues with bind and range options.
+	Thanks to Mike Andrews for reporting this issue.
+	Tests: LISTEN_4 LISTEN_6  V1800_*_RANGE  V1800_*_BIND
+
+	Added Socat option -0 to allow version 1.8.0.0 behaviour (no preferred
+	IP version).
+
+	UDP-SENDTO, UDPLITE-SENDTO, and IP-SENDTO addresses now select an IPv4
+	address in case the server name resolves to both IPv4 and IPv6
+	addresses.
+	Tests: V1800_*_SENDTO_RESOLV_6_4
+
+	Guard applyopts_termios_value() with WITH_TERMIOS.
+	Thanks to Kush Upadhyay from Amazon Bottlerocket team for providing the
+	patch.
+
+	In some situations xioclose() was called nested what could cause hanging
+	of OpenSSL in pthread_rwlock_wrlock()
+
+	socat 1.8.0.0 with addresses of type RECVFROM and option fork, where
+	the second address failed to connect/open in the child process, entered
+	a fork loop that was only stopped by FD exhaustion caused by FD leak.
+	Test: RECVFROM_FORK_LOOP
+
+	socat 1.8.0.0 had an FD leak with addresses of type RECVFROM with fork.
+	Test: RECVFROM_FORK_LEAK
+
+	With version 1.8.0.0, options ipv6-join-group and ipv6-join-source-group
+	did not work.
+	Thanks to Linus Luessing for reporting this bug.
+
+	IP-SENDTO and option pf (protocol-family) with protocol name (vs.numeric
+	argument) failed with message:
+	E retropts_int(): trailing garbage in numerical arg of option "protocol-family"
+	Test: IP_SENDTO_PF
+
+	Fixed a possible buffer overrun with long log lines. In fact it does
+	not write beyond end of buffer but lets pass excessive data to the
+	write() function.
+	Thanks to Heinrich Schuchardt from Canonical for reporting and sending
+	a patch.
+
+	Reworked domain name resolution, centralized IPv4/IPv6 sorting.
+
+	Print warning about not checking CRLs in OpenSSL only in the first
+	child process.
+
+Features:
+	Total inactivity timeout option -T 0 now means 0.0 seconds; up to
+	version 1.8.0.0 it meant no total inactivity timeout.
+
+	Changed socat-chain.sh, socat-mux.sh, and socat-broker.sh to work with
+	older Socat versions.
+
+	socat-mux.sh and socat-broker.sh, when run as root, now internally use
+	low (512..1023) UDP ports to increase security.
+
+	Added option ai-all (sets AI_ALL flag of getaddrinfo() resolver)
+
+	Socks5 now also allows syntax without socks port, and supports option
+	socksport.
+
+Porting:
+	Changes for building and testing on NetBSD
+
+	New Linux distributions dislike egrep, fgrep
+
+	When NETDB_INTERNAL is not available it should be set to -1.
+	Thanks to Baruch Siach for sending a patch.
+
+	On OpenSolaris/Illumos, isastream() is declared only in stropts.h, not
+	in sys/stropts.h
+	Thanks to Andy Fiddaman for sending a patch.
+
+	On latest Illumos, compilation failed due to new unexpected SO_PROTOCOL
+	implementation.
+	Thanks to Andy Fiddaman for sending a patch.
+
+Building:
+	Makefile.in: procan.o build requires srcdir prefix for explicit source
+	file.
+	Thanks to Hongxu Jia and Andrew Schoolman for providing patches.
+
+	Makefile.in: the CC define for procan.o build failed when CC had more
+	than one word.
+	Thanks to Hongxu Jia for providing an inital patch.
+
+Testing:
+	Added the optional DEVTESTS feature for developer tests with controlled
+	name resolution to both IPv4 and IPV6 addresses: configure Socat with
+	--enable-devtests, this provides internal resolution of domain
+	dest-unreach.net with host names: localhost-4, localhost-6,
+	localhost-4-6, and localhost-6-4
+
+	test.sh: lots of corrections and improvements
+
+	test.sh: many hardcoded sleep values were replaced by much shorter
+	values tuned to performance of the platform.
+
+	test.sh -D for output of platform/system specific defines (variables)
+
+	test.sh: fixed ss determination; more DEFS
+	
+Documentation:
+	Fixed a lot of typos.
+	Thanks to Solomon Victorino for sending the patch.
+
+####################### V 1.8.0.0:
 
 Security:
 	Socats OpenSSL addresses do not (and never did) check certificate
@@ -520,12 +634,12 @@ Porting:
 	Fixed ancillary messages on Solaris.
 
 	Filan: Solaris has the open file path infos in /proc/<pid>/path/
-	Thanks to Andy Fiddaman to directing me to the patch.
+	Thanks to Andy Fiddaman for directing me to the patch.
 
 	Filan now recognizes and prints Solaris doors and event ports.
 
 	Solaris derivatives no longer need librt for clock_gettime()
-	Thanks to Andy Fiddaman to directing me to the patch.
+	Thanks to Andy Fiddaman for directing me to the patch.
 
 	LibreSSL does not have OPENSSL_INIT_new(). This function is now
 	guarded. Socat might build with LibreSSL.

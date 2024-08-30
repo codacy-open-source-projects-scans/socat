@@ -4,15 +4,15 @@
 
 # Shell script to perform group communications, sometimes called brokering.
 # It starts a Socat instance that forks a child process for each
-# connected client; the clients communicate via IPv4 broadcast
+# connected client; the child processes communicate via IPv4 broadcast
 
 # Examples:
 
 #   socat-broker.sh TCP-L:1234
-# Now connect with an arbitrary number of clients like TCP:<server>:1234
+# Now connect with any number of clients like TCP:<server>:1234
 
 #   socat-broker.sh SSL-L:1234,cert=server.pem,cafile=clients.crt
-# Now connect with an arbitrary number of clients like SSL:<server>:1234,cafile=server.cert=clients.pem
+# Now connect with an arbitrary number of clients like SSL:<server>:1234,cafile=server,cert=clients.pem
 
 ECHO="echo -e"
 
@@ -21,7 +21,7 @@ usage () {
     $ECHO "	<listener> is a passive address like TCP4-L or SSL-L"
     $ECHO "	<options>:"
     $ECHO "		-d*  -S  -t <timeout>  -T <timeout> 	are passed to socat"
-    $ECHO "		-V	prints the socat command before starting it"
+    $ECHO "		-V	Shows executed Socat commands and some infos"
     $ECHO "For example:"
     $ECHO "	$0 \\"
     $ECHO "		TCP4-L:1234"
@@ -60,15 +60,43 @@ if ! [[ "$LISTENER" =~ .*,fork ]] || [[ "$LISTENER" =~ .*,fork, ]]; then
 fi
 
 case "$0" in
-    */*) SOCAT=${0%/*}/socat ;;
-    *) SOCAT=socat ;;
+    */*) if [ -x ${0%/*}/socat ]; then SOCAT=${0%/*}/socat; fi ;;
 esac
+if [ -z "$SOCAT" ]; then SOCAT=socat; fi
+[ "$VERBOSE" ] && echo "# $0: Using executable $SOCAT" >&2
 
-PORT=$($SOCAT -d -d -T 0.000001 UDP4-RECV:0 /dev/null 2>&1 |grep bound |sed 's/.*:\([1-9][0-9]*\)$/\1/')
-if [ -z "$PORT" ]; then
-    echo "$0: Failed to determine free UDP port" >&2
-    exit 1
+# When run as root we try low ports
+LOWPORT=
+PATTERN=bound
+if [ "$(id -u)" = 0 ]; then
+    LOWPORT="lowport"
+    PATTERN="successfully prepared local socket"
 fi
+
+# We need a free UDP port (on loopback)
+if [ -z "$LOWPORT" ]; then
+    PORT=$($SOCAT -d -d -T 0.000001 UDP4-RECV:0 /dev/null 2>&1 |grep bound |sed 's/.*:\([1-9][0-9]*\)$/\1/')
+fi
+if [ -z "$PORT" ]; then
+    # Probably old Socat version, use a different approach
+    if type ss >/dev/null 2>&1; then
+	:
+    elif type netstat >/dev/null 2>&1; then
+	alias ss=netstat
+    else
+	echo "$0: Failed to determine free UDP port (old Socat version, no ss, no netstat?)" >&2
+	exit 1
+    fi
+    PORT=
+    while [ -z "$PORT" ] || ss -aun |grep -e ":$PORT\>" >/dev/null; do
+	if [ -z "$LOWPORT" ]; then
+	    PORT=$((16384+RANDOM))
+	else
+	    PORT=$((512+(RANDOM>>6) ))
+	fi
+    done
+fi
+[ "$VERBOSE" ] && echo "# $0: Using UDP port $PORT" >&2
 
 BCADDR=127.255.255.255
 

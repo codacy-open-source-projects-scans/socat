@@ -19,6 +19,7 @@
 #include "xio-socket.h"
 #include "xio-ip.h"
 #include "xio-ipapp.h"
+#include "xio-socks.h" 	/* _xioopen_opt_socksport() */
 
 #include "xio-socks5.h"
 
@@ -50,9 +51,9 @@
 
 static int xioopen_socks5(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *xxfd, const struct addrdesc *addrdesc);
 
-const struct addrdesc xioaddr_socks5_connect = { "SOCKS5-CONNECT", 1+XIO_RDWR, xioopen_socks5, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_CHILD|GROUP_RETRY, SOCKS5_COMMAND_CONNECT, 0, 0 HELP(":<socks-server>:<socks-port>:<target-host>:<target-port>") };
+const struct addrdesc xioaddr_socks5_connect = { "SOCKS5-CONNECT", 1+XIO_RDWR, xioopen_socks5, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_IP_SOCKS|GROUP_CHILD|GROUP_RETRY, SOCKS5_COMMAND_CONNECT, 0, 0 HELP(":<socks-server>[:<socks-port>]:<target-host>:<target-port>") };
 
-const struct addrdesc xioaddr_socks5_listen  = { "SOCKS5-LISTEN",  1+XIO_RDWR, xioopen_socks5, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_CHILD|GROUP_RETRY, SOCKS5_COMMAND_BIND,    0, 0 HELP(":<socks-server>:<socks-port>:<listen-host>:<listen-port>") };
+const struct addrdesc xioaddr_socks5_listen  = { "SOCKS5-LISTEN",  1+XIO_RDWR, xioopen_socks5, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_CHILD|GROUP_RETRY, SOCKS5_COMMAND_BIND,    0, 0 HELP(":<socks-server>[:<socks-port>]:<listen-host>:<listen-port>") };
 
 static const char * _xioopen_socks5_strerror(uint8_t r)
 {
@@ -512,7 +513,7 @@ static int xioopen_socks5(
 	const char *socks_server, *target_name, *target_port, *socks_port;
 	union sockaddr_union us_sa, *us = &us_sa;
 	socklen_t uslen = sizeof(us_sa);
-	struct addrinfo *themlist, *themp;
+	struct addrinfo **themarr, *themp;
 	bool needbind = false;
 	bool lowport = false;
 	char infobuff[256];
@@ -521,15 +522,20 @@ static int xioopen_socks5(
 		Error1("%s: use option --experimental to acknowledge unmature state", argv[0]);
 		return STAT_NORETRY;
 	}
-	if (argc != 5) {
+	if (argc < 4 || argc > 5) {
 		xio_syntax(argv[0], 4, argc-1, addrdesc->syntax);
 		return STAT_NORETRY;
 	}
 
 	socks_server = argv[1];
-	socks_port = argv[2];
-	target_name = argv[3];
-	target_port = argv[4];
+	if (argc == 5) {
+		socks_port = argv[2];
+		target_name = argv[3];
+		target_port = argv[4];
+	} else {
+		target_name = argv[2];
+		target_port = argv[3];
+	}
 
 	if (sfd->howtoend == END_UNSPEC)
 		sfd->howtoend = END_SHUTDOWN;
@@ -539,10 +545,14 @@ static int xioopen_socks5(
 	retropt_int(opts, OPT_SO_TYPE, &socktype);
 	retropt_bool(opts, OPT_FORK, &dofork);
 
+	if (_xioopen_opt_socksport(opts, (char **)&socks_port) < 0) {
+		return STAT_NORETRY;
+	}
+
 	result = _xioopen_ipapp_prepare(opts, &opts0, socks_server, socks_port,
 					&pf, ipproto,
 					sfd->para.socket.ip.ai_flags,
-					&themlist, us, &uslen,
+					&themarr, us, &uslen,
 					&needbind, &lowport, socktype);
 
 	Notice2("connecting to socks5 server %s:%s",
@@ -557,8 +567,8 @@ static int xioopen_socks5(
 		}
 #endif
 
-		/* loop over themlist */
-		themp = themlist;
+		/* loop over themarr */
+		themp = themarr[0];
 		while (themp != NULL) {
 			Notice1("opening connection to %s",
 				sockaddr_info(themp->ai_addr, themp->ai_addrlen,
@@ -584,11 +594,11 @@ static int xioopen_socks5(
 				}
 #endif
 			default:
-				xiofreeaddrinfo(themlist);
+				xiofreeaddrinfo(themarr);
 				return result;
 			}
 		}
-		xiofreeaddrinfo(themlist);
+		xiofreeaddrinfo(themarr);
 		applyopts(sfd, -1, opts, PH_ALL);
 
 		if ((result = _xio_openlate(sfd, opts)) < 0)

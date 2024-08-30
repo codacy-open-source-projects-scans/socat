@@ -38,6 +38,23 @@ void *memdup(const void *src, size_t n) {
    return dest;
 }
 
+#if !HAVE_PROTOTYPE_LIB_strndup
+char *strndup(
+	const char *s,
+	size_t n)
+{
+   char *m;
+   m = malloc(n+1);
+   if (m == NULL) {
+      return m;
+   }
+   strncpy(m, s, n);
+   m[n] = '\0';
+   return m;
+}
+#endif /* !HAVE_PROTOTYPE_LIB_strndup */
+
+
 /* search the keyword-table for a match of the leading part of name. */
 /* returns the pointer to the matching field of the keyword or NULL if no
    keyword was found. */

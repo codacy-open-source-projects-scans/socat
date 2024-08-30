@@ -20,6 +20,7 @@ extern const struct optdesc opt_socksuser;
 extern const struct addrdesc xioaddr_socks4_connect;
 extern const struct addrdesc xioaddr_socks4a_connect;
 
+extern int _xioopen_opt_socksport(struct opt *opts, char **socksport);
 extern int _xioopen_socks4_prepare(const char *targetport, struct opt *opts, char **socksport, struct socks4 *sockhead, size_t *headlen);
 extern int
    _xioopen_socks4_connect0(struct single *xfd,

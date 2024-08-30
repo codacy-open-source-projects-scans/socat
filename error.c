@@ -404,6 +404,7 @@ void msg2(
    if (bufp < buff+MSGLEN)
       *bufp++ = ' ';
    strncpy(bufp, text, MSGLEN-(bufp-buff));
+   bufp[MSGLEN-(bufp-buff)] = 0;
    bufp = strchr(bufp, '\0');
    strcpy(bufp, "\n");
    _msg(level, buff, syslp);

@@ -45,7 +45,7 @@ distributions.
 platforms
 ---------
 
-socat 1.8.0 was compiled and more or less successfully tested under the
+socat 1.8.0 has been compiled and more or less successfully tested under the
 following operating systems:
 
 Debian 4 on x86_64
@@ -53,7 +53,7 @@ FreeBSD 10 on amd64
 OpenBSD 7.2 on amd64
 OpenIndiana 2021-04 on i386 with gcc
 Ubuntu 10.04 on i386
-Ubuntu 12..22
+Ubuntu 12..24
 Rocky 9
 Cygwin 10.0
 
@@ -63,7 +63,7 @@ install
 
 Get the tarball and extract it:
 	tar xzf socat.tar.gz
-	cd socat-1.8.0.0
+	cd socat-1.8.0.1
 	./configure
 	make
 	su

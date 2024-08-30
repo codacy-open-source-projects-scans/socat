@@ -346,7 +346,7 @@ int sockaddr_vm_parse(struct sockaddr_vm *sa, const char *cid_str,
 
    return 0;
 }
-#endif /* WITH_IP4 */
+#endif /* WITH_VSOCK */
 
 #if !HAVE_INET_NTOP
 /* http://www.opengroup.org/onlinepubs/000095399/functions/inet_ntop.html */

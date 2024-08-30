@@ -24,10 +24,10 @@ static char *inet6addr_info(const struct in6_addr *sa, char *buff, size_t blen);
 const struct optdesc opt_ipv6_v6only = { "ipv6-v6only", "ipv6only", OPT_IPV6_V6ONLY, GROUP_SOCK_IP6, PH_PREBIND, TYPE_INT, OFUNC_SOCKOPT, SOL_IPV6, IPV6_V6ONLY };
 #endif
 #ifdef IPV6_JOIN_GROUP
-const struct optdesc opt_ipv6_join_group = { "ipv6-join-group", "join-group", OPT_IPV6_JOIN_GROUP, GROUP_SOCK_IP6, PH_PASTSOCKET, TYPE_IP_MREQN, OFUNC_SOCKOPT, SOL_IPV6, IPV6_JOIN_GROUP };
+const struct optdesc opt_ipv6_join_group = { "ipv6-join-group", "join-group", OPT_IPV6_JOIN_GROUP, GROUP_SOCK_IP6, PH_PASTSOCKET, TYPE_IP_MREQN, OFUNC_SPEC, SOL_IPV6, IPV6_JOIN_GROUP };
 #endif
 #ifdef MCAST_JOIN_SOURCE_GROUP
-const struct optdesc opt_ipv6_join_source_group = { "ipv6-join-source-group", "join-source-group", OPT_IPV6_JOIN_SOURCE_GROUP, GROUP_SOCK_IP6, PH_PASTSOCKET, TYPE_GROUP_SOURCE_REQ, OFUNC_SOCKOPT, SOL_IPV6, MCAST_JOIN_SOURCE_GROUP };
+const struct optdesc opt_ipv6_join_source_group = { "ipv6-join-source-group", "join-source-group", OPT_IPV6_JOIN_SOURCE_GROUP, GROUP_SOCK_IP6, PH_PASTSOCKET, TYPE_GROUP_SOURCE_REQ, OFUNC_SPEC, SOL_IPV6, MCAST_JOIN_SOURCE_GROUP };
 #endif
 #ifdef IPV6_PKTINFO
 const struct optdesc opt_ipv6_pktinfo = { "ipv6-pktinfo", "pktinfo", OPT_IPV6_PKTINFO, GROUP_SOCK_IP6, PH_PASTSOCKET, TYPE_INT, OFUNC_SOCKOPT, SOL_IPV6, IPV6_PKTINFO };

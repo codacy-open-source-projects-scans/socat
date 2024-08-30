@@ -286,21 +286,8 @@ int xioopen_ipdgram_listen(
    }
 
    xioinit_ip(&pf, xioparms.default_ip);
-   if (pf == PF_UNSPEC) {
-#if WITH_IP4 && WITH_IP6
-      switch (xioparms.default_ip) {
-      case '4': pf = PF_INET; break;
-      case '6': pf = PF_INET6; break;
-      default: break;		/* includes \0 */
-      }
-#elif WITH_IP6
-      pf = PF_INET6;
-#else
-      pf = PF_INET;
-#endif
-   }
-
    retropt_socket_pf(opts, &pf);
+
    retropt_int(opts, OPT_SO_PROTOTYPE, &ipproto);
 
    if (applyopts_single(sfd, opts, PH_INIT) < 0)
@@ -460,6 +447,7 @@ int xioopen_udp_datagram(
       sfd->para.socket.ip.dosourceport = true;
    }
 
+   xioinit_ip(&pf, xioparms.default_ip);
    retropt_socket_pf(opts, &pf);
 
    result =
@@ -535,23 +523,11 @@ int xioopen_udp_recvfrom(
    }
 
    xioinit_ip(&pf, xioparms.default_ip);
+   retropt_socket_pf(opts, &pf);
+
    sfd->howtoend = END_NONE;
    if (sfd->howtoend == END_UNSPEC)
       sfd->howtoend = END_NONE;
-   retropt_socket_pf(opts, &pf);
-   if (pf == PF_UNSPEC) {
-#if WITH_IP4 && WITH_IP6
-      switch (xioparms.default_ip) {
-      case '4': pf = PF_INET; break;
-      case '6': pf = PF_INET6; break;
-      default: break;		/* includes \0 */
-      }
-#elif WITH_IP6
-      pf = PF_INET6;
-#else
-      pf = PF_INET;
-#endif
-   }
 
    /* Set AI_PASSIVE, except when it is explicitely disabled */
    ai_flags2[0] = xfd->stream.para.socket.ip.ai_flags[0];
@@ -626,20 +602,8 @@ int xioopen_udp_recv(
       return STAT_NORETRY;
    }
 
+   xioinit_ip(&pf, xioparms.default_ip);
    retropt_socket_pf(opts, &pf);
-   if (pf == PF_UNSPEC) {
-#if WITH_IP4 && WITH_IP6
-      switch (xioparms.default_ip) {
-      case '4': pf = PF_INET; break;
-      case '6': pf = PF_INET6; break;
-      default: break;		/* includes \0 */
-      }
-#elif WITH_IP6
-      pf = PF_INET6;
-#else
-      pf = PF_INET;
-#endif
-   }
 
    /* Set AI_PASSIVE, except when it is explicitely disabled */
    ai_flags2[0] = xfd->stream.para.socket.ip.ai_flags[0];

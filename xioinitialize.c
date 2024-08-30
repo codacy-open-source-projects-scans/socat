@@ -15,7 +15,8 @@ static int xioinitialized;
 xiofile_t *sock[XIO_MAXSOCK];
 int (*xiohook_newchild)(void);	/* xio calls this function from a new child
 				   process */
-int num_child = 0;
+int num_child = 0; 		/* actual number of "general" child processes */
+bool first_child = true; 	/* only first child shall print general warnings */
 
 /* returns 0 on success or != if an error occurred */
 int xioinitialize(void) {
@@ -255,9 +256,12 @@ pid_t xio_fork(bool subchild,
       return 0;
    }
 
-   num_child++;
-   Info1("number of children increased to %d", num_child);
    /* parent process */
+   if (!subchild) {
+      ++num_child;
+      first_child = false;
+   }
+   Info1("number of children increased to %d", num_child);
    Notice1("forked off child process "F_pid, pid);
    /* gdb recommends to have env controlled sleep after fork */
    if (forkwaitstring = getenv("SOCAT_FORK_WAIT")) {

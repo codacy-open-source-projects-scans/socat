@@ -167,8 +167,8 @@
 #elif HAVE_LIBUTIL_H
 #include <libutil.h>		/* FreeBSD openpty() */
 #endif
-#if HAVE_SYS_STROPTS_H
-#include <sys/stropts.h>	/* SunOS I_PUSH ... */
+#if HAVE_STROPTS_H
+#include <stropts.h>		/* SunOS I_PUSH ... */
 #endif
 #if HAVE_REGEX_H
 #include <regex.h>

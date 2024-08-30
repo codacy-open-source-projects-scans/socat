@@ -39,13 +39,13 @@ done
 
 # read and parse HTTP request
 read l
-if ! echo "$l" |egrep '^CONNECT +[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+ +HTTP/[1-3].[0-9]$' >/dev/null
+if ! echo "$l" |grep -E '^CONNECT +[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+ +HTTP/[1-3].[0-9]$' >/dev/null
 then
     echo "HTTP/1.0${SPACES}500 Bad Request"
     echo
     exit
 fi
-if ! echo "$l" |egrep '^CONNECT +[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+ +HTTP/'"$REQVER"'$' >/dev/null
+if ! echo "$l" |grep -E '^CONNECT +[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+ +HTTP/'"$REQVER"'$' >/dev/null
 then
     echo "HTTP/1.0${SPACES}426 Upgrade Required"
     echo

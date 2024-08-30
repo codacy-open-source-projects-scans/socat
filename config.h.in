@@ -315,8 +315,8 @@
 /* Define if you have the <libutil.h> header file. (FreeBSD: openpty()) */
 #undef HAVE_LIBUTIL_H
 
-/* Define if you have the <sys/stropts.h> header file. (stream opts on SunOS)*/
-#undef HAVE_SYS_STROPTS_H
+/* Define if you have the <stropts.h> header file. (stream opts on SunOS)*/
+#undef HAVE_STROPTS_H
 
 /* Define if you have the <regex.h> header file. */
 #undef HAVE_REGEX_H
@@ -748,10 +748,10 @@
 #undef WITH_LIBWRAP
 #undef HAVE_TCPD_H
 #undef HAVE_LIBWRAP
-
 #undef WITH_SYCLS
 #undef WITH_FILAN
 #undef WITH_RETRY
+#undef WITH_DEVTESTS
 
 #undef WITH_MSGLEVEL
 

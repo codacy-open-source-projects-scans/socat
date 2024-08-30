@@ -56,7 +56,7 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
    struct opt *popts = NULL;	/* parent options */
    struct opt *copts;		/* child options */
    int numleft;
-   int d, sv[2], rdpip[2], wrpip[2];
+   int sv[2], rdpip[2], wrpip[2];
    int rw = (xioflags & XIO_ACCMODE);
    bool usepipes = false;
 #if HAVE_PTY
@@ -355,10 +355,11 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
       /* end withfork, use_pipes */
    } else {
       /* withfork, socketpair */
+      int pf;
 
-      d = AF_UNIX;
-      retropt_int(opts, OPT_PROTOCOL_FAMILY, &d);
-      result = xiosocketpair(opts, d, SOCK_STREAM, 0, sv);
+      pf = AF_UNIX;
+      retropt_socket_pf(opts, &pf);
+      result = xiosocketpair(opts, pf, SOCK_STREAM, 0, sv);
       if (result < 0) {
 	 return -1;
       }

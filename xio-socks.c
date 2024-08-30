@@ -29,12 +29,12 @@ enum {
 
 static int xioopen_socks4_connect(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *fd, const struct addrdesc *addrdesc);
 
-const struct optdesc opt_socksport = { "socksport", NULL, OPT_SOCKSPORT, GROUP_IP_SOCKS4, PH_LATE, TYPE_STRING, OFUNC_SPEC };
-const struct optdesc opt_socksuser = { "socksuser", NULL, OPT_SOCKSUSER, GROUP_IP_SOCKS4, PH_LATE, TYPE_NAME, OFUNC_SPEC };
+const struct optdesc opt_socksport = { "socksport", NULL, OPT_SOCKSPORT, GROUP_IP_SOCKS, PH_LATE, TYPE_STRING, OFUNC_SPEC };
+const struct optdesc opt_socksuser = { "socksuser", NULL, OPT_SOCKSUSER, GROUP_IP_SOCKS, PH_LATE, TYPE_NAME, OFUNC_SPEC };
 
-const struct addrdesc xioaddr_socks4_connect = { "SOCKS4", 3, xioopen_socks4_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_IP_SOCKS4|GROUP_CHILD|GROUP_RETRY, 0, 0, 0 HELP(":<socks-server>:<host>:<port>") };
+const struct addrdesc xioaddr_socks4_connect = { "SOCKS4", 3, xioopen_socks4_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_IP_SOCKS|GROUP_CHILD|GROUP_RETRY, 0, 0, 0 HELP(":<socks-server>:<host>:<port>") };
 
-const struct addrdesc xioaddr_socks4a_connect = { "SOCKS4A", 3, xioopen_socks4_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_IP_SOCKS4|GROUP_CHILD|GROUP_RETRY, 1, 0, 0 HELP(":<socks-server>:<host>:<port>") };
+const struct addrdesc xioaddr_socks4a_connect = { "SOCKS4A", 3, xioopen_socks4_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_IP_SOCKS|GROUP_CHILD|GROUP_RETRY, 1, 0, 0 HELP(":<socks-server>:<host>:<port>") };
 
 static int xioopen_socks4_connect(
 	int argc,
@@ -55,8 +55,7 @@ static int xioopen_socks4_connect(
    bool dofork = false;
    union sockaddr_union us_sa,  *us = &us_sa;
    socklen_t uslen = sizeof(us_sa);
-   struct addrinfo *themlist, *themp;
-   struct addrinfo **ai_sorted;
+   struct addrinfo **themarr, *themp;
    int i;
    bool needbind = false;
    bool lowport = false;
@@ -103,21 +102,8 @@ static int xioopen_socks4_connect(
 	 _xioopen_ipapp_prepare(opts, &opts0, sockdname, socksport,
 				&pf, ipproto,
 				sfd->para.socket.ip.ai_flags,
-				&themlist, us, &uslen,
+				&themarr, us, &uslen,
 				&needbind, &lowport, socktype);
-
-      /* Count addrinfo entries */
-      themp = themlist;
-      i = 0;
-      while (themp != NULL) {
-	 ++i;
-	 themp = themp->ai_next;
-      }
-      ai_sorted = Calloc((i+1), sizeof(struct addrinfo *));
-      if (ai_sorted == NULL)
-	 return STAT_RETRYLATER;
-      /* Generate a list of addresses sorted by preferred ip version */
-      _xio_sort_ip_addresses(themlist, ai_sorted);
 
       /* we try to resolve the target address _before_ connecting to the socks
 	 server: this avoids unnecessary socks connects and timeouts */
@@ -139,15 +125,15 @@ static int xioopen_socks4_connect(
 	 return result;
       }
 
-      /* loop over themlist */
+      /* loop over themarr */
       i = 0;
-      themp = ai_sorted[i++];
+      themp = themarr[i++];
       while (themp != NULL) {
 	 Notice1("opening connection to %s",
 		 sockaddr_info(themp->ai_addr, themp->ai_addrlen,
 			       infobuff, sizeof(infobuff)));
 #if WITH_RETRY
-	 if (sfd->forever || sfd->retry || ai_sorted[i] != NULL) {
+	 if (sfd->forever || sfd->retry || themarr[i] != NULL) {
 	    level = E_INFO;
 	 } else
 #endif /* WITH_RETRY */
@@ -161,7 +147,7 @@ static int xioopen_socks4_connect(
 			     opts, pf?pf:themp->ai_family, socktype, IPPROTO_TCP, lowport, level);
 	 if (result == STAT_OK)
 	    break;
-	   themp = ai_sorted[i++];
+	   themp = themarr[i++];
 	 if (themp == NULL)
 	    result = STAT_RETRYLATER;
       }
@@ -178,11 +164,10 @@ static int xioopen_socks4_connect(
 	 }
 #endif /* WITH_RETRY */
       default:
-	 free(ai_sorted);
-	 xiofreeaddrinfo(themlist);
+	 xiofreeaddrinfo(themarr);
 	 return result;
       }
-      xiofreeaddrinfo(themlist);
+      xiofreeaddrinfo(themarr);
       applyopts(sfd, -1, opts, PH_ALL);
 
       if ((result = _xio_openlate(sfd, opts)) < 0)
@@ -245,8 +230,31 @@ static int xioopen_socks4_connect(
 }
 
 
-int _xioopen_socks4_prepare(const char *targetport, struct opt *opts, char **socksport, struct socks4 *sockhead, size_t *headlen) {
+int _xioopen_opt_socksport(
+	struct opt *opts,
+	char **socksport)
+{
    struct servent *se;
+
+   if (retropt_string(opts, OPT_SOCKSPORT, socksport) < 0) {
+      if ((se = getservbyname("socks", "tcp")) != NULL) {
+	 Debug1("\"socks/tcp\" resolves to %u", ntohs(se->s_port));
+	 if ((*socksport = Malloc(6)) == NULL) {
+	    return STAT_NORETRY;
+	 }
+	 sprintf(*socksport, "%u", ntohs(se->s_port));
+      } else {
+	 Debug1("cannot resolve service \"socks/tcp\", using %s", SOCKSPORT);
+	 if ((*socksport = strdup(SOCKSPORT)) == NULL) {
+	    return STAT_NORETRY;
+	 }
+      }
+   }
+   return 0;
+}
+
+
+int _xioopen_socks4_prepare(const char *targetport, struct opt *opts, char **socksport, struct socks4 *sockhead, size_t *headlen) {
    char *userid;
 
    /* generate socks header - points to final target */
@@ -254,20 +262,8 @@ int _xioopen_socks4_prepare(const char *targetport, struct opt *opts, char **soc
    sockhead->action  = 1;
    sockhead->port    = parseport(targetport, IPPROTO_TCP);	/* network byte
 								   order */
-
-   if (retropt_string(opts, OPT_SOCKSPORT, socksport) < 0) {
-      if ((se = getservbyname("socks", "tcp")) != NULL) {
-	 Debug1("\"socks/tcp\" resolves to %u", ntohs(se->s_port));
-	 if ((*socksport = Malloc(6)) == NULL) {
-	    return -1;
-	 }
-	 sprintf(*socksport, "%u", ntohs(se->s_port));
-      } else {
-	 Debug1("cannot resolve service \"socks/tcp\", using %s", SOCKSPORT);
-	 if ((*socksport = strdup(SOCKSPORT)) == NULL) {
-	    errno = ENOMEM;  return -1;
-	 }
-      }
+   if (_xioopen_opt_socksport(opts, socksport) < 0) {
+      return STAT_NORETRY;
    }
 
    if (retropt_string(opts, OPT_SOCKSUSER, &userid) < 0) {

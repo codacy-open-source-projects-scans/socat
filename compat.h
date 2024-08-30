@@ -851,6 +851,8 @@ typedef unsigned long T_sigset;
 
 #if !defined(NETDB_INTERNAL) && defined(h_NETDB_INTERNAL)
 #  define NETDB_INTERNAL h_NETDB_INTERNAL
+#elif !defined(NETDB_INTERNAL)
+#  define NETDB_INTERNAL (-1)
 #endif
 
 #ifndef INET_ADDRSTRLEN
