@@ -501,7 +501,7 @@ int xiotermios_spec(int fd, int optcode) {
 #if HAVE_CFMAKERAW
       cfmakeraw(&_xiotermios_data.termarg);
 #else
-      /* these setting follow the Linux documenation of cfmakeraw */
+      /* These settings follow the Linux documentation of cfmakeraw */
       _xiotermios_data.termarg.c_iflag &=
 	 ~(IGNBRK|BRKINT|PARMRK|ISTRIP|INLCR|IGNCR|ICRNL|IXON);
       _xiotermios_data.termarg.c_oflag &= ~(OPOST);

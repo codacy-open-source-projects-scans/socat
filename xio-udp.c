@@ -85,7 +85,7 @@ int _xioopen_ipdgram_listen(struct single *sfd,
        return STAT_NORETRY;
    }
 
-#if WITH_IP4 /*|| WITH_IP6*/
+#if WITH_IP4 || WITH_IP6
    if (retropt_string(opts, OPT_RANGE, &rangename) >= 0) {
       if (xioparserange(rangename, pf, &sfd->para.socket.range,
 			sfd->para.socket.ip.ai_flags)
@@ -277,8 +277,10 @@ int xioopen_ipdgram_listen(
    int pf = addrdesc->arg1;
    int ipproto = addrdesc->arg2;
    union sockaddr_union us;
+   int bind_rc;
    int socktype = SOCK_DGRAM;
    socklen_t uslen;
+   int result;
 
    if (argc != 2) {
       xio_syntax(argv[0], 1, argc-1, addrdesc->syntax);
@@ -295,12 +297,31 @@ int xioopen_ipdgram_listen(
    applyopts(sfd, -1, opts, PH_INIT);
 
    uslen = socket_init(pf, &us);
-   retropt_bind(opts, pf, socktype, ipproto,
+   bind_rc = retropt_bind(opts, pf, socktype, ipproto,
 		(struct sockaddr *)&us, &uslen, 1,
 		xfd->stream.para.socket.ip.ai_flags);
+   if (bind_rc == STAT_NORETRY)
+      return STAT_NORETRY;
+   if (pf == PF_UNSPEC && bind_rc == STAT_OK)
+      pf = us.soa.sa_family;
 
    if (false) {
       ;
+#if WITH_IP4 || WITH_IP6
+   } else if (pf == PF_UNSPEC && bind_rc == STAT_NOACTION) {
+      int ai_flags[2];
+      ai_flags[0] = sfd->para.socket.ip.ai_flags[0];
+      ai_flags[1] = sfd->para.socket.ip.ai_flags[1];
+      if (!(ai_flags[1] & AI_PASSIVE))
+	 ai_flags[0] |= AI_PASSIVE;
+      result =
+	 xioresolve(NULL, portname, pf, socktype, ipproto, &us, &uslen, ai_flags);
+      if (result != STAT_OK) {
+	 Error("error resolving bind option");
+	 return STAT_NORETRY;
+      }
+      pf = us.soa.sa_family;
+#endif /* WITH_IP4 || WITH_IP6*/
 #if WITH_IP4
    } else if (pf == PF_INET) {
       us.ip4.sin_port = parseport(portname, ipproto);
@@ -349,7 +370,7 @@ int xioopen_udp_sendto(
    applies and consumes the following option:
    PH_INIT, PH_PASTSOCKET, PH_FD, PH_PREBIND, PH_BIND, PH_PASTBIND, PH_CONNECTED, PH_LATE
    OFUNC_OFFSET
-   OPT_BIND, OPT_SOURCEPORT, OPT_LOWPORT, OPT_SO_TYPE, OPT_SO_PROTOTYPE, OPT_USER, OPT_GROUP, OPT_CLOEXEC
+   OPT_BIND, OPT_SOURCEPORT, OPT_LOWPORT, OPT_SO_TYPE, OPT_SO_PROTOTYPE, OPT_USER, OPT_GROUP, OPT_O_CLOEXEC
  */
 int _xioopen_udp_sendto(const char *hostname, const char *servname,
 			struct opt *opts,
@@ -529,7 +550,7 @@ int xioopen_udp_recvfrom(
    if (sfd->howtoend == END_UNSPEC)
       sfd->howtoend = END_NONE;
 
-   /* Set AI_PASSIVE, except when it is explicitely disabled */
+   /* Set AI_PASSIVE, except when it is explicitly disabled */
    ai_flags2[0] = xfd->stream.para.socket.ip.ai_flags[0];
    ai_flags2[1] = xfd->stream.para.socket.ip.ai_flags[1];
    if (!(ai_flags2[1] & AI_PASSIVE))
@@ -605,7 +626,7 @@ int xioopen_udp_recv(
    xioinit_ip(&pf, xioparms.default_ip);
    retropt_socket_pf(opts, &pf);
 
-   /* Set AI_PASSIVE, except when it is explicitely disabled */
+   /* Set AI_PASSIVE, except when it is explicitly disabled */
    ai_flags2[0] = xfd->stream.para.socket.ip.ai_flags[0];
    ai_flags2[1] = xfd->stream.para.socket.ip.ai_flags[1];
    if (!(ai_flags2[1] & AI_PASSIVE))
@@ -646,7 +667,7 @@ int xioopen_udp_recv(
    }
 #endif
 
-#if WITH_IP4 /*|| WITH_IP6*/
+#if WITH_IP4 || WITH_IP6
    if (retropt_string(opts, OPT_RANGE, &rangename) >= 0) {
       if (xioparserange(rangename, pf, &xfd->stream.para.socket.range,
 			xfd->stream.para.socket.ip.ai_flags)

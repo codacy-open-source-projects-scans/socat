@@ -1421,11 +1421,11 @@ unsigned int Sleep(unsigned int seconds) {
 #if HAVE_NANOSLEEP
 unsigned int Nanosleep(const struct timespec *req, struct timespec *rem) {
    int retval, _errno;
-   Debug3("nanosleep({"F_time",%ld},%p)", req->tv_sec, req->tv_nsec, rem);
+   Debug3("nanosleep({"F_time".%09ld}, %p)", req->tv_sec, req->tv_nsec, rem);
    retval = nanosleep(req, rem);
    _errno = errno;
    if (rem) {
-      Debug3("nanosleep(,{"F_time",%ld}) -> %d",
+      Debug3("nanosleep(,{"F_time".%09ld}) -> %d",
 	     rem->tv_sec, rem->tv_nsec, retval);
    } else {
       Debug1("nanosleep() -> %d", retval);
@@ -1513,6 +1513,9 @@ void *Malloc(size_t size) {
       Error1("malloc("F_Zd"): out of memory", size);
       return NULL;
    }
+#if WITH_DEVTESTS
+   memset(result, 0x55, size);
+#endif /* WITH_DEVTESTS */
    return result;
 }
 
@@ -1537,6 +1540,18 @@ void *Realloc(void *ptr, size_t size) {
       Error2("realloc(%p, "F_Zd"): out of memory", ptr, size);
       return NULL;
    }
+   return result;
+}
+
+/* Like Realloc(), but gets info about old size for overwrite test */
+void *Realloc3(void *ptr, size_t size, size_t oldsize) {
+   void *result = Realloc(ptr, size);
+   if (result == NULL)
+      return result;
+#if WITH_DEVTESTS
+   if (size > oldsize)
+      memset(result+oldsize, 0x55, size-oldsize);
+#endif /* WITH_DEVTESTS */
    return result;
 }
 

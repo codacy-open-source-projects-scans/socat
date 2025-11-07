@@ -53,7 +53,7 @@ static const char *addressgroupnames[] = {
 
 /* keep consistent with xioopts.h:enum ephase ! */
 static char *optionphasenames[] = {
-	"ALL",		"INIT",		"EARLY",
+	"ALL",		"OFFSET",	"INIT",		"EARLY",
 	"PREOPEN",	"OPEN",		"PASTOPEN",
 	"PRESOCKET",	"SOCKET",	"PASTSOCKET",
 	"PREBIGEN",	"BIGEN",	"PASTBIGEN",
@@ -87,6 +87,8 @@ static int xiohelp_option(FILE *of, const struct optname *on, const char *name) 
    groups = on->desc->group;
    occurred = false;
    chars = 7;
+   if (groups == 0)
+      fputs("(all)", of);
    for (j = 0; j < 8*sizeof(groups_t); ++j) {
       if (groups & 1) {
 	 if (occurred) {
@@ -150,8 +152,9 @@ int xioopenhelp(FILE *of,
 	 i = (40 - chars + 7) / 8;
 	 for (; i > 0; --i) { fputc('\t', of); }
 	 fputs("\tgroups=", of);
-	 groups = an->desc->groups;  occurred = false;
-	 for (j = 0; j < 32; ++j) {
+	 groups = an->desc->groups;
+	 occurred = false;
+	 for (j = 0; j < sizeof(groups_t)*8; ++j) {
 	    if (groups & 1) {
 	       if (occurred) { fputc(',', of); }
 	       fprintf(of, "%s", addressgroupnames[j]);

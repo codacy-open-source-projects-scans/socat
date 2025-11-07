@@ -31,7 +31,7 @@ const struct optdesc opt_o_noinherit = { "o-noinherit", "noinherit", OPT_O_NOINH
 const struct optdesc opt_o_noatime   = { "o-noatime",   "noatime",   OPT_O_NOATIME,   GROUP_OPEN|GROUP_FD, PH_FD, TYPE_BOOL, OFUNC_FCNTL, F_SETFL, O_NOATIME };
 #endif
 /****** for ALL addresses - with fcntl(F_SETFD) ******/
-const struct optdesc opt_cloexec   = { "cloexec",   NULL, OPT_CLOEXEC,   GROUP_FD, PH_LATE, TYPE_BOOL, OFUNC_FCNTL, F_SETFD, FD_CLOEXEC };
+const struct optdesc opt_cloexec     = { "cloexec",     NULL,        OPT_O_CLOEXEC,   GROUP_FD,            PH_LATE, TYPE_BOOL, OFUNC_FCNTL, F_SETFD, FD_CLOEXEC };
 /****** ftruncate() ******/
 /* this record is good for ftruncate() or ftruncate64() if available */
 #if HAVE_FTRUNCATE64

@@ -98,6 +98,10 @@ typedef int sig_atomic_t;
 #  define SOL_IPV6 IPPROTO_IPV6
 #endif
 
+#ifndef EAI_NODATA
+#  define EAI_NODATA 7 	/* for old FreeBSD */
+#endif
+
 #define F_uint8_t "%hu"
 #define F_uint8_x "%02hx"
 #define F_int8_t  "%hd"

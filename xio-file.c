@@ -20,7 +20,7 @@ static int xioopen_open(int argc, const char *argv[], struct opt *opts, int xiof
 const struct optdesc opt_o_rdonly    = { "o-rdonly",    "rdonly", OPT_O_RDONLY,    GROUP_OPEN, PH_OPEN, TYPE_BOOL, OFUNC_FLAG_PATTERN, O_RDONLY, O_ACCMODE };
 const struct optdesc opt_o_wronly    = { "o-wronly",    "wronly", OPT_O_WRONLY,    GROUP_OPEN, PH_OPEN, TYPE_BOOL, OFUNC_FLAG_PATTERN, O_WRONLY, O_ACCMODE };
 const struct optdesc opt_o_rdwr      = { "o-rdwr",      "rdwr",   OPT_O_RDWR,      GROUP_OPEN, PH_OPEN, TYPE_BOOL, OFUNC_FLAG_PATTERN, O_RDWR,   O_ACCMODE };
-const struct optdesc opt_o_create    = { "o-create",    "creat",  OPT_O_CREATE,    GROUP_OPEN, PH_OPEN, TYPE_BOOL, OFUNC_FLAG, O_CREAT };
+const struct optdesc opt_o_creat     = { "o-creat",     "creat",  OPT_O_CREAT,     GROUP_OPEN, PH_OPEN, TYPE_BOOL, OFUNC_FLAG, O_CREAT };
 const struct optdesc opt_o_excl      = { "o-excl",      "excl",   OPT_O_EXCL,      GROUP_OPEN, PH_OPEN, TYPE_BOOL, OFUNC_FLAG, O_EXCL };
 const struct optdesc opt_o_noctty    = { "o-noctty",    "noctty", OPT_O_NOCTTY,    GROUP_OPEN, PH_OPEN, TYPE_BOOL, OFUNC_FLAG, O_NOCTTY };
 #ifdef O_SYNC

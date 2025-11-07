@@ -49,6 +49,7 @@ extern const struct optdesc opt_res_nsaddr;
 
 extern int xioinit_ip(int *pf, char ipv);
 
+extern int retropt_bind_ip(struct opt *opts, int af, int socktype, int ipproto, struct addrinfo ***bindlist, int feats, const int ai_flags[2]);
 extern int xiogetaddrinfo(const char *node, const char *service, int family, int socktype, int protocol, struct addrinfo ***ai_sorted, const int ai_flags[2]);
 extern void xiofreeaddrinfo(struct addrinfo **ai_sorted);
 extern int _xio_sort_ip_addresses(struct addrinfo *themlist, struct addrinfo **ai_sorted);

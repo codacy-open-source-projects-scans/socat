@@ -15,7 +15,7 @@
 
 #if WITH_UNIX
 
-/* to avoid unneccessary runtime if () conditionals when no abstract support is
+/* To avoid unnecessary runtime if () conditionals when no abstract support is
    compiled in (or at least to give optimizing compilers a good chance) we need
    a constant that can be used in C expressions */
 #if WITH_ABSTRACT_UNIXSOCKET
@@ -33,7 +33,7 @@ static int xioopen_unix_client(int argc, const char *argv[], struct opt *opts, i
 
 /* the first free parameter is 0 for "normal" unix domain sockets, or 1 for
    abstract unix sockets (Linux); the second and third free parameter are
-   unsused */
+   unused */
 const struct addrdesc xioaddr_unix_connect = { "UNIX-CONNECT",  1+XIO_RDWR,   xioopen_unix_connect,  GROUP_FD|GROUP_NAMED|GROUP_SOCKET|GROUP_SOCK_UNIX|GROUP_RETRY,                          0, 0, 0 HELP(":<filename>") };
 #if WITH_LISTEN
 const struct addrdesc xioaddr_unix_listen  = { "UNIX-LISTEN",   1+XIO_RDWR,   xioopen_unix_listen,   GROUP_FD|GROUP_NAMED|GROUP_SOCKET|GROUP_SOCK_UNIX|GROUP_LISTEN|GROUP_CHILD|GROUP_RETRY, 0, 0, 0 HELP(":<filename>") };
@@ -123,6 +123,7 @@ static int xioopen_unix_listen(
    /* we expect the form: filename */
    const char *name;
    xiosingle_t *sfd = &xxfd->stream;
+   char *bindstring = NULL;
    int pf = PF_UNIX;
    int socktype = SOCK_STREAM;
    int protocol = 0;
@@ -139,6 +140,12 @@ static int xioopen_unix_listen(
       return STAT_NORETRY;
    }
    name = argv[1];
+
+   if (retropt_string(opts, OPT_BIND, &bindstring) == 0) {
+      Error2("%s:%s: binds implicitly, bind option not allowed",
+	     addrdesc->defname, argv[1]);
+      free(bindstring);
+   }
 
    sfd->para.socket.un.tight = UNIX_TIGHTSOCKLEN;
    retropt_socket_pf(opts, &pf);
@@ -257,7 +264,12 @@ static int xioopen_unix_connect(
 
    if (retropt_bind(opts, pf, socktype, protocol, (struct sockaddr *)&us, &uslen,
 		    (addrdesc->arg1/*abstract*/<<1)|sfd->para.socket.un.tight,
-		    sfd->para.socket.ip.ai_flags)
+#if WITH_TCP
+		    sfd->para.socket.ip.ai_flags
+#else
+		    0
+#endif /* WITH_TCP */
+)
       == STAT_OK) {
       needbind = true;
    }
@@ -426,7 +438,12 @@ static int xioopen_unix_sendto(
 
    if (retropt_bind(opts, pf, socktype, protocol, (struct sockaddr *)&us, &uslen,
 		    (addrdesc->arg1/*abstract*/<<1)| sfd->para.socket.un.tight,
-		    sfd->para.socket.ip.ai_flags)
+#if WITH_TCP
+		    sfd->para.socket.ip.ai_flags
+#else
+		    0
+#endif /* WITH_TCP */
+		    )
        == STAT_OK) {
       needbind = true;
    }
@@ -665,7 +682,7 @@ static int xioopen_unix_client(
    PH_CONNECTED, PH_LATE, ?PH_CONNECT
    OFUNC_OFFSET,
    OPT_PROTOCOL_FAMILY, OPT_UNIX_TIGHTSOCKLEN, OPT_UNLINK_CLOSE, OPT_BIND,
-   OPT_SO_TYPE, OPT_SO_PROTOTYPE, OPT_CLOEXEC, OPT_USER, OPT_GROUP, ?OPT_FORK,
+   OPT_SO_TYPE, OPT_SO_PROTOTYPE, OPT_O_CLOEXEC, OPT_USER, OPT_GROUP, ?OPT_FORK,
 */
 int
 _xioopen_unix_client(
@@ -709,7 +726,12 @@ _xioopen_unix_client(
 
    if (retropt_bind(opts, pf, socktype, protocol, &us.soa, &uslen,
 		    (abstract<<1)|sfd->para.socket.un.tight,
-		    sfd->para.socket.ip.ai_flags)
+#if WITH_TCP
+		    sfd->para.socket.ip.ai_flags
+#else
+		    0
+#endif /* WITH_TCP */
+		    )
        != STAT_NOACTION) {
       needbind = true;
    }
@@ -773,7 +795,7 @@ _xioopen_unix_client(
 			    opts, pf, SOCK_SEQPACKET, protocol,
 			    needtemp, E_INFO)) == 0)
 	 break;
-      if (errno != EPROTOTYPE && errno != EPROTONOSUPPORT/*AIX*/
+      if (errno != EPROTOTYPE && errno != EPROTONOSUPPORT/*AIX*/ && errno != ESOCKTNOSUPPORT/*Debian3*/
 #if WITH_ABSTRACT_UNIXSOCKET
 	  && !(abstract && errno == ECONNREFUSED)
 #endif

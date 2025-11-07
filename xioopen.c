@@ -177,11 +177,13 @@ const struct addrname addressnames[] = {
    { "PIPE",			&xioaddr_pipe },
 #endif
 #if WITH_POSIXMQ
+   { "POSIXMQ", 		&xioaddr_posixmq_bidir },
    { "POSIXMQ-BIDIRECTIONAL", 	&xioaddr_posixmq_bidir },
    { "POSIXMQ-READ", 		&xioaddr_posixmq_read },
    { "POSIXMQ-RECEIVE", 	&xioaddr_posixmq_receive },
    { "POSIXMQ-RECV", 		&xioaddr_posixmq_receive },
    { "POSIXMQ-SEND", 		&xioaddr_posixmq_send },
+   { "POSIXMQ-WRITE", 		&xioaddr_posixmq_write },
 #endif
 #if WITH_PROXY
    { "PROXY",			&xioaddr_proxy_connect },
@@ -471,14 +473,14 @@ static xiofile_t *xioallocfd(void) {
    fd->stream.escape	= -1;
 /* fd->stream.para.exec.pid = 0; */
    fd->stream.lineterm  = LINETERM_RAW;
-#if WITH_RESOLVE
+#if ( _WITH_IP4 || _WITH_IP6 ) && WITH_RESOLVE
 #if HAVE_RES_RETRANS
    fd->stream.para.socket.ip.res.retrans = -1;
 #endif
 #if HAVE_RES_RETRY
    fd->stream.para.socket.ip.res.retry   = -1;
 #endif
-#endif /* WITH_RESOLVE */
+#endif /* ( _WITH_IP4 || _WITH_IP6 ) && WITH_RESOLVE */
    return fd;
 }
 
@@ -701,10 +703,10 @@ int xioopen_single(xiofile_t *xfd, int xioflags) {
    mode_t orig_umask, tmp_umask;
    int result;
    /* Values to be saved until xioopen() is finished */
-#if WITH_RESOLVE && HAVE_RESOLV_H
+#if ( _WITH_IP4 || _WITH_IP6 ) && WITH_RESOLVE && HAVE_RESOLV_H
    int do_res;
    struct __res_state save_res;
-#endif /* WITH_RESOLVE && HAVE_RESOLV_H */
+#endif
 #if WITH_NAMESPACES
    int save_netfd = -1;
 #endif
@@ -730,15 +732,15 @@ int xioopen_single(xiofile_t *xfd, int xioflags) {
    if (applyopts_single(sfd, sfd->opts, PH_OFFSET) < 0)
       return -1;
 
-#if WITH_NAMESPACES
+#if WITH_NAMESPACES 	/* netns */
    if ((save_netfd = xio_apply_namespace(sfd->opts)) < 0)
       return -1;
 #endif /* WITH_NAMESPACES */
 
-#if WITH_RESOLVE && HAVE_RESOLV_H
+#if ( _WITH_IP4 || _WITH_IP6 ) && WITH_RESOLVE && HAVE_RESOLV_H
    if ((do_res = xio_res_init(sfd, &save_res)) < 0)
       return STAT_NORETRY;
-#endif /* WITH_RESOLVE && HAVE_RESOLV_H */
+#endif
 
    if (xio_chdir(sfd->opts, &orig_dir) < 0)
       return STAT_NORETRY;
@@ -769,10 +771,10 @@ int xioopen_single(xiofile_t *xfd, int xioflags) {
       free(orig_dir);
    }
 
-#if WITH_RESOLVE && HAVE_RESOLV_H
+#if ( _WITH_IP4 || _WITH_IP6 ) && WITH_RESOLVE && HAVE_RESOLV_H
    if (do_res)
       xio_res_restore(&save_res);
-#endif /* WITH_RESOLVE && HAVE_RESOLV_H */
+#endif
 
 #if WITH_NAMESPACES
    if (save_netfd > 0) {

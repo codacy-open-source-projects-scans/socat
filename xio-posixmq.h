@@ -9,8 +9,12 @@ extern const struct addrdesc xioaddr_posixmq_bidir;
 extern const struct addrdesc xioaddr_posixmq_read;
 extern const struct addrdesc xioaddr_posixmq_receive;
 extern const struct addrdesc xioaddr_posixmq_send;
+extern const struct addrdesc xioaddr_posixmq_write;
 
+extern const struct optdesc opt_posixmq_maxmsg;
+extern const struct optdesc opt_posixmq_msgsize;
 extern const struct optdesc opt_posixmq_priority;
+extern const struct optdesc opt_posixmq_flush;
 
 extern ssize_t xioread_posixmq(struct single *file, void *buff, size_t bufsiz);
 extern ssize_t xiopending_posixmq(struct single *pipe);

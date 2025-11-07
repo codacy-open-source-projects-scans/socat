@@ -80,7 +80,7 @@ SHFILES = socat-chain.sh socat-mux.sh socat-broker.sh \
 	daemon.sh mail.sh ftp.sh readline.sh \
 	socat_buildscript_for_android.sh
 TESTFILES = test.sh socks4echo.sh proxyecho.sh readline-test.sh \
-	proxy.sh socks4a-echo.sh
+	proxy.sh socks4a-echo.sh socks5server-echo.sh
 
 all: progs doc
 

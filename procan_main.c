@@ -13,6 +13,9 @@ const char copyright[] = "procan by Gerhard Rieger and contributors - send bug r
 #if HAVE_SYS_SELECT_H
 #include <sys/select.h>	/* select(), fdset on FreeBSD */
 #endif
+#if HAVE_SYS_UTSNAME_H
+#include <sys/utsname.h>	/* uname(), struct utsname */
+#endif
 #include "mytypes.h"
 #include "error.h"
 #include "procan.h"
@@ -22,6 +25,13 @@ const char copyright[] = "procan by Gerhard Rieger and contributors - send bug r
 #define WITH_HELP 1
 
 static void procan_usage(FILE *fd);
+static void procan_version(FILE *fd);
+
+const char copyright_procan[] = "procan by Gerhard Rieger and contributors - see www.dest-unreach.org";
+static const char procanversion[] =
+#include "./VERSION"
+      ;
+static const char timestamp[] = BUILD_DATE;
 
 
 int main(int argc, const char *argv[]) {
@@ -39,8 +49,8 @@ int main(int argc, const char *argv[]) {
       case '?': case 'h': procan_usage(stdout); exit(0);
 #endif /* WITH_HELP */
       case 'c': procan_cdefs(stdout); exit(0);
-#if LATER
       case 'V': procan_version(stdout); exit(0);
+#if LATER
       case 'l': diag_set(arg1[0][2], &arg1[0][3]); break;
       case 'd': diag_set('d', NULL); break;
 #endif
@@ -80,9 +90,7 @@ static void procan_usage(FILE *fd) {
    fputs("Usage:\n", fd);
    fputs("procan [options]\n", fd);
    fputs("   options:\n", fd);
-#if LATER
    fputs("      -V     print version information to stdout, and exit\n", fd);
-#endif
 #if WITH_HELP
    fputs("      -?|-h  print a help text describing command line options\n", fd);
 #endif
@@ -100,3 +108,17 @@ static void procan_usage(FILE *fd) {
 #endif
 }
 #endif /* WITH_HELP */
+
+
+void procan_version(
+	FILE *fd)
+{
+   struct utsname ubuf;
+
+   fputs(copyright_procan, fd); fputc('\n', fd);
+   fprintf(fd, "procan version %s on %s\n", procanversion, timestamp);
+   uname(&ubuf);
+   fprintf(fd, "   running on %s version %s, release %s, machine %s\n",
+	   ubuf.sysname, ubuf.version, ubuf.release, ubuf.machine);
+   return;
+}

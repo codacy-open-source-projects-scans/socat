@@ -81,7 +81,7 @@ static int xioopen_shell(
 		Setenv("SHELL", shellpath, 1);
 
 		Info1("executing shell command \"%s\"", string);
-		Debug3("execl(\"%s\", \"%s\", \"-c\", \"%s\", NULL",
+		Debug3("execl(\"%s\", \"%s\", \"-c\", \"%s\", NULL)",
 		       shellpath, shellname, string);
 		result = execl(shellpath, shellname, "-c", string, (char *)NULL);
 		if (result != 0) {

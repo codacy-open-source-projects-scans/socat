@@ -29,7 +29,7 @@ initializes things so after a fork, the child must reinitialize.  When the
 ssl code detects a forks occur and if FIPS mode was enabled, it reinitializes 
 FIPS by disabling and then enabling it again.
 
-To produce Davids enviroment, do the following:
+To produce Davids environment, do the following:
 To build openssl
 download  OpenSSL 0.9.7j-fips-dev from
 http://www.openssl.org/source/OpenSSL-fips-1.0.tar.gz

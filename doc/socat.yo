@@ -313,6 +313,7 @@ label(ADDRESS_CREAT)dit(bf(tt(CREATE:<filename>)))
    if <filename> refers to a socket, this is an error.nl() 
    Option groups: link(FD)(GROUP_FD),link(REG)(GROUP_REG),link(NAMED)(GROUP_NAMED) nl()
    Useful options:
+   link(mode)(OPTION_UMASK),
    link(mode)(OPTION_MODE),
    link(user)(OPTION_USER),
    link(group)(OPTION_GROUP),
@@ -332,7 +333,7 @@ label(ADDRESS_DCCP_CONNECT)dit(bf(tt(DCCP-CONNECT:<host>:<port>)) (bf(tt(DCCP:<h
    link(connect-timeout)(OPTION_CONNECT_TIMEOUT),
    link(tos)(OPTION_TOS),
    link(dccp-set-ccid)(OPTION_DCCP_SET_CCID),
-   link(nonblock)(OPTION_NONBLOCK),
+   link(nonblock)(OPTION_O_NONBLOCK),
    link(sourceport)(OPTION_SOURCEPORT),
    link(retry)(OPTION_RETRY),
    link(readbytes)(OPTION_READBYTES)nl()
@@ -583,7 +584,7 @@ label(ADDRESS_OPEN)dit(bf(tt(OPEN:<filename>)))
    Option groups: link(FD)(GROUP_FD),link(REG)(GROUP_REG),link(NAMED)(GROUP_NAMED),link(OPEN)(GROUP_OPEN) nl()
    Useful options:
    link(creat)(OPTION_O_CREAT),
-   link(excl)(OPTION_EXCL),
+   link(excl)(OPTION_O_EXCL),
    link(noatime)(OPTION_O_NOATIME),
    link(nofollow)(OPTION_NOFOLLOW),
    link(append)(OPTION_APPEND),
@@ -747,7 +748,7 @@ label(ADDRESS_NAMED_PIPE)dit(bf(tt(PIPE:<filename>)))
    Option groups: link(FD)(GROUP_FD),link(NAMED)(GROUP_NAMED),link(OPEN)(GROUP_OPEN) nl()
    Useful options:
    link(rdonly)(OPTION_RDONLY),
-   link(nonblock)(OPTION_NONBLOCK),
+   link(nonblock)(OPTION_O_NONBLOCK),
    link(group)(OPTION_GROUP),
    link(user)(OPTION_USER),
    link(mode)(OPTION_MODE),
@@ -773,50 +774,65 @@ label(ADDRESS_SOCKETPAIR)dit(bf(tt(SOCKETPAIR)))
    See also: link(unnamed pipe)(ADDRESS_UNNAMED_PIPE)
 
 label(ADDRESS_POSIXMQ_READ)dit(bf(tt(POSIXMQ-READ:/<mqueue>)))
-   Opens the specified POSIX message queue and reads messages (packets). It
-   keeps the boundaries.nl()
+   Opens or creates the specified POSIX message queue and reads messages
+   (packets). It keeps the packet boundaries.nl()
    This is a read-only address, see options link(-u)(option_u) and
    link(-U)(option_U) and link(dual addresses)(ADDRESS_DUAL).nl()
    Socat() provides this address type only on Linux because POSIX MQ is based
    on UNIX filedescriptors there.nl()
-   This feature is new in version 1.8.0.0 and might change in the future,
-   therefore it is link(experimental)(option_experimental).nl()
    Useful options:
    link(posixmq-priority)(OPTION_POSIXMQ_PRIORITY),
    link(unlink-early)(OPTION_UNLINK_EARLY),
-   link(unlink-close)(OPTION_UNLINK_CLOSE)
+   link(unlink-close)(OPTION_UNLINK_CLOSE),
+   link(o-nonblock)(OPTION_O_NONBLOCK),
+   link(o-creat)(OPTION_O_CREAT),
+   link(o-excl)(OPTION_O_EXCL),
+   link(umask)(OPTION_UMASK)
 
 label(ADDRESS_POSIXMQ_RECEIVE)dit(bf(tt(POSIXMQ-RECEIVE:/<mqueue>)))
 dit(bf(tt(POSIXMQ-RECV:/<mqueue>)))
-   Opens the specified POSIX message queue and reads one message (packet).nl()
+   Opens or creates the specified POSIX message queue and reads one message
+   (packet).nl()
    This is a read-only address. See link(POSIXMQ-READ)(ADDRESS_POSIXMQ_READ)
    for more info.nl()
    Example: link(POSIX MQ recv with fork)(EXAMPLE_POSIXMQ_RECV_FORK)nl()
-   This feature is link(experimental)(option_experimental).nl()
    Useful options:
    link(posixmq-priority)(OPTION_POSIXMQ_PRIORITY),
    link(fork)(OPTION_FORK),
    link(max-children)(OPTION_MAX_CHILDREN),
    link(unlink-early)(OPTION_UNLINK_EARLY),
-   link(unlink-close)(OPTION_UNLINK_CLOSE)
+   link(unlink-close)(OPTION_UNLINK_CLOSE),
+   link(o-creat)(OPTION_O_CREAT),
+   link(o-excl)(OPTION_O_EXCL),
+   link(umask)(OPTION_UMASK)
 
 label(ADDRESS_POSIXMQ_SEND)dit(bf(tt(POSIXMQ-SEND:/<mqueue>)))
-   Opens the specified POSIX message queue and writes messages (packets).nl()
+   Opens or creates the specified POSIX message queue and writes messages
+   (packets).nl()
    This is a write-only address. See link(POSIXMQ-READ)(ADDRESS_POSIXMQ_READ)
    for more info.nl()
    (link(Example)(EXAMPLE_POSIXMQ_SEND))nl()
-   This feature is link(experimental)(option_experimental).nl()
    Useful options:
    link(posixmq-priority)(OPTION_POSIXMQ_PRIORITY),
+   link(posixmq-flush)(OPTION_POSIXMQ_FLUSH),
    link(fork)(OPTION_FORK),
    link(max-children)(OPTION_MAX_CHILDREN),
    link(unlink-early)(OPTION_UNLINK_EARLY),
-   link(unlink-close)(OPTION_UNLINK_CLOSE)
+   link(unlink-close)(OPTION_UNLINK_CLOSE),
+   link(o-creat)(OPTION_O_CREAT),
+   link(o-excl)(OPTION_O_EXCL),
+   link(umask)(OPTION_UMASK)
+
+label(ADDRESS_POSIXMQ_WRITE)dit(bf(tt(POSIXMQ-WRITE:/<mqueue>)))
+   Does the same as link(POSIXMQ-SEND)(ADDRESS_POSIXMQ_SEND).
 
 label(ADDRESS_POSIXMQ_BIDIRECTIONAL)dit(bf(tt(POSIXMQ-BIDIRECTIONAL:/mqueue)))
-   Opens the specified POSIX message queue and writes and reads messages
-   (packet). This is probably rarely useful but has been implemented for
-   functional completeness.
+dit(bf(tt(POSIXMQ:/mqueue)))
+   Opens or creates the specified POSIX message queue in read and/or write mode
+   depending on context, then reads and/or writes messages (packets).
+   In bidirectional mode this is just another echo service.nl()
+   See link(POSIXMQ-READ)(ADDRESS_POSIXMQ_READ) and
+   link(POSIXMQ-SEND)(ADDRESS_POSIXMQ_SEND) for more info.
 
 label(ADDRESS_PROXY_CONNECT)dit(bf(tt(PROXY:<proxy>:<hostname>:<port>)))
    Connects to an HTTP proxy server on port 8080 using TCP/IP  version 4 or 6
@@ -882,7 +898,7 @@ label(ADDRESS_SCTP_CONNECT)dit(bf(tt(SCTP-CONNECT:<host>:<port>)))
    link(mtudiscover)(OPTION_MTUDISCOVER),
    link(sctp-maxseg)(OPTION_SCTP_MAXSEG),
    link(sctp-nodelay)(OPTION_SCTP_NODELAY),
-   link(nonblock)(OPTION_NONBLOCK),
+   link(nonblock)(OPTION_O_NONBLOCK),
    link(sourceport)(OPTION_SOURCEPORT),
    link(retry)(OPTION_RETRY),
    link(readbytes)(OPTION_READBYTES)nl()
@@ -1103,11 +1119,11 @@ label(ADDRESS_SOCKS4A)dit(bf(tt(SOCKS4A:<socks-server>:<host>:<port>)))
    Option groups: link(FD)(GROUP_FD),link(SOCKET)(GROUP_SOCKET),link(IP4)(GROUP_IP4),link(IP6)(GROUP_IP6),link(TCP)(GROUP_TCP),link(SOCKS4)(GROUP_SOCKS),link(RETRY)(GROUP_RETRY) nl()
 
 label(ADDRESS_SOCKS5_CONNECT)dit(bf(tt(SOCKS5-CONNECT:<socks-server>:<socks-port>:<target-host>:<target-port>)))
+dit(bf(tt(SOCKS5-CONNECT:<socks-server>:<target-host>:<target-port>)))
    Connects via <socks-server> [link(IP address)(TYPE_IP_ADDRESS)]
    to <target-host> [link(IPv4 address)(TYPE_IPV4_ADDRESS)]
    on <target-port> [link(TCP service)(TYPE_TCP_SERVICE)],
    using socks version 5 protocol over TCP. Currently no authentication mechanism is provided.nl()
-   This address type is experimental.nl()
    Option groups: link(FD)(GROUP_FD), link(SOCKET)(GROUP_SOCKET), link(IP4)(GROUP_IP4), link(IP6)(GROUP_IP6), link(TCP)(GROUP_TCP), link(CHILD)(GROUP_CHILD), link(RETRY)(GROUP_RETRY)nl()
    Useful options:
    link(socksport)(OPTION_SOCKSPORT),
@@ -1122,10 +1138,11 @@ label(ADDRESS_SOCKS5_CONNECT)dit(bf(tt(SOCKS5-CONNECT:<socks-server>:<socks-port
    link(TCP)(ADDRESS_TCP_CONNECT)
 
 label(ADDRESS_SOCKS5_LISTEN)dit(bf(tt(SOCKS5-LISTEN:<socks-server>:<socks-port>:<listen-host>:<listen-port>)))
+dit(bf(tt(SOCKS5-LISTEN:<socks-server>:<listen-host>:<listen-port>)))
    Connects to <socks-server> [link(IP address)(TYPE_IP_ADDRESS)]
    using socks version 5 protocol over TCP
    and makes it listen for incoming connections on <listen-port> [link(TCP service)(TYPE_TCP_SERVICE)], binding to <-listen-host> [link(IPv4 address)(TYPE_IPV4_ADDRESS)]
-   Currently not authentication mechanism is provided. This address type is experimental.
+   Currently not authentication mechanism is provided.nl()
    Option groups: link(FD)(GROUP_FD), link(SOCKET)(GROUP_SOCKET), link(IP4)(GROUP_IP4), link(IP6)(GROUP_IP6), link(TCP)(GROUP_TCP), link(CHILD)(GROUP_CHILD), link(RETRY)(GROUP_RETRY)nl()
    Useful options:
    link(sourceport)(OPTION_SOURCEPORT),
@@ -1233,7 +1250,7 @@ label(ADDRESS_TCP_CONNECT)dit(bf(tt(TCP:<host>:<port>)))
    link(mtudiscover)(OPTION_MTUDISCOVER),
    link(mss)(OPTION_MSS),
    link(nodelay)(OPTION_TCP_NODELAY),
-   link(nonblock)(OPTION_NONBLOCK),
+   link(nonblock)(OPTION_O_NONBLOCK),
    link(readbytes)(OPTION_READBYTES)nl()
    See also:
    link(TCP4)(ADDRESS_TCP4_CONNECT),
@@ -1290,7 +1307,7 @@ label(ADDRESS_TCP6_LISTEN)dit(bf(tt(TCP6-LISTEN:<port>)))
    link(ipv6only)(OPTION_IPV6_V6ONLY)nl()
    Option groups: link(FD)(GROUP_FD),link(SOCKET)(GROUP_SOCKET),link(LISTEN)(GROUP_LISTEN),link(CHILD)(GROUP_CHILD),link(RANGE)(GROUP_RANGE),link(IP6)(GROUP_IP6),link(TCP)(GROUP_TCP),link(RETRY)(GROUP_RETRY) nl()
 label(ADDRESS_TUN)dit(bf(tt(TUN[:<if-addr>/<bits>])))
-   Creates a Linux TUN/TAP device and optionally assignes it the address and
+   Creates a Linux TUN/TAP device and optionally assigns it the address and
    netmask given by the parameters. The resulting network interface is almost
    ready for use by other processes; socat serves its "wire side". This address
    requires read and write access to the tunnel cloning device, usually
@@ -1418,7 +1435,8 @@ label(ADDRESS_UDP_SENDTO)dit(bf(tt(UDP-SENDTO:<host>:<port>)))
    link(pf)(OPTION_PROTOCOL_FAMILY). It sends packets to and receives packets
    from that peer socket only.  
    This address effectively implements a datagram client.
-   It works well with socat UDP-RECVFROM and UDP-RECV address peers.nl()
+   It works well with socat UDP-RECVFROM and UDP-RECV address peers.
+   When the peer might send data first, link(UDP-DATAGRAM)(ADDRESS_UDP_DATAGRAM) is preferable.nl()
    Option groups: link(FD)(GROUP_FD),link(SOCKET)(GROUP_SOCKET),link(IP4)(GROUP_IP4),link(IP6)(GROUP_IP6) nl()
    Useful options:
    link(ttl)(OPTION_TTL),
@@ -1456,7 +1474,8 @@ label(ADDRESS_UDP_RECVFROM)dit(bf(tt(UDP-RECVFROM:<port>)))
    label(NOTE_RECVFROM)Note: When the second address fails before entering the transfer loop the
    packet is dropped. Use option link(retry)(OPTION_RETRY) or
    link(forever)(OPTION_FOREVER) on the second address to avoid data loss.
-   nl()
+   When you know the peer address, link(UDP-DATAGRAM)(ADDRESS_UDP_DATAGRAM) is
+   preferable.nl()
    Option groups: link(FD)(GROUP_FD),link(SOCKET)(GROUP_SOCKET),link(IP4)(GROUP_IP4),link(IP6)(GROUP_IP6),link(CHILD)(GROUP_CHILD),link(RANGE)(GROUP_RANGE) nl()
    Useful options:
    link(fork)(OPTION_FORK),
@@ -1839,8 +1858,10 @@ label(OPTION_MODE)dit(bf(tt(mode=<mode>)))
    system calls, socat() uses the code(chmod()) system call after opening the
    filesystem entry or binding to the unixdomain() socket (race condition!).
    Otherwise, socat() sets the mode of the stream
-   using code(fchmod()). 
-   These calls might require ownership or root privilege.
+   using code(fchmod()) which, btw, might not have any effect.nl()
+   These calls might require ownership or root privilege.nl()
+   Note: this option can only tighten the permissions implied by processes
+   umask. See option link(umask)(OPTION_UMASK) to loosen permissions.
 label(OPTION_PERM_LATE)dit(bf(tt(perm-late=<mode>)))
    Sets the permissions of the fd to value <mode>
    [link(mode_t)(TYPE_MODE_T)] using the code(fchmod()) system call after
@@ -1852,7 +1873,7 @@ label(OPTION_APPEND)dit(bf(tt(append[=<bool>])))
    socat() uses the code(O_APPEND) flag with the code(open()) system call
    (link(example)(EXAMPLE_OPTION_APPEND)).
    Otherwise, socat() applies the code(fcntl(fd, F_SETFL, O_APPEND)) call.
-label(OPTION_NONBLOCK)dit(bf(tt(nonblock[=<bool>])))
+label(OPTION_O_NONBLOCK)dit(bf(tt(nonblock[=<bool>])))
    Tries to open or use file in nonblocking mode. Its only effects are that the
    code(connect()) call of TCP addresses does not block, and that opening a
    named pipe for reading does not block.
@@ -1987,13 +2008,13 @@ E.g., option `creat' sets the code(O_CREAT) flag. When the used address does
 not use code(open()) (e.g.STDIO), the code(fcntl(..., F_SETFL, ...)) call is
 used instead.nl()
 See also options link(append)(OPTION_APPEND) and
-link(nonblock)(OPTION_NONBLOCK).
+link(nonblock)(OPTION_O_NONBLOCK).
 startdit()
 label(OPTION_O_CREAT)dit(bf(tt(creat[=<bool>])))
    Creates the file if it does not exist (link(example)(EXAMPLE_OPTION_CREAT)).
 label(OPTION_DSYNC)dit(bf(tt(dsync[=<bool>])))
    Blocks code(write()) calls until metainfo is physically written to media.
-label(OPTION_EXCL)dit(bf(tt(excl[=<bool>])))
+label(OPTION_O_EXCL)dit(bf(tt(excl[=<bool>])))
    With option creat, if file exists this is an error.
 label(OPTION_LARGEFILE)dit(bf(tt(largefile[=<bool>])))
    On 32 bit systems, allows a file larger than 2^31 bytes.
@@ -2108,8 +2129,9 @@ label(OPTION_CHDIR)dit(bf(tt(chdir=<filename>))) dit(bf(tt(cd=<filename>)))
 label(OPTION_UMASK)dit(bf(tt(umask=<mode>)))
    Sets the umask of the process to <mode> [link(mode_t)(TYPE_MODE_T)] before
    opening the address. Useful when file system entries are created or a shell
-   or program is invoked. Usually the value is specified as octal number.nl()
-   The processes tt(umask) value is inherited by child processes.
+   or program is invoked. Usually the value is specified as octal number with
+   leading '0'.nl()
+   The processes tt(umask) value is inherited by child processes.nl()
    Note: umask is an inverted value: creating a file with umask=0026 results in
    permissions 0640.
 enddit()
@@ -2136,7 +2158,7 @@ label(OPTION_SETGID)dit(bf(tt(setgid=<group>)))
    processing the address. This call might require root privilege. Please note
    that this option does not drop other group related privileges.
 label(OPTION_SETGID_EARLY)dit(bf(tt(setgid-early=<group>)))
-   Like link(setgit)(OPTION_SETGID) but is performed before opening the address.
+   Like link(setgid)(OPTION_SETGID) but is performed before opening the address.
 label(OPTION_SETUID)dit(bf(tt(setuid=<user>)))
    Changes the link(<user>)(TYPE_USER) (owner) of the process after processing
    the address. This call might require root privilege. Please note that this
@@ -2164,9 +2186,9 @@ label(OPTION_SETSID)dit(bf(tt(setsid)))
    Makes the process the leader of a new session (link(example)(EXAMPLE_OPTION_SETSID)).
 label(OPTION_NETNS)dit(bf(tt(netns=<net-namespace-name>)))
    Before opening the address it tries to switch to the named network namespace.
-   After opening the address it switches back to the previous namespace.
-   (link(Example with TCP forwarder)(EXAMPLE_OPTION_NETNS),
-   link(example with virtual network connection)(EXAMPLE_TUN_NETNS).nl()
+   After opening the address it switches back to the previous namespace
+   (link(example with TCP forwarder)(EXAMPLE_OPTION_NETNS),
+   link(example with virtual network connection)(EXAMPLE_TUN_NETNS)).nl()
    Only on Linux; requires root; use option tt(--experimental).nl()
 enddit()
 
@@ -2189,7 +2211,7 @@ label(OPTION_NOECHO)dit(bf(tt(noecho=<pattern>)))
    Specifies a regular pattern for a prompt that prevents the following input
    line from being displayed on the screen and from being added to the history.
    The prompt is defined as the text that was output to the readline address 
-   after the lastest newline character and before an input character was
+   after the last newline character and before an input character was
    typed. The pattern is a regular expression, e.g.
    "^[Pp]assword:.*$" or "([Uu]ser:|[Pp]assword:)". See NOEXPAND(regex(7)) for details.
    (link(example)(EXAMPLE_OPTION_NOECHO))
@@ -2368,7 +2390,7 @@ COMMENT(label(OPTION_SECURITYENCRYPTIONNETWORK)dit(bf(tt(securityencryptionnetwo
 COMMENT(label(OPTION_SECURITYENCRYPTIONTRANSPORT)dit(bf(tt(securityencryptiontransport)))
    Set the code(SO_SECURITY_ENCRYPTION_TRANSPORT) socket option.)
 COMMENT(label(OPTION_SIOCSPGRP)dit(bf(tt(siocspgrp=<pid_t>)))
-   Set the SIOCSPGRP with code(ioclt()) to enable SIGIO.)
+   Set the SIOCSPGRP with code(ioctl()) to enable SIGIO.)
 COMMENT(label(OPTION_USEIFBUFS)dit(bf(tt(useifbufs)))
    Set the code(SO_USE_IFBUFS) socket option.)
 label(OPTION_SO_TIMESTAMP)dit(bf(tt(so-timestamp)))
@@ -2394,6 +2416,12 @@ label(OPTION_SETSOCKOPT_STRING)dit(bf(tt(setsockopt-string=<level>:<optname>:<op
    Like tt(setsockopt), but <optval> is a link(string)(TYPE_STRING).
    This string is passed to the function with trailing null character, and the
    length parameter is automatically derived from the data.
+label(OPTION_SETSOCKOPT_SOCKET)dit(bf(tt(setsockopt-socket=<level>:<optname>:<optval>)))
+   Like tt(setsockopt), but is applied to the socket before other operations
+   (code(bind()), code(connect()), code(accept()), ...)
+label(OPTION_SETSOCKOPT_CONNECTED)dit(bf(tt(setsockopt-connected=<level>:<optname>:<optval>)))
+   Like tt(setsockopt), but is applied only when the socket has been connected
+   by a code(connect()) or code(listen()) call.
 enddit()
 
 startdit()enddit()nl()
@@ -2525,7 +2553,8 @@ dit(bf(tt(ipv6-join-source-group=<multicast-address:interface-index:source-addre
    IPv4 variant. The option takes the IP address of the multicast group,
    info about the desired network interface and the source IP address of the
    multicast traffic. The indices of active network interfaces can be shown
-   using the utility procan().
+   using the utility procan().nl()
+   This feature is experimental.
 label(OPTION_IP_MULTICAST_IF)
 dit(bf(tt(ip-multicast-if=<hostname>)))
    Specifies hostname or address of the network interface to be used for
@@ -2976,6 +3005,8 @@ label(OPTION_NOFORK)dit(bf(tt(nofork)))
    it() the first socat address cannot be OPENSSL or READLINE
    it() socat options -b, -t, -D, -l, -v, -x become useless
    it() for both addresses, options ignoreeof, cr, and crnl become useless
+   it() for both addresses, address specific end/shutdown handling (e.g.,
+   graceful socket shutdown) and related options become useless
    it() for the second address (the one with option nofork), options 
       append, metaCOMMENT(async,) cloexec, flock, user, group, mode, nonblock,
       perm-late, setlk, and setpgid cannot be applied. Some of these could be
@@ -3345,7 +3376,7 @@ label(OPTION_OPENSSL_PSEUDO)dit(bf(tt(pseudo)))
    gathering daemon can be utilized, this option activates a mechanism for
    providing pseudo entropy. This is achieved by taking the current time in
    microseconds for feeding the libc pseudo random number generator with an
-   initial value. openssl is then feeded with output from NOEXPAND(random()) calls.nl()
+   initial value. openssl is then fed with output from NOEXPAND(random()) calls.nl()
    NOTE:This mechanism is not sufficient for generation of secure keys!
 label(OPTION_OPENSSL_COMPRESS)dit(bf(tt(compress)))
    Enable or disable the use of compression for a connection. Setting this to
@@ -3490,6 +3521,15 @@ startdit()
 label(OPTION_POSIXMQ_PRIORITY)dit(bf(tt(posixmq-priority (mq-prio))))
    Sets the priority of messages (packets) written to the queue, or the minimal
    priority of packet read from the queue.
+label(OPTION_POSIXMQ_FLUSH)dit(bf(tt(posixmq-flush (mq-flush))))
+   "Consumes" (drops) all messages currently in the queue before starting
+   transfers.
+label(OPTION_POSIXMQ_MAXMSG)dit(bf(tt(posixmq-maxmsg (mq-maxmsg))))
+   Sets the maxmsg parameter of the POSIX message queue when creating it.nl()
+   Note: This option applies only when the queue does not already exist.
+label(OPTION_POSIXMQ_MSGSIZE)dit(bf(tt(posixmq-msgsize (mq-msgsize))))
+   Sets the msgsize parameter of the POSIX message queue when creating it.nl()
+   Note: This option applies only when the queue does not already exist.
 enddit()
 
 
@@ -3512,7 +3552,8 @@ label(TYPE_COMMAND_LINE)dit(command-line)
    A string specifying a program name and its arguments, separated by single
    spaces. 
 label(TYPE_DATA)dit(data)
-   This is a more general data specification. The given text string contains
+   This is a more general data specification, "dalan" (low level data
+   description language). The given text string contains
    information about the target data type and value. Generally a leading
    character specifies the type of the following data item. In its specific
    context a default data type may exist.nl()
@@ -3528,12 +3569,12 @@ label(TYPE_DATA)dit(data)
    dit(b)  A signed byte (signed char).nl()
    dit(B)  An unsigned byte (unsigned char).nl()
    dit(x)  Following is an even number of hex digits, stored as sequence of
-   bytes.nl()
+   bytes, the data length is the resulting number of bytes.nl()
    Example:    bf(x7f000001) (IP address 127.0.0.1)
    dit(")  Following is a string that is used with the common conversions 
    \n \r \t \f \b \a \e \0; the string must be closed with '"'. Please note
    that the quotes and backslashes need to be escaped from shell and socat()
-   conversion.nl()
+   conversion. No implicit \0 is appended.nl()
    Example:    bf("Hello world!\n")
    dit(')  A single char, with the usual conversions. Please note that the
    quotes and backslashes need to be escaped from shell and socat() conversion.
@@ -3581,10 +3622,10 @@ label(TYPE_LONG)dit(long)
 label(TYPE_LONGLONG)dit(long long)
    A number read with code(strtoll()). The value must fit into a C long long.
 label(TYPE_OFF)dit(off_t)
-   An implementation dependend signed number, usually 32 bits, read with strtol
+   An implementation dependent signed number, usually 32 bits, read with strtol
    or strtoll.
 label(TYPE_OFF64)dit(off64_t)
-   An implementation dependend signed number, usually 64 bits, read with strtol
+   An implementation dependent signed number, usually 64 bits, read with strtol
    or strtoll.
 label(TYPE_MODE_T)dit(mode_t)
    An unsigned integer, read with code(strtoul()), specifying mode (permission)
@@ -3972,7 +4013,7 @@ prompts.
 label(EXAMPLE_ADDRESS_PTY)
 label(EXAMPLE_OPTION_SYMBOLIC_LINK)
 label(EXAMPLE_OPTION_WAIT_SLAVE)
-label(EXAMPLE_OPTION_NONBLOCK)
+label(EXAMPLE_OPTION_O_NONBLOCK)
 mancommand(\.LP)
 mancommand(\.nf)
 mancommand(\fBsocat \\)
@@ -4445,14 +4486,14 @@ both devices. Use pppd on device tt(/var/run/ppp) then.
 label(EXAMPLE_POSIXMQ_SEND)
 mancommand(\.LP)
 mancommand(\.nf)
-mancommand(\fBsocat --experimental -u \\)
+mancommand(\fBsocat -u \\)
 mancommand(\.RS)
 mancommand(\fBSTDIO \\ 
 	POSIXMQ-SEND:/queue1,unlink-early,mq-prio=10\fP)
 mancommand(\.RE)
 mancommand(\.fi)
 
-htmlcommand(<hr><div class="shell">socat --experimental -u &#x5C;
+htmlcommand(<hr><div class="shell">socat -u &#x5C;
     STDIO &#x5C;
     POSIXMQ-SEND:/queue1,unlink-early,mq-prio=10</div>)
 
@@ -4464,7 +4505,7 @@ label(EXAMPLE_POSIXMQ_RECV_FORK)
 
 mancommand(\.LP)
 mancommand(\.nf)
-mancommand(\fBsocat --experimental -u \\)
+mancommand(\fBsocat -u \\)
 mancommand(\.RS)
 mancommand(\fBPOSIXMQ-RECV:/queue1,fork,max-children=3 \\ 
 	SYSTEM:"worker.sh"\fP)
@@ -4472,7 +4513,7 @@ mancommand(\fBPOSIXMQ-RECV:/queue1,fork,max-children=3 \\
 mancommand(\.RE)
 mancommand(\.fi)
 
-htmlcommand(<hr><div class="shell">socat --experimental -u &#x5C;
+htmlcommand(<hr><div class="shell">socat -u &#x5C;
     POSIXMQ-RECV:/queue1,fork,max-children=3 &#x5C;
     SYSTEM:"worker.sh"</div>)
 

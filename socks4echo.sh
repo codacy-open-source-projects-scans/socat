@@ -9,6 +9,7 @@
 # it is required for test.sh
 # for TCP, use this script as:
 # socat tcp-l:1080,reuseaddr,crlf system:"socks4echo.sh"
+# Then connect with a socks4 request for 32.98.76.54:32109 and user nobody
 
 # older bash and ksh do not have -n option to read command; we try dd then
 #if echo a |read -n 1 null >/dev/null 2>&1; then
@@ -36,7 +37,7 @@ esac
 if   [ $(echo "x\c") = "x" ]; then E=""
 elif [ $(echo -e "x\c") = "x" ]; then E="-e"
 else
-    echo "cannot suppress trailing newline on echo" >&2
+    echo "$0: cannot suppress trailing newline on echo" >&2
     exit 1
 fi
 ECHO="echo $E"
@@ -57,7 +58,7 @@ else
 fi
 if [ "$vn" != $($ECHO "\04") ]; then
     $ECHO "$SOCKSREPLY_FAILED"
-    echo "invalid socks version requested" >&2
+    echo "$0: invalid socks version requested" >&2
     exit
 fi
 
@@ -68,7 +69,7 @@ else
 fi
 if [ "$cd" != $($ECHO "\01") ]; then
     $ECHO "$SOCKSREPLY_FAILED"
-    echo "invalid socks operation requested" >&2
+    echo "$0: invalid socks operation requested" >&2
     exit
 fi
 
@@ -91,7 +92,7 @@ else
 fi
 if [ "$u" != "nobody" ]; then
     $ECHO "$SOCKSREPLY_FAILED"
-    echo "wrong socks user requested (expected \"nobody\")" >&2
+    echo "$0: wrong socks user requested (expected \"nobody\")" >&2
     exit
 fi
 

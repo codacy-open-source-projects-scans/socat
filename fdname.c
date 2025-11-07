@@ -226,7 +226,7 @@ int sockname(int fd, FILE *outfile, char style) {
 #define FDNAME_OPTLEN 256
 #define FDNAME_NAMELEN 256
    socklen_t optlen;
-#if HAVE_GETPROTOBYNUMBER || HAVE_GETPROTOBYNUMBER_R
+#if (WITH_IP4 || WITH_IP6) && ( HAVE_GETPROTOBYNUMBER || HAVE_GETPROTOBYNUMBER_R )
    struct protoent protoent, *protoentp;
 #endif
 #define PROTONAMEMAX 1024
@@ -278,7 +278,7 @@ int sockname(int fd, FILE *outfile, char style) {
    Getsockopt(fd, SOL_SOCKET, SO_ACCEPTCONN, &optacceptconn, &optlen);
 #endif
 
-#if defined(SO_PROTOCOL) || defined(SO_PROTOTYPE)
+#if (WITH_IP4 || WITH_IP6) && ( defined(SO_PROTOCOL) || defined(SO_PROTOTYPE) )
 #if HAVE_GETPROTOBYNUMBER_R==1 /* Linux */
    rc = getprotobynumber_r(proto, &protoent, protoname, sizeof(protoname), &protoentp);
    if (protoentp == NULL) {

@@ -51,7 +51,7 @@ ACTIVE PHASE:
   . xioopts.h: enum e_optcode  (sorted numerically/alphabetically by name)
   . xio-*.c: select the appropriate address file (e.g., xio-tcp.c for
     TCP-options) and make a record of type struct optdesc: opt_newoption
-  . xio-*.h: the declation of struct optdesc
+  . xio-*.h: the declaration of struct optdesc
   . xioopts.c: add records to  struct optname optionnames  for all appropriate
     names (sorted strictly ASCII for binary search)
   . filan.c: add the option to the appropriate array (sockopts, ipopts,

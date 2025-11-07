@@ -83,6 +83,8 @@ extern const struct optdesc opt_setsockopt_bin;
 extern const struct optdesc opt_setsockopt_string;
 extern const struct optdesc opt_setsockopt_listen;
 extern const struct optdesc opt_null_eof;
+extern const struct optdesc opt_setsockopt_socket;
+extern const struct optdesc opt_setsockopt_connected;
 
 
 extern
@@ -135,8 +137,6 @@ extern int xioparserange(const char *rangename, int pf, struct xiorange *range, 
 
 extern int
 xiosocket(struct opt *opts, int pf, int socktype, int proto, int level);
-extern int
-xiosocketpair(struct opt *opts, int pf, int socktype, int proto, int sv[2]);
 extern int xiosock_reuseaddr(int fd, int ipproto, struct opt *opts);
 
 #endif /* !defined(__xio_socket_h_included) */

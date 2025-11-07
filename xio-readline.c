@@ -184,7 +184,7 @@ ssize_t xioread_readline(struct single *pipe, void *buff, size_t bufsiz) {
 	 /* we must carriage return, because readline will first print the
 	    prompt */
 	 ssize_t writt;
-	 writt = writefull(pipe->fd, "\r", 1);
+	 writt = writefull(pipe->fd, "\r", 1, NULL);
 	 if (writt < 0) {
 	    Warn2("write(%d, \"\\r\", 1): %s",
 		   pipe->fd, strerror(errno));
@@ -203,6 +203,9 @@ ssize_t xioread_readline(struct single *pipe, void *buff, size_t bufsiz) {
       /* GNU readline defines no error return */
       if (line == NULL) {
 	 return 0;	/* EOF */
+      }
+      if (strlen(line) == 0) {
+	 Write(STDOUT_FILENO, "\n", 1);
       }
 #if _WITH_TERMIOS
       xiotermios_clrflag(pipe->fd, 3, ECHO);

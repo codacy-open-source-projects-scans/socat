@@ -150,6 +150,9 @@
 #if HAVE_LINUX_IF_TUN_H
 #include <linux/if_tun.h>
 #endif
+#if HAVE_NETINET_DCCP_H
+#include <netinet/dccp.h>
+#endif
 #if HAVE_LINUX_DCCP_H
 #include <linux/dccp.h>
 #endif
@@ -182,7 +185,7 @@
 #if WITH_NAMESPACES && HAVE_SCHED_H
 #include <sched.h>
 #endif
-#if WITH_POSIXMQ
+#if WITH_POSIXMQ && HAVE_MQUEUE_H
 #include <mqueue.h> 		/* POSIX MQ */
 #endif
 #if WITH_READLINE

@@ -17,7 +17,7 @@ static int xioopen_stdio(int argc, const char *argv[], struct opt *opts, int xio
 static int xioopen_stdfd(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *xfd, const struct addrdesc *addrdesc);
 
 
-/* we specify all option groups that we can imagine for a FD, becasue the
+/* We specify all option groups that we can imagine for a FD, because the
    changed parsing mechanism does not allow us to check the type of FD before
    applying the options */
 const struct addrdesc xioaddr_stdio  = { "STDIO",  3, xioopen_stdio, GROUP_FD|GROUP_FIFO|GROUP_CHR|GROUP_BLK|GROUP_FILE|GROUP_SOCKET|GROUP_TERMIOS|GROUP_SOCK_UNIX|GROUP_SOCK_IP|GROUP_IPAPP, 0, 0, 0 HELP(NULL) };

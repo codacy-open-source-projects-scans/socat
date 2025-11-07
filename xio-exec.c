@@ -84,7 +84,8 @@ static int xioopen_exec(
       while (*strp == ' ') {
 	 while (*++strp == ' ')  ;
 	 if ((pargc & 0x07) == 0) {
-	    pargv = Realloc(pargv, (pargc+8)*sizeof(char *));
+	    /*0 pargv = Realloc(pargv, (pargc+8)*sizeof(char *)); */
+	    pargv = Realloc3(pargv, (pargc+8)*sizeof(char *), pargc*sizeof(char *));
 	    if (pargv == NULL)  return STAT_RETRYLATER;
 	 }
 	 pargv[pargc++] = tokp;

@@ -68,7 +68,7 @@ const struct optdesc opt_ip_multicast_if  ={"ip-multicast-if",  "multicast-if", 
 #ifdef IP_PKTOPTIONS
 const struct optdesc opt_ip_pktoptions = { "ip-pktoptions", "pktopts", OPT_IP_PKTOPTIONS, GROUP_SOCK_IP, PH_PASTSOCKET, TYPE_INT, OFUNC_SOCKOPT, SOL_IP, IP_PKTOPTIONS };
 #endif
-#ifdef IP_ADD_MEMBERSHIP
+#if defined(HAVE_STRUCT_IP_MREQ) || defined(HAVE_STRUCT_IP_MREQN)
 const struct optdesc opt_ip_add_membership = { "ip-add-membership", "membership",OPT_IP_ADD_MEMBERSHIP, GROUP_SOCK_IP, PH_PASTSOCKET, TYPE_IP_MREQN, OFUNC_SPEC, SOL_IP, IP_ADD_MEMBERSHIP };
 #endif
 #if defined(HAVE_STRUCT_IP_MREQ_SOURCE) && defined(IP_ADD_SOURCE_MEMBERSHIP)
@@ -159,6 +159,79 @@ int Res_init(void) {
 }
 
 #endif /* HAVE_RESOLV_H */
+
+
+/* Looks for a bind option and, if found, passes it to resolver;
+   for IP (v4, v6) and raw (PF_UNSPEC);
+   returns list of addrinfo results;
+   returns STAT_OK if option exists and could be resolved,
+   STAT_NORETRY if option exists but had error,
+   or STAT_NOACTION if it does not exist */
+int retropt_bind_ip(
+	struct opt *opts,
+	int af,
+	int socktype,
+	int ipproto,
+	struct addrinfo ***bindlist,
+	int feats,	/* TCP etc: 1..address allowed,
+			   3..address and port allowed
+			*/
+	const int ai_flags[2])
+{
+   const char portsep[] = ":";
+   const char *ends[] = { portsep, NULL };
+   const char *nests[] = { "[", "]", NULL };
+   bool portallowed;
+   char *bindname, *bindp;
+   char hostname[512], *hostp = hostname, *portp = NULL;
+   size_t hostlen = sizeof(hostname)-1;
+   int parsres;
+   int ai_flags2[2];
+   int result;
+
+   if (retropt_string(opts, OPT_BIND, &bindname) < 0) {
+      return STAT_NOACTION;
+   }
+   bindp = bindname;
+
+      portallowed = (feats>=2);
+      parsres =
+	 nestlex((const char **)&bindp, &hostp, &hostlen, ends, NULL, NULL, nests,
+		 true, false, false);
+      if (parsres < 0) {
+	 Error1("option too long:  \"%s\"", bindp);
+	 return STAT_NORETRY;
+      } else if (parsres > 0) {
+	 Error1("syntax error in \"%s\"", bindp);
+	 return STAT_NORETRY;
+      }
+      *hostp++ = '\0';
+      if (!strncmp(bindp, portsep, strlen(portsep))) {
+	 if (!portallowed) {
+	    Error("port specification not allowed in this bind option");
+	    return STAT_NORETRY;
+	 } else {
+	    portp = bindp + strlen(portsep);
+	 }
+      }
+
+      /* Set AI_PASSIVE, except when it is explicitely disabled */
+      ai_flags2[0] = ai_flags[0];
+      ai_flags2[1] = ai_flags[1];
+      if (!(ai_flags2[1] & AI_PASSIVE))
+      ai_flags2[0] |= AI_PASSIVE;
+
+      if ((result =
+	   xiogetaddrinfo(hostname[0]!='\0'?hostname:NULL, portp,
+		      af, socktype, ipproto,
+		      bindlist, ai_flags2))
+	  != STAT_OK) {
+	 Error2("error resolving bind option \"%s\" with af=%d", bindname, af);
+	 return STAT_NORETRY;
+      }
+
+      return STAT_OK;
+}
 
 
 #if WITH_DEVTESTS
@@ -386,6 +459,7 @@ int _xiogetaddrinfo(const char *node, const char *service,
 #else /* HAVE_PROTOTYPE_LIB_getipnodebyname || nothing */
    struct hostent *host;
 #endif
+   bool restore_proto = false;
    int error_num;
 
    Debug8("_xiogetaddrinfo(node=\"%s\", service=\"%s\", family=%d, socktype=%d, protoco=%d, ai_flags={0x%04x/0x%04x} }, res=%p",
@@ -512,15 +586,16 @@ int _xiogetaddrinfo(const char *node, const char *service,
 	      return EAI_SERVICE;
 	   }
 	   /* Probably unsupported protocol (e.g. UDP-Lite), fallback to 0 */
+	   restore_proto = true;
 	   hints.ai_protocol = 0;
 	   continue;
 	}
       if ((error_num = Getaddrinfo(node, service, &hints, res)) != 0) {
-	 Warn7("getaddrinfo(\"%s\", \"%s\", {0x%02x,%d,%d,%d}, {}): %d",
+	 Warn7("getaddrinfo(\"%s\", \"%s\", {0x%02x,%d,%d,%d}, {}): %s",
 		node?node:"NULL", service?service:"NULL",
 		hints.ai_flags, hints.ai_family,
 		hints.ai_socktype, hints.ai_protocol,
-		error_num);
+		gai_strerror(error_num));
 	 if (numnode)
 	    free(numnode);
 
@@ -538,6 +613,14 @@ int _xiogetaddrinfo(const char *node, const char *service,
 	 record = record->ai_next;
       }
 #endif /* WITH_MSGLEVEL <= E_DEBUG */
+   }
+
+   if (restore_proto) {
+      struct addrinfo *record = *res;
+      while (record) {
+	 record->ai_protocol = protocol;
+	 record = record->ai_next;
+      }
    }
 
 #elif HAVE_PROTOTYPE_LIB_getipnodebyname /* !HAVE_GETADDRINFO */
@@ -592,7 +675,7 @@ int _xiogetaddrinfo(const char *node, const char *service,
       freehostent(host);
    }
 
-#elsif 0 /* !HAVE_PROTOTYPE_LIB_getipnodebyname */
+#elif 0 /* !HAVE_PROTOTYPE_LIB_getipnodebyname */
 
    if (node != NULL) {
       /* this is not a typical IP6 resolver function - but Linux
@@ -760,6 +843,9 @@ void xiofreeaddrinfo(struct addrinfo **ai_sorted) {
    int ain;
    struct addrinfo *res;
 
+   if (ai_sorted == NULL)
+      return;
+
    /* Find the original *res from getaddrinfo past NULL */
    ain = 0;
    while (ai_sorted[ain] != NULL)
@@ -843,7 +929,7 @@ int xioresolve(const char *node, const char *service,
 }
 
 #if defined(HAVE_STRUCT_CMSGHDR) && defined(CMSG_DATA)
-/* Converts the ancillary message in *cmsg into a form useable for further
+/* Converts the ancillary message in *cmsg into a form usable for further
    processing. knows the specifics of common message types.
    These are valid for IPv4 and IPv6
    Returns the number of resulting syntax elements in *num
@@ -902,16 +988,20 @@ int xiolog_ancillary_ip(
 	       '\0',
 	       inet4addr_info(ntohl(pktinfo->ipi_addr.s_addr),
 			      scratch3, sizeof(scratch3)));
+#if HAVE_PKTINFO_IPI_SPEC_DST
       Notice3("Ancillary message: interface \"%s\", locaddr=%s, dstaddr=%s",
 	      xiogetifname(pktinfo->ipi_ifindex, scratch1, -1),
-#if HAVE_PKTINFO_IPI_SPEC_DST
 	      inet4addr_info(ntohl(pktinfo->ipi_spec_dst.s_addr),
 			     scratch2, sizeof(scratch2)),
-#else
-	      "",
-#endif
 	      inet4addr_info(ntohl(pktinfo->ipi_addr.s_addr),
 			     scratch3, sizeof(scratch3)));
+#else
+      Notice3("Ancillary message: interface \"%s\", locaddr=%s, dstaddr=%s",
+	      xiogetifname(pktinfo->ipi_ifindex, scratch1, -1),
+	      "",
+	      inet4addr_info(ntohl(pktinfo->ipi_addr.s_addr),
+			     scratch3, sizeof(scratch3)));
+#endif
    }
       return STAT_OK;
 #endif /* defined(IP_PKTINFO) && HAVE_STRUCT_IN_PKTINFO */
@@ -1001,7 +1091,7 @@ int xiolog_ancillary_ip(
       cmsgtype = "IP_OPTIONS"; cmsgname = "options"; cmsgctr = -1;
       /*!!!*/
       break;
-#if XIO_ANCILLARY_TYPE_SOLARIS
+#if defined(IP_RECVTOS) && XIO_ANCILLARY_TYPE_SOLARIS
    case IP_RECVTOS:
 #else
    case IP_TOS:
@@ -1112,13 +1202,14 @@ int xiotype_ip_add_membership(
 		      opt->value2.u_string/*param2*/,
 		      opt->value3.u_string/*ifindex*/);
 	} else {
-		/*0 opt->value3.u_string = NULL; / * is NULL from init */
+		opt->value3.u_string = NULL; /* is not NULL from init! */
 		Info3("setting option \"%s\" to {\"%s\",\"%s\"}",
 		      ent->desc->defname,
 		      opt->value.u_string/*multiaddr*/,
 		      opt->value2.u_string/*param2*/);
 	}
 #else /* !HAVE_STRUCT_IP_MREQN */
+	opt->value3.u_string = NULL;
 	Info3("setting option \"%s\" to {\"%s\",\"%s\"}",
 	      ent->desc->defname,
 	      opt->value.u_string/*multiaddr*/,
@@ -1127,6 +1218,9 @@ int xiotype_ip_add_membership(
 	return 0;
 }
 #endif /* defined(HAVE_STRUCT_IP_MREQ) || defined (HAVE_STRUCT_IP_MREQN) */
+
+
+#if _WITH_IP4
 
 #if defined(HAVE_STRUCT_IP_MREQ) || defined (HAVE_STRUCT_IP_MREQN)
 int xioapply_ip_add_membership(
@@ -1352,7 +1446,7 @@ int xioapply_ip_add_source_membership(struct single *sfd, struct opt *opt) {
    }
    ip4_mreq_src.imr_multiaddr = sockaddr1.ip4.sin_addr;
    /* second parameter is interface address */
-   rc = xioresolve(opt->value.u_string/*ifaddr*/, NULL,
+   rc = xioresolve(opt->value2.u_string/*ifaddr*/, NULL,
 		   sfd->para.socket.la.soa.sa_family,
 		   SOCK_DGRAM, IPPROTO_IP,
 		   &sockaddr2, &socklen2, sfd->para.socket.ip.ai_flags);
@@ -1361,7 +1455,7 @@ int xioapply_ip_add_source_membership(struct single *sfd, struct opt *opt) {
    }
    ip4_mreq_src.imr_interface = sockaddr2.ip4.sin_addr;
    /* third parameter is source address */
-   rc = xioresolve(opt->value.u_string/*srcaddr*/, NULL,
+   rc = xioresolve(opt->value3.u_string/*srcaddr*/, NULL,
 		   sfd->para.socket.la.soa.sa_family,
 		   SOCK_DGRAM, IPPROTO_IP,
 		   &sockaddr3, &socklen3, sfd->para.socket.ip.ai_flags);
@@ -1385,6 +1479,8 @@ int xioapply_ip_add_source_membership(struct single *sfd, struct opt *opt) {
 }
 
 #endif /* HAVE_STRUCT_IP_MREQ_SOURCE */
+
+#endif /* _WITH_IP4 */
 
 
 #if WITH_RESOLVE

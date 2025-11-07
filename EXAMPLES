@@ -67,7 +67,7 @@ $ socat \
 	TCP-LISTEN:8000,crlf \
 	SYSTEM:"echo HTTP/1.0 200; echo Content-Type\: text/plain; echo; cat"
 
-// A less primitive HTTP echo server that sends back not only the reqest but
+// A less primitive HTTP echo server that sends back not only the request but
 // also server and client address and port. Might have portability issues with
 // echo
 $ socat -T 1 -d -d \
@@ -131,7 +131,7 @@ $ socat \
 ///////////////////////////////////////////////////////////////////////////////
 // Intrusion testing
 
-// Found an XWindow Server behind IP filters with FTP data hole? (you are
+// Found an X-Window Server behind IP filters with FTP data hole? (you are
 // lucky!) 
 // prepare your host:
 # rm -f /tmp/.X11-unix/X1
@@ -241,7 +241,7 @@ $ socat - /tmp/postoffice
 // Uses of filan
 // See what your operating system opens for you
 $ filan
-// or if that was too detailled
+// or if that was too detailed
 $ filan -s
 // See what file descriptors are passed via exec function
 $ socat - EXEC:"filan -s",nofork
@@ -342,7 +342,7 @@ socat \
 // three main versions for entering password:
 // 1) from your TTY; have 10 seconds to enter password:
 (sleep 10; echo "ls"; sleep 1) |socat - EXEC:'ssh server',pty
-// 2) from XWindows (DISPLAY !); again 10 seconds
+// 2) from X-Windows (DISPLAY !); again 10 seconds
 (sleep 10; echo "ls"; sleep 1) |socat - EXEC:'ssh server',pty,setsid
 // 3) from script
 (sleep 5; echo PASSWORD; echo ls; sleep 1) |./socat - EXEC:'ssh server',pty,setsid,ctty

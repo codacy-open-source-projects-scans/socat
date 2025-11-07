@@ -187,10 +187,30 @@ int procan(FILE *outfile) {
    fprintf(outfile, "process group id if fg process / stderr = "F_pid"\n", Tcgetpgrp(2));
 
    /* process owner, groups */
+#if HAVE_GETRESUID
+   {
+      uid_t ruid, euid, suid;
+      getresuid(&ruid, &euid, &suid);
+      fprintf(outfile, "user id  = "F_uid"\n", ruid);
+      fprintf(outfile, "effective user id  = "F_uid"\n", euid);
+      fprintf(outfile, "saved set-user id  = "F_uid"\n", suid);
+   }
+#else /* !HAVE_GETRESUID */
    fprintf(outfile, "user id  = "F_uid"\n", Getuid());
    fprintf(outfile, "effective user id  = "F_uid"\n", Geteuid());
+#endif /* !HAVE_GETRESUID */
+#if HAVE_GETRESGID
+   {
+      gid_t rgid, egid, sgid;
+      getresgid(&rgid, &egid, &sgid);
+      fprintf(outfile, "group id = "F_gid"\n", rgid);
+      fprintf(outfile, "effective group id = "F_gid"\n", egid);
+      fprintf(outfile, "saved set-group id = "F_gid"\n", sgid);
+   }
+#else /* !HAVE_GETRESGID */
    fprintf(outfile, "group id = "F_gid"\n", Getgid());
    fprintf(outfile, "effective group id = "F_gid"\n", Getegid());
+#endif /* !HAVE_GETRESGID */
 
    /* Simple process features */
    fprintf(outfile, "\n");

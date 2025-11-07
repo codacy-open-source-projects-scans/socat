@@ -16,7 +16,13 @@
 #  define WITH_OPEN 1
 #endif
 
-#if WITH_OPEN || WITH_PIPE || WITH_UNIX || WITH_PTY
+#if WITH_INTERFACE || WITH_TUN
+#  define _WITH_INTERFACE 1
+#else
+#  define _WITH_INTERFACE 0
+#endif
+
+#if WITH_OPEN || WITH_PIPE || WITH_UNIX || WITH_PTY || _WITH_INTERFACE
 #  define WITH_NAMED 1
 #endif
 
@@ -34,7 +40,7 @@
 			   with IP6 */
 #endif
 
-#if WITH_OPENSSL
+#if WITH_OPENSSL || WITH_SOCKS5
 #  define WITH_TCP 1
 #  define WITH_IP4 1
 #endif
@@ -57,7 +63,7 @@
 #  define _WITH_UDP 1
 #endif
 
-#if WITH_UNIX || WITH_IP4 || WITH_IP6 || WITH_SOCKS4 || WITH_RAWIP || WITH_GENERICSOCKET
+#if WITH_UNIX || WITH_IP4 || WITH_IP6 || WITH_SOCKS4 || WITH_SOCKS5 || WITH_RAWIP || WITH_GENERICSOCKET || WITH_SOCKETPAIR || WITH_VSOCK
 #  define _WITH_SOCKET 1
 #else
 #  undef _WITH_SOCKET
@@ -71,10 +77,8 @@
 #  undef WITH_LIBWRAP
 #endif
 
-#if WITH_INTERFACE || WITH_TUN
-#  define _WITH_INTERFACE 1
-#else
-#  define _WITH_INTERFACE 0
+#if WITH_SOCKETPAIR || WITH_EXEC || WITH_SYSTEM || WITH_SHELL
+#  define _WITH_SOCKETPAIR 1
 #endif
 
 #if WITH_GENERICSOCKET || _WITH_INTERFACE

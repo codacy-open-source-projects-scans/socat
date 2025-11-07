@@ -53,7 +53,7 @@ static int xioopen_socks5(int argc, const char *argv[], struct opt *opts, int xi
 
 const struct addrdesc xioaddr_socks5_connect = { "SOCKS5-CONNECT", 1+XIO_RDWR, xioopen_socks5, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_IP_SOCKS|GROUP_CHILD|GROUP_RETRY, SOCKS5_COMMAND_CONNECT, 0, 0 HELP(":<socks-server>[:<socks-port>]:<target-host>:<target-port>") };
 
-const struct addrdesc xioaddr_socks5_listen  = { "SOCKS5-LISTEN",  1+XIO_RDWR, xioopen_socks5, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_CHILD|GROUP_RETRY, SOCKS5_COMMAND_BIND,    0, 0 HELP(":<socks-server>[:<socks-port>]:<listen-host>:<listen-port>") };
+const struct addrdesc xioaddr_socks5_listen  = { "SOCKS5-LISTEN",  1+XIO_RDWR, xioopen_socks5, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_IP_SOCKS|GROUP_CHILD|GROUP_RETRY, SOCKS5_COMMAND_BIND,    0, 0 HELP(":<socks-server>[:<socks-port>]:<listen-host>:<listen-port>") };
 
 static const char * _xioopen_socks5_strerror(uint8_t r)
 {
@@ -136,7 +136,7 @@ static int _xioopen_socks5_handshake(struct single *sfd, int level)
 	}
 #endif
 
-	if (writefull(sfd->fd, client_hello, client_hello_size) < 0) {
+	if (writefull(sfd->fd, client_hello, client_hello_size, NULL) < 0) {
 		Msg4(level, "write(%d, %p, %d): %s",
 		     sfd->fd, client_hello, client_hello_size,
 		     strerror(errno));
@@ -188,6 +188,8 @@ static int _xioopen_socks5_handshake(struct single *sfd, int level)
 		return STAT_RETRYLATER;
 	}
 
+	Debug2("received SOCKS5 server hello %02x %02x",
+	       server_hello_ptr[0], server_hello_ptr[1]);
 	Info2("received SOCKS5 server hello version=%d method=%d",
 		server_hello.version,
 		server_hello.method);
@@ -332,6 +334,12 @@ static int _xioopen_socks5_read_reply(
 			}
 			return STAT_RETRYLATER;
 		}
+		Debug5("received SOCKS5 reply %02x %02x %02x %02x %02x",
+		       ((unsigned char *)reply+bytes_read)[0],
+		       ((unsigned char *)reply+bytes_read)[1],
+		       ((unsigned char *)reply+bytes_read)[2],
+		       ((unsigned char *)reply+bytes_read)[3],
+		       ((unsigned char *)reply+bytes_read)[4]);
 		bytes_read += result;
 
 		/* Once we've read 5 bytes, figure out total message length and
@@ -418,7 +426,7 @@ static int _xioopen_socks5_request(
 	}
 #endif
 
-	if (writefull(sfd->fd, req, bytes) < 0) {
+	if (writefull(sfd->fd, req, bytes, NULL) < 0) {
 		Msg4(level, "write(%d, %p, %d): %s",
 			sfd->fd, req, bytes, strerror(errno));
 		if (Close(sfd->fd) < 0) {
@@ -504,6 +512,7 @@ static int xioopen_socks5(
 {
 	int socks_command = addrdesc->arg1;
 	bool dofork = false;
+	int maxchildren = 0;
 	int socktype = SOCK_STREAM;
 	int pf = PF_UNSPEC;
 	int ipproto = IPPROTO_TCP;
@@ -511,17 +520,12 @@ static int xioopen_socks5(
 	struct opt *opts0 = NULL;
 	struct single *sfd = &xxfd->stream;
 	const char *socks_server, *target_name, *target_port, *socks_port;
-	union sockaddr_union us_sa, *us = &us_sa;
-	socklen_t uslen = sizeof(us_sa);
-	struct addrinfo **themarr, *themp;
+	struct addrinfo **bindarr = NULL;
+	struct addrinfo **themarr = NULL;
+	uint16_t bindport = 0;
 	bool needbind = false;
 	bool lowport = false;
-	char infobuff[256];
 
-	if (!xioparms.experimental) {
-		Error1("%s: use option --experimental to acknowledge unmature state", argv[0]);
-		return STAT_NORETRY;
-	}
 	if (argc < 4 || argc > 5) {
 		xio_syntax(argv[0], 4, argc-1, addrdesc->syntax);
 		return STAT_NORETRY;
@@ -533,78 +537,120 @@ static int xioopen_socks5(
 		target_name = argv[3];
 		target_port = argv[4];
 	} else {
+		socks_port = NULL;
 		target_name = argv[2];
 		target_port = argv[3];
 	}
 
-	if (sfd->howtoend == END_UNSPEC)
-		sfd->howtoend = END_SHUTDOWN;
-	if (applyopts_single(sfd, opts, PH_INIT) < 0)	return -1;
-	applyopts(sfd, -1, opts, PH_INIT);
-
-	retropt_int(opts, OPT_SO_TYPE, &socktype);
-	retropt_bool(opts, OPT_FORK, &dofork);
+	/* Apply and retrieve some options */
+	result = _xioopen_ipapp_init(sfd, xioflags, opts,
+			        &dofork, &maxchildren,
+			        &pf, &socktype, &ipproto);
+	if (result != STAT_OK)
+		return result;
 
 	if (_xioopen_opt_socksport(opts, (char **)&socks_port) < 0) {
 		return STAT_NORETRY;
 	}
+	/*! possible memory leak */
 
-	result = _xioopen_ipapp_prepare(opts, &opts0, socks_server, socks_port,
-					&pf, ipproto,
-					sfd->para.socket.ip.ai_flags,
-					&themarr, us, &uslen,
-					&needbind, &lowport, socktype);
+	opts0 = opts;
+	opts = NULL;
 
-	Notice2("connecting to socks5 server %s:%s",
-		socks_server, socks_port);
+	Notice4("opening connection to %s:%s vis socks5 server %s:%s",
+		target_name, target_port, socks_server, socks_port);
 
-	do {
+	do {	/* loop over retries (failed connect and socks-request attempts)
+		   and/or forks */
+		int _errno;
 #if WITH_RETRY
 		if (sfd->forever || sfd->retry) {
-			level = E_INFO;
-		} else {
-			level = E_ERROR;
-		}
+			level = E_NOTICE;
+		} else
 #endif
+			level = E_WARN;
 
-		/* loop over themarr */
-		themp = themarr[0];
-		while (themp != NULL) {
-			Notice1("opening connection to %s",
-				sockaddr_info(themp->ai_addr, themp->ai_addrlen,
-					      infobuff, sizeof(infobuff)));
-			result = _xioopen_connect(sfd, needbind?us:NULL, sizeof(*us),
-						  themp->ai_addr, themp->ai_addrlen,
-						  opts, pf?pf:themp->ai_family, socktype,
-						  IPPROTO_TCP, lowport, level);
-			if (result == STAT_OK)
-				break;
-			themp = themp->ai_next;
-			if (themp == NULL)
-				result = STAT_RETRYLATER;
+		opts = copyopts(opts0, GROUP_ALL);
 
-			switch(result){
-				break;
+		result =
+			_xioopen_ipapp_prepare(&opts, opts0, socks_server, socks_port,
+					       pf, socktype, ipproto,
+					       sfd->para.socket.ip.ai_flags,
+					       &themarr, &bindarr, &bindport, &needbind,
+					       &lowport);
+		switch (result) {
+		case STAT_OK: break;
 #if WITH_RETRY
-			case STAT_RETRYLATER:
-			case STAT_RETRYNOW:
-				if (sfd->forever || sfd->retry-- ) {
-					if (result == STAT_RETRYLATER)	Nanosleep(&sfd->intervall, NULL);
-					continue;
-				}
-#endif
-			default:
+		case STAT_RETRYLATER:
+		case STAT_RETRYNOW:
+			if (sfd->forever || sfd->retry--) {
+				if (result == STAT_RETRYLATER)
+					Nanosleep(&sfd->intervall, NULL);
+				if (bindarr != NULL)  xiofreeaddrinfo(bindarr);
 				xiofreeaddrinfo(themarr);
-				return result;
+				freeopts(opts);
+				continue;
 			}
-		}
-		xiofreeaddrinfo(themarr);
-		applyopts(sfd, -1, opts, PH_ALL);
-
-		if ((result = _xio_openlate(sfd, opts)) < 0)
+#endif /* WITH_RETRY */
+			/* FALLTHROUGH */
+		case STAT_NORETRY:
+			if (bindarr != NULL)  xiofreeaddrinfo(bindarr);
+			xiofreeaddrinfo(themarr);
+			freeopts(opts);
+			freeopts(opts0);
 			return result;
+		}
 
-		if ((result = _xioopen_socks5_handshake(sfd, level)) != STAT_OK) {
+		Notice2("opening connection to socks5 server %s:%s",
+			socks_server, socks_port);
+		result =
+			_xioopen_ipapp_connect(sfd, socks_server, opts, themarr,
+					       needbind, bindarr, bindport, lowport, level);
+		_errno = errno;
+		if (bindarr != NULL)  xiofreeaddrinfo(bindarr);
+		xiofreeaddrinfo(themarr);
+		switch (result) {
+		case STAT_OK: break;
+#if WITH_RETRY
+		case STAT_RETRYLATER:
+		case STAT_RETRYNOW:
+			if (sfd->forever || sfd->retry--) {
+				if (result == STAT_RETRYLATER) {
+					Nanosleep(&sfd->intervall, NULL);
+				}
+				freeopts(opts);
+				continue;
+			}
+#endif /* WITH_RETRY */
+			/* FALLTHROUGH */
+		default:
+			Error4("%s:%s:%s:...: %s",
+			       argv[0], socks_server, socks_port,
+			       _errno?strerror(_errno):"(See above)");
+			freeopts(opts0);
+			freeopts(opts);
+			return result;
+		}
+
+		result = _xioopen_socks5_handshake(sfd, level);
+		switch (result) {
+		case STAT_OK: break;
+#if WITH_RETRY
+		case STAT_RETRYLATER:
+		case STAT_RETRYNOW:
+			if (sfd->forever || sfd->retry--) {
+				if (result == STAT_RETRYLATER) {
+					Nanosleep(&sfd->intervall, NULL);
+				}
+				freeopts(opts);
+				continue;
+			}
+#endif /* WITH_RETRY */
+			/* FALLTHROUGH */
+		default:
+			Error3("%s:%s:%s: Connection failed", argv[0], socks_server, socks_port);
+			freeopts(opts0);
+			freeopts(opts);
 			return result;
 		}
 
@@ -616,11 +662,16 @@ static int xioopen_socks5(
 		case STAT_RETRYLATER:
 		case STAT_RETRYNOW:
 			if ( sfd->forever || sfd->retry-- ) {
-				if (result == STAT_RETRYLATER)	Nanosleep(&sfd->intervall, NULL);
+				if (result == STAT_RETRYLATER)
+					Nanosleep(&sfd->intervall, NULL);
+				freeopts(opts);
 				continue;
 			}
-#endif
+#endif /* WITH_RETRY */
+			/* FALLTHROUGH */
 		default:
+			freeopts(opts);
+			freeopts(opts0);
 			return result;
 		}
 
@@ -636,12 +687,18 @@ static int xioopen_socks5(
 				level = E_WARN;
 			}
 			while ((pid = xio_fork(false, level, sfd->shutup)) < 0) {
-				if (sfd->forever || --sfd->retry) {
+				if (sfd->forever || sfd->retry) {
+					if (sfd->retry > 0)
+						--sfd->retry;
 					Nanosleep(&sfd->intervall, NULL);
+					freeopts(opts);
 					continue;
 				}
+				freeopts(opts);
+				freeopts(opts0);
 				return STAT_RETRYLATER;
 			}
+
 			if ( pid == 0 ) {
 				sfd->forever = false;
 				sfd->retry = 0;
@@ -650,17 +707,26 @@ static int xioopen_socks5(
 
 			Close(sfd->fd);
 			Nanosleep(&sfd->intervall, NULL);
-			dropopts(opts, PH_ALL);
-			opts = copyopts(opts0, GROUP_ALL);
+			while (maxchildren > 0 && num_child >= maxchildren) {
+				Info1("all %d allowed children are active, waiting", maxchildren);
+				Nanosleep(&sfd->intervall, NULL);
+			}
+			freeopts(opts);
 			continue;
 		} else
-#endif
+#endif /* WITH_RETRY */
 		{
 			break;
 		}
 	} while (true);
 
-	return 0;
+	Notice4("successfully connected to %s:%s via socks5 server %s:%s",
+		target_name, target_port, socks_server, socks_port);
+
+	result = _xio_openlate(sfd, opts);
+	freeopts(opts);
+	freeopts(opts0);
+	return STAT_OK;
 }
 
 #endif /* WITH_SOCKS5 */

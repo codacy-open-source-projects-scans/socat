@@ -27,9 +27,22 @@ const int one = 1;
    Returns <0 on unhandled error, errno valid
    Will only return <0 or bytes
 */
-ssize_t writefull(int fd, const void *buff, size_t bytes) {
+/* Assuming your pipe size is 65536 - find out with:
+   filan -i 1 |grep F_GETPIPE_SZ |sed 's|.*\(F_GETPIPE_SZ=[1-9][0-9]*\).*|\1|'
+   Then we can test partial write with something like:
+   socat -d4 -lu -b 262144 -u /dev/zero,readbytes=262144 -,o-nonblock |{ sleep 3; wc -c; }
+*/
+ssize_t writefull(
+	int fd,
+	const void *buff,
+	size_t bytes,
+	const struct timeval *tmo0) {
    size_t writt = 0;
    ssize_t chk;
+   struct pollfd pfd;
+   struct timeval tmo = { 0 };
+   int rc;
+
    while (1) {
       chk = Write(fd, (const char *)buff + writt, bytes - writt);
       if (chk < 0) {
@@ -40,15 +53,34 @@ ssize_t writefull(int fd, const void *buff, size_t bytes) {
 	 case EWOULDBLOCK:
 #endif
 	    Warn4("write(%d, %p, "F_Zu"): %s", fd, (const char *)buff+writt, bytes-writt, strerror(errno));
-	    Sleep(1); continue;
-	 default: return -1;
+	    pfd.fd      = fd;
+	    pfd.events  = POLLOUT;
+	    pfd.revents = 0;
+	    if (tmo0 != NULL) {
+	       tmo.tv_sec  = tmo0->tv_sec;
+	       tmo.tv_usec = tmo0->tv_usec;
+	    }
+	    rc = xiopoll(&pfd, 1, (tmo.tv_sec!=0 || tmo.tv_usec!=0) ? &tmo : NULL);
+	    if (rc == 0) {
+	       Notice("inactivity timeout triggered");
+	       errno = ETIMEDOUT;
+	       return -1;
+	    }
+	    continue;
+	 default:
+	    return -1;
 	 }
+      } else if (chk == bytes) {
+	 /* First attempt, complete write */
+	 return chk;
       } else if (writt+chk < bytes) {
-	 Warn4("write(%d, %p, "F_Zu"): only wrote "F_Zu" bytes, trying to continue (rev.direction is blocked)",
+	 Warn4("write(%d, %p, "F_Zu"): only wrote "F_Zu" bytes, trying to continue (meanwhile, other direction is blocked)",
 	       fd, (const char *)buff+writt, bytes-writt, chk);
 	 writt += chk;
-      } else {
-	 writt = bytes;
+      } else if (writt == 0) {
+	 /* First attempt, write complete - no extra message */
+	 return chk;
+      } else { 	/* write completed */
 	 break;
       }
    }
@@ -548,7 +580,7 @@ int getusergroups(const char *user, gid_t *list, int *ngroups) {
    /* we prefer getgrouplist because it may be much faster with many groups, but it is not standard */
    gid_t grp, twogrps[2];
    int two = 2;
-   /* getgrouplist requires to pass an extra group id, typically the users primary group, that is then added to the supplementary group list. We don't want such an additional group in the result, but there is not "unspecified" gid value available. Thus we try to find an abitrary supplementary group id that we then pass in a second call to getgrouplist. */
+   /* getgrouplist requires to pass an extra group id, typically the users primary group, that is then added to the supplementary group list. We don't want such an additional group in the result, but there is not "unspecified" gid value available. Thus we try to find an arbitrary supplementary group id that we then pass in a second call to getgrouplist. */
    grp = 0;
    Getgrouplist(user, grp, twogrps, &two);
    if (two == 1) {
@@ -677,7 +709,7 @@ int xiopoll(struct pollfd fds[], unsigned long nfds, struct timeval *timeout) {
 }
 
 
-#if WITH_TCP || WITH_UDP
+#if WITH_TCP || WITH_UDP || WITH_SCTP || WITH_DCCP || WITH_UDPLITE
 /* returns port in network byte order;
    ipproto==IPPROTO_UDP resolves as UDP service, every other value resolves as
    TCP */
@@ -702,10 +734,10 @@ int parseport(const char *portname, int ipproto) {
 
    return se->s_port;
 }
-#endif /* WITH_TCP || WITH_UDP */
+#endif /* WITH_TCP || WITH_UDP || WITH_SCTP || WITH_DCCP || WITH_UDPLITE */
 
 
-#if WITH_IP4 || WITH_IP6 || WITH_INTERFACE
+#if WITH_IP4 || WITH_IP6 || _WITH_INTERFACE
 /* check the systems interfaces for ifname and return its index
    or -1 if no interface with this name was found
    The system calls require an arbitrary socket; the calling program may
@@ -729,8 +761,8 @@ int ifindexbyname(const char *ifname, int anysock) {
    }
    if (anysock >= 0) {
       s = anysock;
-   } else  if ((s = Socket(PF_INET, SOCK_DGRAM, IPPROTO_IP)) < 0) {
-      Error1("socket(PF_INET, SOCK_DGRAM, IPPROTO_IP): %s", strerror(errno));
+   } else  if ((s = Socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
+      Error1("socket(PF_INET, SOCK_DGRAM, 0): %s", strerror(errno));
       return -1;
    }
 
@@ -756,10 +788,10 @@ int ifindexbyname(const char *ifname, int anysock) {
    return -1;
 #endif /* !defined(HAVE_ STRUCT_IFREQ) && defined(SIOCGIFCONF) && defined(SIOCGIFINDEX) */
 }
-#endif /* WITH_IP4 || WITH_IP6 || WITH_INTERFACE */
+#endif /* WITH_IP4 || WITH_IP6 || _WITH_INTERFACE */
 
 
-#if WITH_IP4 || WITH_IP6 || WITH_INTERFACE
+#if WITH_IP4 || WITH_IP6 || _WITH_INTERFACE
 /* like ifindexbyname(), but also allows the index number as input - in this
    case it does not lookup the index.
    writes the resulting index to *ifindex and returns 0,
@@ -783,7 +815,7 @@ int ifindex(const char *ifname, unsigned int *ifindex, int anysock) {
    *ifindex = val;
    return 0;
 }
-#endif /* WITH_IP4 || WITH_IP6 || WITH_INTERFACE */
+#endif /* WITH_IP4 || WITH_IP6 || _WITH_INTERFACE */
 
 
 int _xiosetenv(const char *envname, const char *value, int overwrite, const char *sep) {

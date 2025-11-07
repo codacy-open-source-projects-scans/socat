@@ -177,7 +177,7 @@ static int applyopt(struct single *sfd,	int fd,	struct opt *opt);
    binary search! */
 /* NULL terminated */
 const struct optname optionnames[] = {
-#if HAVE_RESOLV_H && WITH_RES_AAONLY
+#if (WITH_IP4 || WITH_IP6) && HAVE_RESOLV_H && WITH_RES_AAONLY
 	IF_RESOLVE("aaonly",		&opt_res_aaonly)
 #endif
 #ifdef TCP_ABORT_THRESHOLD  /* HP_UX */
@@ -352,7 +352,7 @@ const struct optname optionnames[] = {
 #endif /* SO_CKSUMRECV */
 	/*IF_NAMED  ("cleanup",	&opt_cleanup)*/
 	IF_TERMIOS("clocal",	&opt_clocal)
-	IF_ANY    ("cloexec",	&opt_cloexec)
+	IF_ANY    ("cloexec",		&opt_cloexec)
 	IF_ANY    ("close",	&opt_end_close)
 	IF_OPENSSL("cn",		&opt_openssl_commonname)
 	IF_OPENSSL("commonname",	&opt_openssl_commonname)
@@ -390,8 +390,8 @@ const struct optname optionnames[] = {
 #  endif
 #endif /* defined(CRDLY) */
 	IF_TERMIOS("cread",	&opt_cread)
-	IF_OPEN   ("creat",	&opt_o_create)
-	IF_OPEN   ("create",	&opt_o_create)
+	IF_OPEN   ("creat",	&opt_o_creat)
+	IF_OPEN   ("create",	&opt_o_creat)
 	IF_ANY    ("crlf",      &opt_crnl)
 	IF_ANY    ("crnl",      &opt_crnl)
 	IF_TERMIOS("crterase",	&opt_echoe)
@@ -421,7 +421,7 @@ const struct optname optionnames[] = {
 #ifdef TCP_DEFER_ACCEPT	/* Linux 2.4.0 */
 	IF_TCP    ("defer-accept",	&opt_tcp_defer_accept)
 #endif
-#if HAVE_RESOLV_H
+#if (WITH_IP4 || WITH_IP6) && HAVE_RESOLV_H
 	IF_RESOLVE("defnames",		&opt_res_defnames)
 #endif /* HAVE_RESOLV_H */
 #ifdef O_DELAY
@@ -454,10 +454,10 @@ const struct optname optionnames[] = {
 #ifdef VDISCARD
 	IF_TERMIOS("discard",	&opt_vdiscard)
 #endif
-#if WITH_RESOLVE && HAVE_RESOLV_H && HAVE_RES_NSADDR_LIST
+#if (WITH_IP4 || WITH_IP6) && WITH_RESOLVE && HAVE_RESOLV_H && HAVE_RES_NSADDR_LIST
 	IF_IP     ("dns",		&opt_res_nsaddr)
 #endif
-#if HAVE_RESOLV_H
+#if (WITH_IP4 || WITH_IP6) && HAVE_RESOLV_H
 	IF_RESOLVE("dnsrch",		&opt_res_dnsrch)
 #endif /* HAVE_RESOLV_H */
 #ifdef SO_DONTLINGER
@@ -721,7 +721,7 @@ const struct optname optionnames[] = {
 	IF_ANY    ("ignoreeof",	&opt_ignoreeof)
 	IF_ANY    ("ignoreof",	&opt_ignoreeof)
 	IF_TERMIOS("ignpar",	&opt_ignpar)
-#if HAVE_RESOLV_H
+#if (WITH_IP4 || WITH_IP6) && HAVE_RESOLV_H
 	IF_RESOLVE("igntc",		&opt_res_igntc)
 #endif /* HAVE_RESOLV_H */
 	IF_TERMIOS("imaxbel",	&opt_imaxbel)
@@ -1032,7 +1032,10 @@ const struct optname optionnames[] = {
 #endif
 	IF_ANY    ("mode",	&opt_perm)
 #if WITH_POSIXMQ
-	IF_ANY	  ("mq-prio",	&opt_posixmq_priority)
+	IF_ANY	  ("mq-flush",		&opt_posixmq_flush)
+	IF_ANY	  ("mq-maxmsg",		&opt_posixmq_maxmsg)
+	IF_ANY	  ("mq-msgsize", 	&opt_posixmq_msgsize)
+	IF_ANY	  ("mq-prio",		&opt_posixmq_priority)
 #endif
 #ifdef TCP_MAXSEG
 	IF_TCP    ("mss",	&opt_tcp_maxseg)
@@ -1050,7 +1053,7 @@ const struct optname optionnames[] = {
 	IF_IP     ("multicast-ttl",	&opt_ip_multicast_ttl)
 	IF_IP     ("multicastloop",	&opt_ip_multicast_loop)
 	IF_IP     ("multicastttl",	&opt_ip_multicast_ttl)
-#if WITH_RESOLVE && HAVE_RESOLV_H && HAVE_RES_NSADDR_LIST
+#if (WITH_IP4 || WITH_IP6) && WITH_RESOLVE && HAVE_RESOLV_H && HAVE_RES_NSADDR_LIST
 	IF_IP     ("nameserver",	&opt_res_nsaddr)
 #endif
 #if defined(O_NDELAY) && (!defined(O_NONBLOCK) || O_NDELAY != O_NONBLOCK)
@@ -1118,7 +1121,7 @@ const struct optname optionnames[] = {
 	IF_OPENSSL("nosni",		&opt_openssl_no_sni)
 #endif
 	IF_INTERFACE("notrailers",	&opt_iff_notrailers)
-#if WITH_RESOLVE && HAVE_RESOLV_H && HAVE_RES_NSADDR_LIST
+#if (WITH_IP4 || WITH_IP6) && WITH_RESOLVE && HAVE_RESOLV_H && HAVE_RES_NSADDR_LIST
 	IF_IP     ("nsaddr",		&opt_res_nsaddr)
 #endif
 #ifdef O_NSHARE
@@ -1132,8 +1135,8 @@ const struct optname optionnames[] = {
 #ifdef O_BINARY
 	IF_OPEN   ("o-binary",		&opt_o_binary)
 #endif
-	IF_OPEN   ("o-creat",	&opt_o_create)
-	IF_OPEN   ("o-create",	&opt_o_create)
+	IF_OPEN   ("o-creat",	&opt_o_creat)
+	IF_OPEN   ("o-create",	&opt_o_creat)
 #ifdef O_DEFER
 	IF_OPEN   ("o-defer",	&opt_o_defer)
 #endif
@@ -1191,7 +1194,8 @@ const struct optname optionnames[] = {
 #endif
 	IF_OPEN   ("o-trunc",	&opt_o_trunc)
 	IF_OPEN   ("o-wronly",	&opt_o_wronly)
-	IF_OPEN   ("o_create",	&opt_o_create)
+	IF_OPEN   ("o_creat",	&opt_o_creat)
+	IF_OPEN   ("o_create",	&opt_o_creat)
 #ifdef O_DEFER
 	IF_OPEN   ("o_defer",	&opt_o_defer)
 #endif
@@ -1348,9 +1352,12 @@ const struct optname optionnames[] = {
 	IF_INTERFACE("portsel",	&opt_iff_portsel)
 #endif
 #if WITH_POSIXMQ
+	IF_ANY	  ("posixmq-flush",	&opt_posixmq_flush)
+	IF_ANY	  ("posixmq-maxmsg",	&opt_posixmq_maxmsg)
+	IF_ANY	  ("posixmq-msgsize", 	&opt_posixmq_msgsize)
 	IF_ANY	  ("posixmq-priority",	&opt_posixmq_priority)
 #endif
-#if HAVE_RESOLV_H && WITH_RES_PRIMARY
+#if (WITH_IP4 || WITH_IP6) && HAVE_RESOLV_H && WITH_RES_PRIMARY
 	IF_RESOLVE("primary",		&opt_res_primary)
 #endif
 #ifdef SO_PRIORITY
@@ -1411,7 +1418,7 @@ const struct optname optionnames[] = {
 	IF_OPEN   ("rdonly",	&opt_o_rdonly)
 	IF_OPEN   ("rdwr",	&opt_o_rdwr)
 	IF_ANY    ("readbytes", &opt_readbytes)
-#if HAVE_RESOLV_H
+#if (WITH_IP4 || WITH_IP6) && HAVE_RESOLV_H
 	IF_RESOLVE("recurse",		&opt_res_recurse)
 #endif /* HAVE_RESOLV_H */
 #ifdef IP_RECVDSTADDR
@@ -1451,7 +1458,7 @@ const struct optname optionnames[] = {
 #ifdef VREPRINT
 	IF_TERMIOS("reprint",	&opt_vreprint)
 #endif
-#if HAVE_RESOLV_H
+#if (WITH_IP4 || WITH_IP6) && HAVE_RESOLV_H
 #  if WITH_AA_ONLY
 	IF_RESOLVE("res-aaonly",	&opt_res_aaonly)
 #  endif
@@ -1480,15 +1487,15 @@ const struct optname optionnames[] = {
 #  endif
 	IF_RESOLVE("res-stayopen",	&opt_res_stayopen)
 	IF_RESOLVE("res-usevc",		&opt_res_usevc)
-#endif /* HAVE_RESOLV_H */
+#endif /* (WITH_IP4 || WITH_IP6) && HAVE_RESOLV_H */
 	IF_PROXY  ("resolv",	&opt_proxy_resolve)
 	IF_PROXY  ("resolve",	&opt_proxy_resolve)
 #ifdef IP_RETOPTS
 	IF_IP     ("retopts",	&opt_ip_retopts)
 #endif
-#  if HAVE_RES_RETRANS
+#if (WITH_IP4 || WITH_IP6) && HAVE_RES_RETRANS
 	IF_RESOLVE("retrans",		&opt_res_retrans)
-#  endif
+#endif
 #if WITH_INTERFACE && defined(PACKET_AUXDATA)
 	IF_SOCKET ("retrieve-vlan", 		&opt_retrieve_vlan)
 #endif
@@ -1576,8 +1583,10 @@ const struct optname optionnames[] = {
 #endif
 	IF_SOCKET ("setsockopt",	&opt_setsockopt)
 	IF_SOCKET ("setsockopt-bin",	&opt_setsockopt_bin)
+	IF_SOCKET ("setsockopt-connected",	&opt_setsockopt_connected)
 	IF_SOCKET ("setsockopt-int",	&opt_setsockopt_int)
 	IF_SOCKET ("setsockopt-listen",	&opt_setsockopt_listen)
+	IF_SOCKET ("setsockopt-socket",		&opt_setsockopt_socket)
 	IF_SOCKET ("setsockopt-string",	&opt_setsockopt_string)
 	IF_ANY    ("setuid",	&opt_setuid)
 	IF_ANY    ("setuid-early",	&opt_setuid_early)
@@ -1712,8 +1721,10 @@ const struct optname optionnames[] = {
 #endif /* SO_USELOOPBACK */
 	IF_SOCKET ("sockopt",		&opt_setsockopt)
 	IF_SOCKET ("sockopt-bin",	&opt_setsockopt_bin)
+	IF_SOCKET ("sockopt-conn",	&opt_setsockopt_connected)
 	IF_SOCKET ("sockopt-int",	&opt_setsockopt_int)
 	IF_SOCKET ("sockopt-listen",	&opt_setsockopt_listen)
+	IF_SOCKET ("sockopt-sock",	&opt_setsockopt_socket)
 	IF_SOCKET ("sockopt-string",	&opt_setsockopt_string)
 	IF_SOCKS4 ("socksport",	&opt_socksport)
 	IF_SOCKS4 ("socksuser",	&opt_socksuser)
@@ -1724,7 +1735,7 @@ const struct optname optionnames[] = {
 	IF_IPAPP  ("sourceport",	&opt_sourceport)
 	IF_IPAPP  ("sp",	&opt_sourceport)
 	IF_TERMIOS("start",	&opt_vstart)
-#if HAVE_RESOLV_H
+#if (WITH_IP4 || WITH_IP6) && HAVE_RESOLV_H
 	IF_RESOLVE("stayopen",		&opt_res_stayopen)
 #endif /* HAVE_RESOLV_H */
 	IF_EXEC   ("stderr",    &opt_stderr)
@@ -1930,7 +1941,7 @@ const struct optname optionnames[] = {
 	IF_ANY    ("user",	&opt_user)
 	IF_NAMED  ("user-early",	&opt_user_early)
 	IF_ANY    ("user-late",	&opt_user_late)
-#if HAVE_RESOLV_H
+#if (WITH_IP4 || WITH_IP6) && HAVE_RESOLV_H
 	IF_RESOLVE("usevc",		&opt_res_usevc)
 #endif /* HAVE_RESOLV_H */
 #if defined(AI_V4MAPPED)
@@ -2654,13 +2665,13 @@ int parseopts_table(const char **a, groups_t groups, struct opt **opts,
 	       (*opts)[i].value3.u_string);
 	 break;
 
-#if defined(HAVE_STRUCT_IP_MREQ) || defined (HAVE_STRUCT_IP_MREQN)
+#if (WITH_IP4 || WITH_IP6) && ( defined(HAVE_STRUCT_IP_MREQ) || defined (HAVE_STRUCT_IP_MREQN) )
       case TYPE_IP_MREQN:
 	 xiotype_ip_add_membership(token, ent, opt);
 	 break;
-#endif /* defined(HAVE_STRUCT_IP_MREQ) || defined (HAVE_STRUCT_IP_MREQN) */
+#endif /* WITH_IP && defined(HAVE_STRUCT_IP_MREQ) || defined (HAVE_STRUCT_IP_MREQN) ) */
 
-#if defined(HAVE_STRUCT_IP_MREQ_SOURCE) && defined(IP_ADD_SOURCE_MEMBERSHIP)
+#if _WITH_IP4 && defined(HAVE_STRUCT_IP_MREQ_SOURCE)
       case TYPE_IP_MREQ_SOURCE:
 	 xiotype_ip_add_source_membership(token, ent, opt);
 	 break;
@@ -2768,7 +2779,8 @@ int parseopts_table(const char **a, groups_t groups, struct opt **opts,
 
       ++i;
       if ((i % 8) == 0) {
-	 *opts = Realloc(*opts, (i+8) * sizeof(struct opt));
+	 /*0 *opts = Realloc(*opts, (i+8) * sizeof(struct opt)); */
+	 *opts = Realloc3(*opts, (i+8) * sizeof(struct opt), i * sizeof(struct opt));
 	 if (*opts == NULL) {
 	    return -1;
 	 }
@@ -2903,7 +2915,6 @@ int showleft(const struct opt *opts) {
    }
    return 0;
 }
-
 
 /* determines the address group from mode_t */
 /* does not set GROUP_FD; cannot determine GROUP_TERMIOS ! */
@@ -3100,7 +3111,7 @@ int retropt_int(struct opt *opts, int optcode, int *result) {
 /* Looks for the first option of type <optcode>. If the option is found,
    this function stores its int value in *result, "consumes" the
    option, and returns 0.
-   If the option is not found, *result is not modified, and -1 is returned. */
+   If the option is not found, values are not modified, and -1 is returned. */
 int retropt_2integrals(struct opt *opts, int optcode,
 		       union integral *value1, union integral *value2)
 {
@@ -3250,7 +3261,8 @@ int retropt_bind(struct opt *opts,
 		 int ipproto,
 		 struct sockaddr *sa,
 		 socklen_t *salen,
-		 int feats,	/* TCP etc: 1..address allowed,
+		 int feats,	/*         -1..generic addr spec
+				   TCP etc: 1..address allowed,
 					    3..address and port allowed
 				   UNIX (or'd): 1..tight
 						2..abstract
@@ -3274,10 +3286,13 @@ int retropt_bind(struct opt *opts,
    }
    bindp = bindname;
 
-   switch (af) {
+#if WITH_IP4 && WITH_IP6
+   /* Try to derive address family from string */
+   if (af == AF_UNSPEC && bindname[0] == '[')
+      af = AF_INET6;
+#endif /* WITH_IP4 && WITH_IP6 */
 
-   case AF_UNSPEC:
-      {
+   if (feats == -1) {
 	 size_t p = 0;
 	 dalan(bindname, (uint8_t *)sa->sa_data, &p, *salen-sizeof(sa->sa_family), 'i');
 	 *salen = p + sizeof(sa->sa_family);
@@ -3289,10 +3304,13 @@ int retropt_bind(struct opt *opts,
 #if HAVE_STRUCT_SOCKADDR_SALEN
 	 sa->sa_len = *salen;
 #endif
-      }
-      break;
+	 return STAT_OK;
+   }
+
+   switch (af) {
 
 #if WITH_IP4 || WITH_IP6 || WITH_VSOCK
+   case AF_UNSPEC:
 #if WITH_VSOCK
    case AF_VSOCK:
 #endif
@@ -3323,11 +3341,12 @@ int retropt_bind(struct opt *opts,
 	 }
       }
 
-      /* Set AI_PASSIVE, except when it is explicitely disabled */
+#  if WITH_IP4 || WITH_IP6
+      /* Set AI_PASSIVE, except when it is explicitly disabled */
       ai_flags2[0] = ai_flags[0];
       ai_flags2[1] = ai_flags[1];
       if (!(ai_flags2[1] & AI_PASSIVE))
-      ai_flags2[0] |= AI_PASSIVE;
+	 ai_flags2[0] |= AI_PASSIVE;
 
       if ((result =
 	   xioresolve(hostname[0]!='\0'?hostname:NULL, portp,
@@ -3337,6 +3356,8 @@ int retropt_bind(struct opt *opts,
 	 Error("error resolving bind option");
 	 return STAT_NORETRY;
       }
+/*#  else */
+#  endif /* WITH_IP4 || WITH_IP6 */
       break;
 #endif /* WITH_IP4 || WITH_IP6 || WITH_VSOCK */
 
@@ -3567,6 +3588,8 @@ int applyopt_ioctl_generic(
 	return 0;
 }
 
+#if _WITH_SOCKET
+
 int applyopt_sockopt(
 	int fd,
 	struct opt *opt)
@@ -3695,7 +3718,7 @@ int applyopt_sockopt(
 	}
 	break;
 #endif /* HAVE_STRUCT_LINGER */
-#if defined(HAVE_STRUCT_IP_MREQ) || defined (HAVE_STRUCT_IP_MREQN)
+#if (WITH_IP4 || WITH_IP6) && ( defined(HAVE_STRUCT_IP_MREQ) || defined (HAVE_STRUCT_IP_MREQN) )
 	case TYPE_IP_MREQN:
 		/* handled in applyopts_single */
 		break;
@@ -3815,6 +3838,9 @@ int applyopt_sockopt_generic(
 	return 0;
 }
 
+#endif /* _WITH_SOCKET */
+
+#if HAVE_FLOCK
 int applyopt_flock(
 	int fd,
 	struct opt *opt)
@@ -3826,6 +3852,7 @@ int applyopt_flock(
 	}
 	return 0;
 }
+#endif /* defined(HAVE_FLOCK) */
 
 /* Applies an option that needs handling specific to its OPT_* setting.
    Does not overwrite the option instance with ODESC_DONE or ODESC_ERROR,
@@ -3921,8 +3948,12 @@ int applyopt_spec(
 	{
 		struct passwd *pwd;
 		if ((pwd = getpwuid(opt->value.u_uidt)) == NULL) {
-			Error1("getpwuid("F_uid"): no such user",
-			       opt->value.u_uidt);
+			if (errno != 0)
+				Error2("getpwuid("F_uid"): %s",
+				       opt->value.u_uidt, strerror(errno));
+			else
+				Error1("getpwuid("F_uid"): no such user",
+				       opt->value.u_uidt);
 			return -1;
 		}
 		if (Initgroups(pwd->pw_name, pwd->pw_gid) < 0) {
@@ -4216,7 +4247,7 @@ int applyopts_cloexec(int fd, struct opt *opts) {
 
    if (!opts)  return 0;
 
-   retropt_bool(opts, OPT_CLOEXEC, &docloexec);
+   retropt_bool(opts, OPT_O_CLOEXEC, &docloexec);
    if (docloexec) {
       if (Fcntl_l(fd, F_SETFD, FD_CLOEXEC) < 0) {
 	 Warn2("fcntl(%d, F_SETFD, FD_CLOEXEC): %s", fd, strerror(errno));
@@ -4272,6 +4303,7 @@ static int applyopt_offset(struct single *sfd, struct opt *opt) {
    case TYPE_CONST:
       *(int *)ptr = opt->desc->minor;
       break;
+#if WITH_IP4
    case TYPE_IP4NAME:
       memset(ptr, 0, sizeof(struct sockaddr_in));
       ((struct sockaddr_in *)ptr)->sin_addr   = opt->value.u_ip4addr;
@@ -4281,6 +4313,7 @@ static int applyopt_offset(struct single *sfd, struct opt *opt) {
       memset(ptr, 0, sizeof(struct sockaddr_in));
       *(struct sockaddr_in *)ptr = opt->value.u_ip4sock;
       break;
+#endif /* WITH_IP4 */
    default:
       Error2("applyopt_offset(opt:%s): type %s not implemented",
 	     opt->desc->defname, xiohelp_opttypename(opt->desc->type));
@@ -4663,4 +4696,12 @@ int dumpopts(struct opt *opts)
 		++i;
 	}
 	return 0;
+}
+
+/* Better with type specific free function */
+void freeopts(
+	struct opt *opts)
+{
+   free(opts);
+   return;
 }

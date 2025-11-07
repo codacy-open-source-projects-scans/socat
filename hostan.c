@@ -33,6 +33,11 @@ int hostan(FILE *outfile) {
 #endif
    fprintf(outfile, "sizeof(size_t)    = %u\n", (unsigned int)sizeof(size_t));
 
+   if ((char)-1 > 0)
+      fprintf(outfile, "typedef unsigned char       char;\n");
+   else
+      fprintf(outfile, "typedef signed char         char;\n");
+
 #  if HAVE_BASIC_SIZE_T==2
    fprintf(outfile, "typedef unsigned short      size_t;     /* sizeof(size_t) = %u */\n", (unsigned int)sizeof(size_t));
 #elif HAVE_BASIC_SIZE_T==4

@@ -167,7 +167,7 @@ int main(int argc, const char *argv[]) {
    Nanosleep(&waittime, NULL);
 
    if (style == 0) {
-      /* this style gives detailled infos, but requires a file descriptor */
+      /* This style gives detailed infos, but requires a file descriptor */
       if (filename) {
 #if LATER /* this is just in case that S_ISSOCK does not work */
 	 struct stat buf;

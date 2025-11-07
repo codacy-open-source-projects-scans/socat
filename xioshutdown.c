@@ -10,6 +10,7 @@
 
 #include "xio-openssl.h"
 
+
 static pid_t socat_kill_pid;	/* here we pass the pid to be killed in sighandler */
 
 static void signal_kill_pid(int dummy) {
@@ -51,6 +52,7 @@ int xioshutdown(xiofile_t *sock, int how) {
 	       sock->stream.fd, strerror(errno));
       }
       return 0;
+#if _WITH_SOCKET
    case XIOSHUT_DOWN:
       result = Shutdown(sock->stream.fd, how);
       if (result < 0) {
@@ -70,7 +72,6 @@ int xioshutdown(xiofile_t *sock, int how) {
 	 return -1;
       }
       return 0;
-#if _WITH_SOCKET
    case XIOSHUT_NULL:
       writenull = '\0'; 	/* assign something to make gcc happy */
       /* send an empty packet; only useful on datagram sockets? */

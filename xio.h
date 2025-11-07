@@ -120,12 +120,13 @@ typedef struct xioparms {
    const char *sniffleft_name; 		/* file name with -r */
    const char *sniffright_name; 	/* file name with -R */
    size_t bufsiz;
+   struct timeval total_timeout;/* when nothing happens, die after seconds */
 } xioparms_t;
 
 /* pack the description of a lock file */
 typedef struct {
    const char     *lockfile;	/* name of lockfile; NULL if no locking */
-   bool            waitlock;	/* dont't exit when already locked */
+   bool            waitlock;	/* don't exit when already locked */
    struct timespec intervall;	/* polling intervall */
 } xiolock_t;
 

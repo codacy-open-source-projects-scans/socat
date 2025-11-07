@@ -52,7 +52,7 @@ int xiogetlock(const char *lockfile) {
 
    pid = Getpid();
    bytes = sprintf(pidbuf, F_pid"\n", pid);
-   if (writefull(fd, pidbuf, bytes) < 0) {
+   if (writefull(fd, pidbuf, bytes, NULL) < 0) {
       Error4("write(%d, %p, "F_Zu"): %s", fd, pidbuf, bytes, strerror(errno));
       return -1;
    }

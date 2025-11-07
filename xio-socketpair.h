@@ -7,4 +7,6 @@
 
 const extern struct addrdesc xioaddr_socketpair;
 
+extern int xiosocketpair(struct opt *opts, int pf, int socktype, int proto, int sv[2]);
+
 #endif /* !defined(__xio_socketpair_h_included) */

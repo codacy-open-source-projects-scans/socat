@@ -95,3 +95,26 @@ static int xioopen_socketpair(
 }
 
 #endif /* WITH_SOCKETPAIR */
+
+
+#if _WITH_SOCKETPAIR
+
+/* retrieves options so-type and so-prototype from opts, calls socketpair, and
+   ev. generates an appropriate error message.
+   returns 0 on success or -1 if an error occurred. */
+int
+xiosocketpair(struct opt *opts, int pf, int socktype, int proto, int sv[2]) {
+   int result;
+
+   retropt_int(opts, OPT_SO_TYPE, &socktype);
+   retropt_int(opts, OPT_SO_PROTOTYPE, &proto);
+   result = Socketpair(pf, socktype, proto, sv);
+   if (result < 0) {
+      Error5("socketpair(%d, %d, %d, %p): %s",
+	     pf, socktype, proto, sv, strerror(errno));
+      return -1;
+   }
+   return result;
+}
+
+#endif /* _WITH_SOCKETPAIR */

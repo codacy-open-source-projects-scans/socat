@@ -50,7 +50,7 @@ ssize_t xiowrite(xiofile_t *file, const void *buff, size_t bytes) {
    switch (pipe->dtype & XIODATA_WRITEMASK) {
 
    case XIOWRITE_STREAM:
-      writt = writefull(pipe->fd, buff, bytes);
+      writt = writefull(pipe->fd, buff, bytes, NULL);
       if (writt < 0) {
 	 _errno = errno;
 	 switch (_errno) {
@@ -116,8 +116,10 @@ ssize_t xiowrite(xiofile_t *file, const void *buff, size_t bytes) {
    case XIOWRITE_PIPE:
       if (pipe->para.bipipe.socktype == SOCK_STREAM) {
 	 writt = Write(pipe->para.bipipe.fdout, buff, bytes);
+#if _WITH_SOCKET
       } else {
 	 writt = Send(pipe->para.bipipe.fdout, buff, bytes, 0);
+#endif /* _WITH_SOCKET */
       }
       _errno = errno;
       if (writt < 0) {

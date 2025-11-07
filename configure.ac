@@ -39,7 +39,7 @@ AC_PROG_RANLIB
 AC_SUBST(AR)
 AC_CHECK_PROG(AR, ar, ar, gar)
 #
-# we need to explicitely call this here; otherwise, with --disable-libwrap we
+# we need to explicitly call this here; otherwise, with --disable-libwrap we
 # fail
 AC_LANG_COMPILER_REQUIRE()
 
@@ -409,21 +409,33 @@ AC_ARG_ENABLE(dccp, [  --disable-dccp           disable DCCP support],
 	       [AC_MSG_RESULT(yes);   WITH_DCCP=1 ])
 
 if test -n "$WITH_DCCP"; then
-AC_MSG_CHECKING(for IPPROTO_DCCP)
-AC_CACHE_VAL(sc_cv_define_ipproto_dccp,
-[AC_TRY_COMPILE([#include <sys/types.h>
-#include <netinet/in.h>],
-[IPPROTO_DCCP;],
-[sc_cv_define_ipproto_dccp=yes],
-[sc_cv_define_ipproto_dccp=no])])
-AC_MSG_RESULT($sc_cv_define_ipproto_dccp)
-if test $sc_cv_define_ipproto_dccp = yes; then
-   AC_DEFINE(WITH_DCCP)
+   AC_CHECK_HEADER(netinet/dccp.h,
+     AC_DEFINE(HAVE_NETINET_DCCP_H))
    AC_CHECK_HEADER(linux/dccp.h,
      AC_DEFINE(HAVE_LINUX_DCCP_H))
-else
-   AC_MSG_WARN([IPPROTO_DCCP undefined, disabling DCCP support])
 fi
+if test -n "$WITH_DCCP"; then
+   AC_MSG_CHECKING(for IPPROTO_DCCP)
+   AC_CACHE_VAL(sc_cv_define_ipproto_dccp,
+   [AC_TRY_COMPILE([#include <sys/types.h>
+   #include <netinet/in.h>],
+   [IPPROTO_DCCP;],
+   [sc_cv_define_ipproto_dccp=yes],
+   [sc_cv_define_ipproto_dccp=no; WITH_DCCP=])])
+   AC_MSG_RESULT($sc_cv_define_ipproto_dccp)
+fi
+if test -n "$WITH_DCCP"; then
+   AC_MSG_CHECKING(for SOCK_DCCP)
+   AC_CACHE_VAL(sc_cv_define_sock_dccp,
+   [AC_TRY_COMPILE([#include <sys/types.h>
+   #include <netinet/in.h>],
+   [SOCK_DCCP;],
+   [sc_cv_define_sock_dccp=yes],
+   [sc_cv_define_sock_dccp=no; WITH_DCCP=])])
+   AC_MSG_RESULT($sc_cv_define_sock_dccp)
+fi
+if test -n "$WITH_DCCP"; then
+   AC_DEFINE(WITH_DCCP)
 fi
 
 AC_MSG_CHECKING(whether to include vsock support)
@@ -489,6 +501,13 @@ AC_ARG_ENABLE(posixmq, [  --disable-posixmq       disable POSIX MQ support],
 	       *) WITH_POSIXMQ=1; AC_MSG_RESULT(yes);;
 	       esac],
 	       [WITH_POSIXMQ=1; AC_MSG_RESULT(yes)])
+if test "$WITH_POSIXMQ"; then
+    AC_CHECK_HEADERS(mqueue.h)
+    if test "x$ac_cv_header_mqueue_h" != xyes; then
+	AC_MSG_WARN([Header mqueue.h not found, disabling POSIX MQ])
+	WITH_POSIXMQ=
+    fi
+fi
 if test "$WITH_POSIXMQ"; then
     case "`uname`" in
     Linux) AC_DEFINE(WITH_POSIXMQ)
@@ -652,23 +671,16 @@ if test -n "$WITH_OPENSSL"; then
   AC_CACHE_VAL(sc_cv_have_openssl_ssl_h,
     [AC_TRY_COMPILE([#include <openssl/ssl.h>],[;],
       [sc_cv_have_openssl_ssl_h=yes; OPENSSL_BASE=""; ],
-      [sc_cv_have_openssl_ssl_h=no
-       if test "$OPENSSL_BASE"; then
-	  Ds="$OPENSSL_BASE"
-       else
-          Ds="/sw /usr/local /opt/freeware /usr/sfw /usr/local/ssl"
-       fi
-       for D in $Ds; do
-	I="$D/include"
-	i="$I/openssl/ssl.h"
-	if test -r "$i"; then
-	  #V_INCL="$V_INCL -I$I"
-	  CPPFLAGS="$CPPFLAGS -I$I"
-	  AC_MSG_NOTICE(found $i)
-	  sc_cv_have_openssl_ssl_h=yes; OPENSSL_BASE="$D"
-	  break;
-	fi
-      done])
+      [
+        # Another attempt to compile with OPENSSL_NO_KRB5
+	AC_MSG_NOTICE(trying with -DOPENSSL_NO_KRB5)
+	CFLAGS_ORIG="$CFLAGS"
+	CFLAGS="$CFLAGS -DOPENSSL_NO_KRB5"
+	AC_TRY_COMPILE([#include <openssl/ssl.h>],[;],
+	  [sc_cv_have_openssl_ssl_h=yes],
+	  [sc_cv_have_openssl_ssl_h=no
+	   CFLAGS="$CFLAGS_ORIG"])
+    ])
   ])
   if test "$sc_cv_have_openssl_ssl_h" = "yes"; then
     AC_DEFINE(HAVE_OPENSSL_SSL_H)
@@ -1722,6 +1734,8 @@ AC_CHECK_PROTOTYPE_LIB(gettimeofday)
 
 AC_CHECK_FUNC(clock_gettime, AC_DEFINE(HAVE_CLOCK_GETTIME), AC_CHECK_LIB(rt, clock_gettime, [LIBS="-lrt $LIBS"; AC_DEFINE(HAVE_CLOCK_GETTIME)]))
 
+AC_CHECK_FUNCS(getresuid getresgid)
+
 dnl Search for flock()
 # with Linux it's in libc, with AIX in libbsd
 AC_CHECK_FUNC(flock, AC_DEFINE(HAVE_FLOCK),
@@ -2248,7 +2262,7 @@ AC_TRY_COMPILE([#include <resolv.h>],
 
 dnl "tcpd" "tcpwrappers"
 # on some platforms, raw linking with libwrap fails because allow_severity and
-# deny_severity are not explicitely defined. Thus we put the libwrap part to
+# deny_severity are not explicitly defined. Thus we put the libwrap part to
 # the end
 AC_MSG_CHECKING(whether to include libwrap support)
 AC_ARG_ENABLE(libwrap, [  --disable-libwrap       disable libwrap support],
@@ -2303,7 +2317,7 @@ int allow_severity,deny_severity;],[hosts_access(0)],
 	AC_TRY_LINK([#include <sys/types.h>
 #include <tcpd.h>
 int allow_severity,deny_severity;],[hosts_access(0)],
-      	  [sc_cv_have_libwrap='yes'],
+	  [sc_cv_have_libwrap='yes'],
 	  [sc_cv_have_libwrap='no'])
       ]
       )

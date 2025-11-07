@@ -58,18 +58,25 @@ Rocky 9
 Cygwin 10.0
 
 
-install
--------
+build
+-----
+
+You need at least gcc and make.
+A few libraries are required for full features:
+Debian:     libssl-dev    libreadline-dev libwrap0-dev
+Red Hat:    openssl-devel readline-devel  tcp_wrappers-libs
+Arch Linux: openssl       readline
+
 
 Get the tarball and extract it:
 	tar xzf socat.tar.gz
-	cd socat-1.8.0.1
+	cd socat-1.8.0.3
 	./configure
 	make
 	su
 	make install	# installs socat, filan, and procan in /usr/local/bin
 
-For compiling socat, gcc (or clang) is recommended.
+For compiling socat, gcc or a compatible compiler (e.g. clang) is recommended.
 If gcc (or a compiler with similar front end) is not available, the configure
 script might fail to determine some features
 

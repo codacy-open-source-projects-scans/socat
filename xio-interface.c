@@ -71,7 +71,7 @@ int _xioopen_interface(const char *ifname,
 
    if (ifindex(ifname, &ifidx, -1) < 0) {
       Error1("unknown interface \"%s\"", ifname);
-      ifidx = 0;	/* desparate attempt to continue */
+      ifidx = 0;	/* desperate attempt to continue */
    }
 
    if (sfd->howtoend == END_UNSPEC)
@@ -276,7 +276,7 @@ int _xiointerface_apply_iff(
 
 
 #if HAVE_STRUCT_CMSGHDR && HAVE_STRUCT_TPACKET_AUXDATA
-/* Converts the ancillary message in *cmsg into a form useable for further
+/* Converts the ancillary message in *cmsg into a form usable for further
    processing. Knows the specifics of common message types.
    On PACKET_AUXDATA it stored the ancillary data in the XFD.
    For other types:

@@ -2,7 +2,7 @@
 # Copyright Gerhard Rieger and contributors (see file CHANGES)
 # Published under the GNU General Public License V.2, see file COPYING
 
-# Shell script to build a many-to-one, one-to-all communication
+# Shell script to establish many-to-one, one-to-all communications.
 # It starts two Socat instances that communicate via IPv4 broadcast,
 # the first of which forks a child process for each connected client.
 
@@ -43,6 +43,7 @@ while [ "$1" ]; do
 	X-q) QUIET=1; OPTS="-d0" ;;
 	X-d*|X-l?*) OPTS="$OPTS $1" ;;
 	X-b|X-S|X-t|X-T|X-l) OPT=$1; shift; OPTS="$OPTS $OPT $1" ;;
+	X--experimental) ;;
 	X-) break ;;
 	X-*) echo "$0: Unknown option \"$1\"" >&2
 	     usage >&2

@@ -24,7 +24,7 @@ avoid accessing files in world-writable directories like /tmp
 
 * When using socat with system, exec, or in a shell script, know what you do
 
-* With system and exec, use absolute pathes or set the path option
+* With system and exec, use absolute paths or set the path option
 
 * When starting programs with socat, consider using the chroot option (this
 requires root, so use the substuser option too).

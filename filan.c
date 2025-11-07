@@ -393,7 +393,7 @@ int filan_stat(
       break;
 #ifdef S_IFLNK
    case (S_IFLNK):	/* 10, symbolic link */
-      /* we wait for freadlink() sytem call */
+      /* we wait for freadlink() system call */
       break;
 #endif /* S_IFLNK */
       break;
@@ -804,13 +804,13 @@ int ipan(int fd, FILE *outfile) {
    }
    /* want to pass the fd to the next layer protocol. */
 #if defined(SO_PROTOCOL) || defined(SO_PROTOTYPE)
-   if (Getsockopt(fd, SOL_SOCKET,
+   if (
 #ifdef SO_PROTOCOL
-		  SO_PROTOCOL,
+       Getsockopt(fd, SOL_SOCKET, SO_PROTOCOL, &optproto, &optlen)
 #elif defined(SO_PROTOTYPE)
-		  SO_PROTOTYPE,
+       Getsockopt(fd, SOL_SOCKET, SO_PROTOTYPE, &optproto, &optlen)
 #endif
-		  &optproto, &optlen) >= 0) {
+       >= 0) {
       switch (optproto) {
 #if WITH_TCP
       case IPPROTO_TCP: tcpan(fd, outfile); break;

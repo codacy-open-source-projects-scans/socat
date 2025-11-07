@@ -25,9 +25,8 @@ extern const struct optdesc opt_proxy_authorization_file;
 
 extern const struct addrdesc xioaddr_proxy_connect;
 
+extern int _xioopen_proxy_init(struct proxyvars *proxyvars, struct opt *opts, const char *targetname, const char *targetport);
 extern int _xioopen_proxy_prepare(struct proxyvars *proxyvars, struct opt *opts, const char *targetname, const char *targetport, const int ai_flags[2]);
-int _xioopen_proxy_connect(struct single *xfd,
-			   struct proxyvars *proxyvars,
-			   int level);
+extern int _xioopen_proxy_connect(struct single *xfd, struct proxyvars *proxyvars, int level);
 
 #endif /* !defined(__xio_proxy_h_included) */

@@ -79,7 +79,7 @@ int xio_retropt_tcpwrap(
 }
 
 
-/* returns -1 if forbidden, 0 if no tcpwrap check, or 1 if explicitely allowed
+/* Returns -1 if forbidden, 0 if no tcpwrap check, or 1 if explicitly allowed
    */
 int xio_tcpwrap_check(
 	struct single *sfd,

@@ -11,7 +11,7 @@
 
 #include "xio-ascii.h"
 
-/* for each 6 bit pattern we have an ASCII character in the arry */
+/* For each 6 bit pattern we have an ASCII character in the array */
 const static int base64chars[] = {
   'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
   'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',

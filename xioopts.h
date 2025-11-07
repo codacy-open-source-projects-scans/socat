@@ -72,7 +72,7 @@ enum e_types {
 #if HAVE_STRUCT_LINGER
    TYPE_LINGER,		/* struct linger */
 #endif /* HAVE_STRUCT_LINGER */
-#if HAVE_STRUCT_IP_MREQ || HAVE_STRUCT_IP_MREQN
+#if (WITH_IP4 || WITH_IP6) && ( defined(HAVE_STRUCT_IP_MREQ) || defined(HAVE_STRUCT_IP_MREQN) )
    TYPE_IP_MREQN,	/* for  struct ip_mreq  or  struct ip_mreqn */
 #endif
 #if HAVE_STRUCT_IP_MREQ_SOURCE
@@ -150,7 +150,7 @@ enum e_func {
 #define GROUP_NONE	0x00000000
 #define GROUP_ADDR	0x00000000 	/* options that apply to all addresses */
 
-#define GROUP_FD	0x00000001	/* everything applyable to a fd */
+#define GROUP_FD	0x00000001	/* everything applicable to a fd */
 #define GROUP_FIFO	0x00000002
 #define GROUP_CHR	0x00000004 	/* not yet used? */
 #define GROUP_BLK	0x00000008
@@ -272,7 +272,6 @@ enum e_optcode {
    OPT_CHROOT_EARLY,	/* chroot() before file system access */
    /*OPT_CIBAUD,*/		/* termios.c_cflag */
    OPT_CLOCAL,		/* termios.c_cflag */
-   OPT_CLOEXEC,
    OPT_CONNECT_TIMEOUT,	/* socket connect */
    OPT_COOL_WRITE,
    OPT_CR,		/* customized */
@@ -482,6 +481,9 @@ enum e_optcode {
    OPT_LOWPORT,
    OPT_MAX_CHILDREN,
 #if WITH_POSIXMQ
+   OPT_POSIXMQ_FLUSH,
+   OPT_POSIXMQ_MAXMSG,
+   OPT_POSIXMQ_MSGSIZE,
    OPT_POSIXMQ_PRIORITY,
 #endif
 #ifdef NLDLY
@@ -552,7 +554,8 @@ enum e_optcode {
    OPT_O_ASYNC,
 #endif
    OPT_O_BINARY,		/* Cygwin */
-   OPT_O_CREATE,
+   OPT_O_CLOEXEC,
+   OPT_O_CREAT,
 #ifdef O_DEFER
    OPT_O_DEFER,
 #endif
@@ -660,8 +663,10 @@ enum e_optcode {
    OPT_SETPGID,
    OPT_SETSID,
    OPT_SETSOCKOPT_BIN,
+   OPT_SETSOCKOPT_CONNECTED,
    OPT_SETSOCKOPT_INT,
    OPT_SETSOCKOPT_LISTEN,
+   OPT_SETSOCKOPT_SOCKET,
    OPT_SETSOCKOPT_STRING,
    OPT_SETUID,
    OPT_SETUID_EARLY,
@@ -1028,6 +1033,7 @@ extern groups_t _groupbits(mode_t mode);
 extern int dropopts(struct opt *opts, unsigned int phase);
 extern int dropopts2(struct opt *opts, unsigned int from, unsigned int to);
 extern int dumpopts(struct opt *opts);
+extern void freeopts(struct opt *opts);
 
 #if HAVE_BASIC_UID_T==1
 #  define retropt_uid(o,c,r) retropt_short(o,c,r)

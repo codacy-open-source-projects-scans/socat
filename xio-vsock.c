@@ -98,7 +98,7 @@ static int xioopen_vsock_connect(
 
    ret = retropt_bind(opts, pf, socktype, protocol,
                       (struct sockaddr *)&sa_local, &sa_len, 3,
-		      sfd->para.socket.ip.ai_flags);
+		      NULL);
    if (ret == STAT_NORETRY)
       return ret;
    if (ret == STAT_OK)

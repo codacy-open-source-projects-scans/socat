@@ -36,7 +36,7 @@ $ECHO
 
 if [ "$USERNAME" != "$CREDUSER" -o "$PASSWORD" != "$CREDPASS" ]; then
     $ECHO "Authentication failed" >&2
-    exit -1
+    exit 1
 fi
 
 while $ECHO "$PROMPT\c"; read -r COMMAND; do

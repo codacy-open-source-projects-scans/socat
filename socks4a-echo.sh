@@ -37,7 +37,7 @@ esac
 if   [ $(echo "x\c") = "x" ]; then E=""
 elif [ $(echo -e "x\c") = "x" ]; then E="-e"
 else
-    echo "cannot suppress trailing newline on echo" >&2
+    echo "$0: cannot suppress trailing newline on echo" >&2
     exit 1
 fi
 ECHO="echo $E"
@@ -58,7 +58,7 @@ else
 fi
 if [ "$vn" != $($ECHO "\04") ]; then
     $ECHO "$SOCKSREPLY_FAILED"
-    echo "invalid socks version requested" >&2
+    echo "$0 invalid socks version requested" >&2
     exit
 fi
 
@@ -69,7 +69,7 @@ else
 fi
 if [ "$cd" != $($ECHO "\01") ]; then
     $ECHO "$SOCKSREPLY_FAILED"
-    echo "invalid socks operation requested" >&2
+    echo "$0: invalid socks operation requested" >&2
     exit
 fi
 
@@ -82,7 +82,7 @@ a=$(dd bs=1 count=6 2>/dev/null)
 if [ "$a" != "$($ECHO "}m\0\0\0\01")" ]; then
     sleep 1
     $ECHO "$SOCKSREPLY_FAILED"
-    echo "wrong socks address or port requested" >&2
+    echo "$0: wrong socks address or port requested" >&2
     exit
 fi
 
@@ -93,7 +93,7 @@ else
 fi
 if [ "$u" != "nobody" ]; then
     $ECHO "$SOCKSREPLY_FAILED"
-    echo "wrong socks user requested" >&2
+    echo "$0: wrong socks user requested" >&2
     exit
 fi
 
@@ -104,7 +104,7 @@ else
 fi
 if [ "$h" != "localhost" ]; then
     $ECHO "$SOCKSREPLY_FAILED"
-    echo "wrong socks address requested" >&2
+    echo "$0: wrong socks address requested" >&2
     exit
 fi
 

@@ -87,7 +87,7 @@ const struct optdesc opt_fs_noatime      = { "fs-noatime",      "noatime",      
 #endif /* FS_NOATIME_FL */
 
 /* FS_DIRTY_FL ??? */
-/* FS_COMPRBLK_FL one ore more compress clusters */
+/* FS_COMPRBLK_FL one or more compress clusters */
 /* FS_NOCOMPR_FL access raw compressed data */
 /* FS_ECOMPR_FL compression error */
 /* FS_BTREE_FL btree format dir */

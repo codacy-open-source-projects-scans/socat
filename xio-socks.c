@@ -6,13 +6,15 @@
 
 #include "xiosysincludes.h"
 
-#if WITH_SOCKS4 || WITH_SOCKS4A
-
 #include "xioopen.h"
 #include "xio-ascii.h"
 #include "xio-socket.h"
 #include "xio-ip.h"
 #include "xio-ipapp.h"
+
+#define SOCKSPORT "1080"
+
+#if WITH_SOCKS4 || WITH_SOCKS4A
 
 #include "xio-socks.h"
 
@@ -24,7 +26,6 @@ enum {
    SOCKS_CD_IDENTFAILED
 } ;
 
-#define SOCKSPORT "1080"
 #define BUFF_LEN (SIZEOF_STRUCT_SOCKS4+512)
 
 static int xioopen_socks4_connect(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *fd, const struct addrdesc *addrdesc);
@@ -53,13 +54,12 @@ static int xioopen_socks4_connect(
    int pf = PF_UNSPEC;
    int ipproto = IPPROTO_TCP;
    bool dofork = false;
-   union sockaddr_union us_sa,  *us = &us_sa;
-   socklen_t uslen = sizeof(us_sa);
-   struct addrinfo **themarr, *themp;
-   int i;
+   int maxchildren = 0;
+   struct addrinfo **bindarr = NULL;
+   struct addrinfo **themarr = NULL;
+   uint16_t bindport = 0;
    bool needbind = false;
    bool lowport = false;
-   char infobuff[256];
    unsigned char buff[BUFF_LEN];
    struct socks4 *sockhead = (struct socks4 *)buff;
    size_t buflen = sizeof(buff);
@@ -75,41 +75,43 @@ static int xioopen_socks4_connect(
    targetname = argv[2];
    targetport = argv[3];
 
-   if (sfd->howtoend == END_UNSPEC)
-      sfd->howtoend = END_SHUTDOWN;
-   if (applyopts_single(sfd, opts, PH_INIT) < 0)  return -1;
-   applyopts(sfd, 1, opts, PH_INIT);
-
-   retropt_int(opts, OPT_SO_TYPE, &socktype);
-
-   retropt_bool(opts, OPT_FORK, &dofork);
-
-   result = _xioopen_socks4_prepare(targetport, opts, &socksport, sockhead, &buflen);
+   /* Apply and retrieve some options */
+   result = _xioopen_ipapp_init(sfd, xioflags, opts,
+			        &dofork, &maxchildren,
+			        &pf, &socktype, &ipproto);
    if (result != STAT_OK)
       return result;
 
+   result = _xioopen_socks4_init(targetport, opts, &socksport, sockhead,
+				 &buflen);
+   if (result != STAT_OK)
+      return result;
+
+   opts0 = opts; 	/* save remaining options for each loop */
+   opts = NULL;
+
    Notice5("opening connection to %s:%u via socks4 server %s:%s as user \"%s\"",
-	   targetname,
-	   ntohs(sockhead->port),
+	   targetname, ntohs(sockhead->port),
 	   sockdname, socksport, sockhead->userid);
 
-   i = 0;
-   do {	/* loop over retries (failed connect and socks-request attempts) */
+   do {	/* loop over retries (failed connect and socks-request attempts)
+	   and/or forks */
+      int _errno;
 
-      level = E_INFO;
+#if WITH_RETRY
+      if (sfd->forever || sfd->retry) {
+	 level = E_NOTICE;
+      } else
+#endif /* WITH_RETRY */
+	 level = E_WARN;
+
+      opts = copyopts(opts0, GROUP_ALL);
 
       result =
-	 _xioopen_ipapp_prepare(opts, &opts0, sockdname, socksport,
-				&pf, ipproto,
+	 _xioopen_ipapp_prepare(&opts, opts0, sockdname, socksport,
+				pf, socktype, ipproto,
 				sfd->para.socket.ip.ai_flags,
-				&themarr, us, &uslen,
-				&needbind, &lowport, socktype);
-
-      /* we try to resolve the target address _before_ connecting to the socks
-	 server: this avoids unnecessary socks connects and timeouts */
-      result =
-	 _xioopen_socks4_connect0(sfd, targetname, socks4a, sockhead,
-				  (ssize_t *)&buflen, level);
+				&themarr, &bindarr, &bindport, &needbind, &lowport);
       switch (result) {
       case STAT_OK: break;
 #if WITH_RETRY
@@ -118,60 +120,78 @@ static int xioopen_socks4_connect(
 	 if (sfd->forever || sfd->retry--) {
 	    if (result == STAT_RETRYLATER)
 	       Nanosleep(&sfd->intervall, NULL);
+	    if (bindarr != NULL)  xiofreeaddrinfo(bindarr);
+	    xiofreeaddrinfo(themarr);
+	    freeopts(opts);
 	    continue;
 	 }
 #endif /* WITH_RETRY */
-      default:
+	 /* FALLTHROUGH */
+      case STAT_NORETRY:
+	 if (bindarr != NULL)  xiofreeaddrinfo(bindarr);
+	 xiofreeaddrinfo(themarr);
+	 freeopts(opts);
+	 freeopts(opts0);
 	 return result;
       }
 
-      /* loop over themarr */
-      i = 0;
-      themp = themarr[i++];
-      while (themp != NULL) {
-	 Notice1("opening connection to %s",
-		 sockaddr_info(themp->ai_addr, themp->ai_addrlen,
-			       infobuff, sizeof(infobuff)));
-#if WITH_RETRY
-	 if (sfd->forever || sfd->retry || themarr[i] != NULL) {
-	    level = E_INFO;
-	 } else
-#endif /* WITH_RETRY */
-	    level = E_ERROR;
-
-      /* this cannot fork because we retrieved fork option above */
-	 result =
-	    _xioopen_connect(sfd,
-			     needbind?us:NULL, uslen,
-			     themp->ai_addr, themp->ai_addrlen,
-			     opts, pf?pf:themp->ai_family, socktype, IPPROTO_TCP, lowport, level);
-	 if (result == STAT_OK)
-	    break;
-	   themp = themarr[i++];
-	 if (themp == NULL)
-	    result = STAT_RETRYLATER;
-      }
+      /* we try to resolve the target address _before_ connecting to the socks
+	 server: this may avoid unnecessary connects and timeouts */
+      result =
+	 _xioopen_socks4_prepare(sfd, targetname, socks4a, sockhead,
+				 (ssize_t *)&buflen, level);
       switch (result) {
       case STAT_OK: break;
 #if WITH_RETRY
       case STAT_RETRYLATER:
       case STAT_RETRYNOW:
-	 if (sfd->forever || sfd->retry) {
-	    --sfd->retry;
+	 if (sfd->forever || sfd->retry--) {
 	    if (result == STAT_RETRYLATER)
 	       Nanosleep(&sfd->intervall, NULL);
+	 if (bindarr != NULL)  xiofreeaddrinfo(bindarr);
+	 xiofreeaddrinfo(themarr);
+	    freeopts(opts);
 	    continue;
 	 }
 #endif /* WITH_RETRY */
+	 /* FALLTHROUGH */
       default:
+	 if (bindarr != NULL)  xiofreeaddrinfo(bindarr);
 	 xiofreeaddrinfo(themarr);
+	 freeopts(opts);
+	 freeopts(opts0);
 	 return result;
       }
-      xiofreeaddrinfo(themarr);
-      applyopts(sfd, -1, opts, PH_ALL);
 
-      if ((result = _xio_openlate(sfd, opts)) < 0)
+      Notice2("opening connection to sockd %s:%s", sockdname, socksport);
+      result =
+	 _xioopen_ipapp_connect(sfd, sockdname, opts, themarr,
+				needbind, bindarr, bindport, lowport, level);
+      _errno = errno;
+      if (bindarr != NULL)  xiofreeaddrinfo(bindarr);
+      xiofreeaddrinfo(themarr);
+      switch (result) {
+      case STAT_OK: break;
+#if WITH_RETRY
+      case STAT_RETRYLATER:
+      case STAT_RETRYNOW:
+	 if (sfd->forever || sfd->retry--) {
+	    if (result == STAT_RETRYLATER) {
+	       Nanosleep(&sfd->intervall, NULL);
+	    }
+	    freeopts(opts);
+	    continue;
+	 }
+#endif /* WITH_RETRY */
+	 /* FALLTHROUGH */
+      default:
+	 errno = _errno;
+	 Error4("%s:%s:...,socksport=%s: %s", argv[0], sockdname, socksport,
+		_errno?strerror(_errno):"(See above)");
+	 freeopts(opts0);
+	 freeopts(opts);
 	 return result;
+      }
 
       result = _xioopen_socks4_connect(sfd, sockhead, buflen, level);
       switch (result) {
@@ -180,11 +200,16 @@ static int xioopen_socks4_connect(
       case STAT_RETRYLATER:
       case STAT_RETRYNOW:
 	 if (sfd->forever || sfd->retry--) {
-	    if (result == STAT_RETRYLATER)  Nanosleep(&sfd->intervall, NULL);
+	    if (result == STAT_RETRYLATER)
+	       Nanosleep(&sfd->intervall, NULL);
+	    freeopts(opts);
 	    continue;
 	 }
 #endif /* WITH_RETRY */
+	 /* FALLTHROUGH */
       default:
+	 freeopts(opts);
+	 freeopts(opts0);
 	 return result;
       }
 
@@ -201,10 +226,13 @@ static int xioopen_socks4_connect(
 				   so Notice is too weak */
 	 }
 	 while ((pid = xio_fork(false, level, sfd->shutup)) < 0) {
-	    if (sfd->forever || --sfd->retry) {
+	    if (sfd->forever || sfd->retry--) {
 	       Nanosleep(&sfd->intervall, NULL);
+	       freeopts(opts);
 	       continue;
 	    }
+	    freeopts(opts);
+	    freeopts(opts0);
 	    return STAT_RETRYLATER;
 	 }
 
@@ -216,8 +244,13 @@ static int xioopen_socks4_connect(
 
 	 /* parent process */
 	 Close(sfd->fd);
+	 /* with and without retry */
 	 Nanosleep(&sfd->intervall, NULL);
-	 dropopts(opts, PH_ALL); opts = copyopts(opts0, GROUP_ALL);
+	 while (maxchildren > 0 && num_child >= maxchildren) {
+	    Info1("all %d allowed children are active, waiting", maxchildren);
+	    Nanosleep(&sfd->intervall, NULL);
+	 }
+	 freeopts(opts);
 	 continue;
       } else
 #endif /* WITH_RETRY */
@@ -226,9 +259,19 @@ static int xioopen_socks4_connect(
       }
 
    } while (true);	/* end of complete open loop - drop out on success */
-   return 0;
+   /* only "active" process breaks (master without fork, or child) */
+
+   Notice4("successfully connected to %s:%s via sockd %s:%s",
+	   targetname, targetport, sockdname, socksport);
+
+   result = _xio_openlate(sfd, opts);
+   freeopts(opts);
+   freeopts(opts0);
+   return result;
 }
 
+#endif /* WITH_SOCKS4 || WITH_SOCKS4A */
+#if WITH_SOCKS4 || WITH_SOCKS4A || WITH_SOCKS5
 
 int _xioopen_opt_socksport(
 	struct opt *opts,
@@ -236,7 +279,8 @@ int _xioopen_opt_socksport(
 {
    struct servent *se;
 
-   if (retropt_string(opts, OPT_SOCKSPORT, socksport) < 0) {
+   if (retropt_string(opts, OPT_SOCKSPORT, socksport) < 0 &&
+       *socksport == NULL) {
       if ((se = getservbyname("socks", "tcp")) != NULL) {
 	 Debug1("\"socks/tcp\" resolves to %u", ntohs(se->s_port));
 	 if ((*socksport = Malloc(6)) == NULL) {
@@ -253,8 +297,16 @@ int _xioopen_opt_socksport(
    return 0;
 }
 
+#endif /* WITH_SOCKS4 || WITH_SOCKS4A || WITH_SOCKS5 */
+#if WITH_SOCKS4 || WITH_SOCKS4A
 
-int _xioopen_socks4_prepare(const char *targetport, struct opt *opts, char **socksport, struct socks4 *sockhead, size_t *headlen) {
+int _xioopen_socks4_init(
+	const char *targetport,
+	struct opt *opts,
+	char **socksport,
+	struct socks4 *sockhead,
+	size_t *headlen)
+{
    char *userid;
 
    /* generate socks header - points to final target */
@@ -280,14 +332,14 @@ int _xioopen_socks4_prepare(const char *targetport, struct opt *opts, char **soc
 
 
 /* called within retry/fork loop, before connect() */
-int
-   _xioopen_socks4_connect0(struct single *sfd,
-			    const char *hostname,	/* socks target host */
-			    int socks4a,
-			    struct socks4 *sockhead,
-			    ssize_t *headlen,		/* get available space,
-							   return used length*/
-			    int level) {
+int _xioopen_socks4_prepare(
+	struct single *sfd,
+	const char *hostname,	/* socks target host */
+	int socks4a,
+	struct socks4 *sockhead,
+	ssize_t *headlen,	/* get available space, return used length*/
+	int level)
+{
    int result;
 
    if (!socks4a) {
@@ -364,7 +416,7 @@ int _xioopen_socks4_connect(struct single *sfd,
       }
    }
 #endif /* WITH_MSGLEVEL <= E_DEBUG */
-   if (writefull(sfd->fd, sockhead, headlen) < 0) {
+   if (writefull(sfd->fd, sockhead, headlen, NULL) < 0) {
       Msg4(level, "write(%d, %p, "F_Zu"): %s",
 	   sfd->fd, sockhead, headlen, strerror(errno));
       if (Close(sfd->fd) < 0) {
@@ -429,16 +481,7 @@ int _xioopen_socks4_connect(struct single *sfd,
    switch (replyhead->action) {
    case SOCKS_CD_GRANTED:
       /* Notice("socks: connect request succeeded"); */
-#if 0
-      if (Getsockname(sfd->fd, (struct sockaddr *)&us, &uslen) < 0) {
-	 Warn4("getsockname(%d, %p, {%d}): %s",
-		sfd->fd, &us, uslen, strerror(errno));
-      }
-      Notice1("successfully connected from %s via socks4",
-	      sockaddr_info((struct sockaddr *)&us, infobuff, sizeof(infobuff)));
-#else
       Notice("successfully connected via socks4");
-#endif
       break;
 
    case SOCKS_CD_FAILED:

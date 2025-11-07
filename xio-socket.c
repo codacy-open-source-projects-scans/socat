@@ -7,8 +7,6 @@
 
 #include "xiosysincludes.h"
 
-#if _WITH_SOCKET
-
 #include "xioopen.h"
 #include "xio-ascii.h"
 #include "xio-socket.h"
@@ -29,6 +27,8 @@
 #include "xio-ipapp.h"	/*! not clean */
 #include "xio-tcpwrap.h"
 
+
+#if _WITH_SOCKET
 
 static int xioopen_socket_connect(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *xfd, const struct addrdesc *addrdesc);
 static int xioopen_socket_listen(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *xfd, const struct addrdesc *addrdesc);
@@ -191,6 +191,8 @@ const struct optdesc opt_setsockopt_int    = { "setsockopt-int",    "sockopt-int
 const struct optdesc opt_setsockopt_bin    = { "setsockopt-bin",    "sockopt-bin",    OPT_SETSOCKOPT_BIN,        GROUP_SOCKET,PH_CONNECTED, TYPE_INT_INT_BIN,     OFUNC_SOCKOPT_GENERIC, 0, 0 };
 const struct optdesc opt_setsockopt_string = { "setsockopt-string", "sockopt-string", OPT_SETSOCKOPT_STRING,     GROUP_SOCKET,PH_CONNECTED, TYPE_INT_INT_STRING,  OFUNC_SOCKOPT_GENERIC, 0, 0 };
 const struct optdesc opt_setsockopt_listen = { "setsockopt-listen", "sockopt-listen", OPT_SETSOCKOPT_LISTEN,     GROUP_SOCKET,PH_PREBIND,   TYPE_INT_INT_BIN,     OFUNC_SOCKOPT_GENERIC, 0, 0 };
+const struct optdesc opt_setsockopt_socket    = { "setsockopt-socket",    "sockopt-sock", OPT_SETSOCKOPT_SOCKET,    GROUP_SOCKET,PH_PASTSOCKET, TYPE_INT_INT_BIN,    OFUNC_SOCKOPT_GENERIC, 0, 0 };
+const struct optdesc opt_setsockopt_connected = { "setsockopt-connected", "sockopt-conn", OPT_SETSOCKOPT_CONNECTED, GROUP_SOCKET,PH_CONNECTED,  TYPE_INT_INT_BIN,    OFUNC_SOCKOPT_GENERIC, 0, 0 };
 
 const struct optdesc opt_null_eof = { "null-eof", NULL, OPT_NULL_EOF, GROUP_SOCKET, PH_OFFSET, TYPE_BOOL, OFUNC_OFFSET, XIO_OFFSETOF(para.socket.null_eof) };
 
@@ -262,8 +264,13 @@ static int xioopen_socket_connect(
    sfd->dtype = XIOREAD_STREAM|XIOWRITE_STREAM;
 
    socket_init(0, &us);
-   if (retropt_bind(opts, 0 /*pf*/, socktype, proto, (struct sockaddr *)&us, &uslen, 3,
-		    sfd->para.socket.ip.ai_flags)
+   if (retropt_bind(opts, pf, socktype, proto, (struct sockaddr *)&us, &uslen, -1,
+#if _WITH_IP4 || _WITH_IP6
+		    sfd->para.socket.ip.ai_flags
+#else
+		    NULL
+#endif /* _WITH_IP4 || _WITH_IP6 */
+		    )
        != STAT_NOACTION) {
       needbind = true;
       us.soa.sa_family = pf;
@@ -540,7 +547,12 @@ int xioopen_socket_recvfrom(
 
    if (retropt_string(opts, OPT_RANGE, &rangename) >= 0) {
       if (xioparserange(rangename, 0, &sfd->para.socket.range,
-			sfd->para.socket.ip.ai_flags)
+#if _WITH_IP4 || _WITH_IP6
+			sfd->para.socket.ip.ai_flags
+#else
+			NULL
+#endif /* _WITH_IP4 */
+			)
 	  < 0) {
 	 free(rangename);
 	 return STAT_NORETRY;
@@ -626,7 +638,12 @@ int xioopen_socket_recv(
 
    if (retropt_string(opts, OPT_RANGE, &rangename) >= 0) {
       if (xioparserange(rangename, 0, &sfd->para.socket.range,
-			sfd->para.socket.ip.ai_flags)
+#if _WITH_IP4 || _WITH_IP6
+			sfd->para.socket.ip.ai_flags
+#else
+			NULL
+#endif /* _WITH_IP4 */
+			)
 	  < 0) {
 	 free(rangename);
 	 return STAT_NORETRY;
@@ -712,7 +729,12 @@ static int xioopen_socket_datagram(
    /* which reply sockets will accept - determine by range option */
    if (retropt_string(opts, OPT_RANGE, &rangename) >= 0) {
       if (xioparserange(rangename, 0, &sfd->para.socket.range,
-			sfd->para.socket.ip.ai_flags)
+#if _WITH_IP4 || _WITH_IP6
+			sfd->para.socket.ip.ai_flags
+#else
+			NULL
+#endif /* _WITH_IP4 */
+			)
 	  < 0) {
 	 free(rangename);
 	 return STAT_NORETRY;
@@ -779,13 +801,13 @@ int xiogetpacketinfo(struct single *sfd, int fd)
    PH_PASTSOCKET, PH_FD, PH_PREBIND, PH_BIND, PH_PASTBIND, PH_CONNECT,
    PH_CONNECTED, PH_LATE,
    OFUNC_OFFSET,
-   OPT_SO_TYPE, OPT_SO_PROTOTYPE, OPT_USER, OPT_GROUP, OPT_CLOEXEC
+   OPT_SO_TYPE, OPT_SO_PROTOTYPE, OPT_USER, OPT_GROUP, OPT_O_CLOEXEC
    Does not fork, does not retry.
    Alternate (alt) bind semantics are:
       with IP sockets: lowport (selects randomly a free port from 640 to 1023)
       with UNIX and abstract sockets: uses tmpname() to find a free file system
       entry.
-   returns 0 on success.
+   Returns STAT_OK on success, or STAT_RETRYLATER (+errno) on failure.
 */
 int _xioopen_connect(struct single *sfd, union sockaddr_union *us, size_t uslen,
 		     struct sockaddr *them, size_t themlen,
@@ -815,7 +837,7 @@ int _xioopen_connect(struct single *sfd, union sockaddr_union *us, size_t uslen,
    applyopts_cloexec(sfd->fd, opts);
 
    if (xiobind(sfd, us, uslen, opts, pf, alt, level) < 0) {
-      return -1;
+      return STAT_RETRYLATER;
    }
 
    applyopts(sfd, -1, opts, PH_CONNECT);
@@ -855,6 +877,7 @@ int _xioopen_connect(struct single *sfd, union sockaddr_union *us, size_t uslen,
 	       Msg4(level, "xiopoll({%d,POLLOUT|POLLERR},,{"F_tv_sec"."F_tv_usec"): %s",
 		    sfd->fd, timeout.tv_sec, timeout.tv_usec, strerror(errno));
 	       Close(sfd->fd);
+	       errno = _errno;
 	       return STAT_RETRYLATER;
 	    }
 	    if (result == 0) {
@@ -862,6 +885,7 @@ int _xioopen_connect(struct single *sfd, union sockaddr_union *us, size_t uslen,
 		    sockaddr_info(them, themlen, infobuff, sizeof(infobuff)),
 		    strerror(ETIMEDOUT));
 	       Close(sfd->fd);
+	       errno = _errno;
 	       return STAT_RETRYLATER;
 	    }
 	    if (writefd.revents & POLLERR) {
@@ -877,15 +901,19 @@ int _xioopen_connect(struct single *sfd, union sockaddr_union *us, size_t uslen,
 		     sfd->fd, sockaddr_info(them, themlen, infobuff, sizeof(infobuff)),
 		     themlen, strerror(errno));
 #endif
+	       _errno = errno;
 	       Close(sfd->fd);
+	       errno = _errno;
 	       return STAT_RETRYLATER;
 	    }
 	    /* otherwise OK or network error */
 	    result = Getsockopt(sfd->fd, SOL_SOCKET, SO_ERROR, &err, &errlen);
 	    if (result != 0) {
+	       _errno = errno;
 	       Msg2(level, "getsockopt(%d, SOL_SOCKET, SO_ERROR, ...): %s",
 		    sfd->fd, strerror(err));
 	       Close(sfd->fd);
+	       errno = _errno;
 	       return STAT_RETRYLATER;
 	    }
 	    Debug2("getsockopt(%d, SOL_SOCKET, SO_ERROR, { %d }) -> 0",
@@ -895,6 +923,7 @@ int _xioopen_connect(struct single *sfd, union sockaddr_union *us, size_t uslen,
 		     sfd->fd, sockaddr_info(them, themlen, infobuff, sizeof(infobuff)),
 		     themlen, strerror(err));
 	       Close(sfd->fd);
+	       errno = err;
 	       return STAT_RETRYLATER;
 	    }
 	    Fcntl_l(sfd->fd, F_SETFL, fcntl_flags);
@@ -925,6 +954,7 @@ int _xioopen_connect(struct single *sfd, union sockaddr_union *us, size_t uslen,
 	      sfd->fd, sockaddr_info(them, themlen, infobuff, sizeof(infobuff)),
 	      themlen, strerror(errno));
 	 Close(sfd->fd);
+	 errno = _errno;
 	 return STAT_RETRYLATER;
       }
    } else {	/* result >= 0 */
@@ -952,7 +982,7 @@ int _xioopen_connect(struct single *sfd, union sockaddr_union *us, size_t uslen,
    PH_PASTSOCKET, PH_FD, PH_PREBIND, PH_BIND, PH_PASTBIND, PH_CONNECT,
    PH_CONNECTED, PH_LATE,
    OFUNC_OFFSET,
-   OPT_FORK, OPT_SO_TYPE, OPT_SO_PROTOTYPE, OPT_USER, OPT_GROUP, OPT_CLOEXEC
+   OPT_FORK, OPT_SO_TYPE, OPT_SO_PROTOTYPE, OPT_USER, OPT_GROUP, OPT_O_CLOEXEC
    returns 0 on success.
 */
 int xioopen_connect(struct single *sfd, union sockaddr_union *us, size_t uslen,
@@ -1052,7 +1082,7 @@ int xioopen_connect(struct single *sfd, union sockaddr_union *us, size_t uslen,
    applies and consumes the following option:
    PH_PASTSOCKET, PH_FD, PH_PREBIND, PH_BIND, PH_PASTBIND, PH_CONNECTED, PH_LATE
    OFUNC_OFFSET
-   OPT_SO_TYPE, OPT_SO_PROTOTYPE, OPT_USER, OPT_GROUP, OPT_CLOEXEC
+   OPT_SO_TYPE, OPT_SO_PROTOTYPE, OPT_USER, OPT_GROUP, OPT_O_CLOEXEC
  */
 int _xioopen_dgram_sendto(/* them is already in xfd->peersa */
 			union sockaddr_union *us, socklen_t uslen,
@@ -1202,6 +1232,7 @@ int _xioopen_dgram_recvfrom(struct single *sfd, int xioflags,
    }
 #endif
 
+#if WITH_IP4 || WITH_IP6
    /* for generic sockets, this has already been retrieved */
    if (retropt_string(opts, OPT_RANGE, &rangename) >= 0) {
       if (xioparserange(rangename, pf, &sfd->para.socket.range,
@@ -1213,6 +1244,7 @@ int _xioopen_dgram_recvfrom(struct single *sfd, int xioflags,
       free(rangename);
       sfd->para.socket.dorange = true;
    }
+#endif /* WITH_IP4 || WITH_IP6 */
 
 #if (WITH_TCP || WITH_UDP) && WITH_LIBWRAP
    xio_retropt_tcpwrap(sfd, opts);
@@ -1424,6 +1456,7 @@ int _xioopen_dgram_recv(struct single *sfd, int xioflags,
    }
 #endif
 
+#if WITH_IP4 || WITH_IP6
    if (retropt_string(opts, OPT_RANGE, &rangename) >= 0) {
       if (xioparserange(rangename, pf, &sfd->para.socket.range,
 			sfd->para.socket.ip.ai_flags)
@@ -1434,6 +1467,7 @@ int _xioopen_dgram_recv(struct single *sfd, int xioflags,
       free(rangename);
       sfd->para.socket.dorange = true;
    }
+#endif /* WITH_IP4 || WITH_IP6 */
 
 #if (WITH_TCP || WITH_UDP) && WITH_LIBWRAP
    xio_retropt_tcpwrap(sfd, opts);
@@ -1449,7 +1483,10 @@ int _xioopen_dgram_recv(struct single *sfd, int xioflags,
    return STAT_OK;
 }
 
+#endif /* _WITH_SOCKET */
 
+
+#if _WITH_SOCKET || _WITH_SOCKETPAIR
 int retropt_socket_pf(struct opt *opts, int *pf) {
    char *pfname;
 
@@ -1478,7 +1515,10 @@ int retropt_socket_pf(struct opt *opts, int *pf) {
    }
    return -1;
 }
+#endif /* _WITH_SOCKET || _WITH_SOCKETPAIR */
 
+
+#if _WITH_SOCKET
 
 /* This function calls recvmsg(..., MSG_PEEK, ...) to obtain information about
    the arriving packet, thus it does not "consume" the packet.
@@ -1651,7 +1691,7 @@ int xiocheckpeer(xiosingle_t *sfd,
    char infobuff[256];
    int result;
 
-#if WITH_IP4
+#if WITH_IP4 || WITH_IP6
    if (sfd->para.socket.dorange) {
       if (pa == NULL)  { return -1; }
       if (xiocheckrange(pa, &sfd->para.socket.range) < 0) {
@@ -1736,7 +1776,7 @@ int xiocheckpeer(xiosingle_t *sfd,
 
 
 #if HAVE_STRUCT_CMSGHDR
-/* converts the ancillary message in *cmsg into a form useable for further
+/* Converts the ancillary message in *cmsg into a form usable for further
    processing. knows the specifics of common message types.
    returns the number of resulting syntax elements in *num
    returns a sequence of \0 terminated type strings in *typbuff
@@ -1957,7 +1997,7 @@ int xioparserange(
       return -1;
    }
    /* we have parsed the address and mask; now we make sure that the stored
-      address has 0 where mask is 0, to simplify comparisions */
+      address has 0 where mask is 0, to simplify comparisons */
    switch (pf) {
 #if WITH_IP4
    case PF_INET:
@@ -2055,15 +2095,12 @@ int xiosetsockaddrenv(const char *lr,
 #  undef XIOSOCKADDRENVLEN
 }
 
-#endif /* _WITH_SOCKET */
-
-/* these do sockets internally */
+/* These do sockets internally */
 
 /* retrieves options so-type and so-prototype from opts, calls socket, and
    ev. generates an appropriate error message.
-   returns 0 on success or -1 if an error occurred. */
-int
-xiosocket(struct opt *opts, int pf, int socktype, int proto, int msglevel) {
+   returns 0 on success or -1 (and errno) if an error occurred. */
+int xiosocket(struct opt *opts, int pf, int socktype, int proto, int msglevel) {
    int result;
 
    retropt_int(opts, OPT_SO_TYPE, &socktype);
@@ -2080,24 +2117,6 @@ xiosocket(struct opt *opts, int pf, int socktype, int proto, int msglevel) {
    return result;
 }
 
-/* retrieves options so-type and so-prototype from opts, calls socketpair, and
-   ev. generates an appropriate error message.
-   returns 0 on success or -1 if an error occurred. */
-int
-xiosocketpair(struct opt *opts, int pf, int socktype, int proto, int sv[2]) {
-   int result;
-
-   retropt_int(opts, OPT_SO_TYPE, &socktype);
-   retropt_int(opts, OPT_SO_PROTOTYPE, &proto);
-   result = Socketpair(pf, socktype, proto, sv);
-   if (result < 0) {
-      Error5("socketpair(%d, %d, %d, %p): %s",
-	     pf, socktype, proto, sv, strerror(errno));
-      return -1;
-   }
-   return result;
-}
-
 /* Binds a socket to a socket address. Handles IP (internet protocol), UNIX
    domain, Linux abstract UNIX domain.
    The bind address us may be NULL in which case no bind() happens, except with
@@ -2106,6 +2125,7 @@ xiosocketpair(struct opt *opts, int pf, int socktype, int proto, int sv[2]) {
       with IP sockets: lowport (selects randomly a free port from 640 to 1023)
       with UNIX and abstract sockets: uses a method similar to tmpname() to
       find a free file system entry.
+   On success returns STAT_OK, otherwise errno is set.
 */
 int xiobind(
 	struct single *sfd,
@@ -2142,18 +2162,20 @@ int xiobind(
 	       usrname = strndup(us->un.sun_path, sizeof(us->un.sun_path));
 	    if (usrname	== NULL) {
 	       int _errno = errno;
-	       Error2("strndup(\"%s\", "F_Zu"): out of memory",
+	       Msg2(level, "strndup(\"%s\", "F_Zu"): out of memory",
 		      us->un.sun_path, sizeof(us->un.sun_path));
 	       errno = _errno;
-	       return -1;
+	       return STAT_RETRYLATER;
 	    }
 	 }
 
 	 do {	/* loop over tempnam bind() attempts */
 	    sockname = xio_tempnam(usrname, abstract);
 	    if (sockname == NULL) {
+	       int _errno = errno;
 	       Error2("tempnam(\"%s\"): %s", usrname, strerror(errno));
 	       free(usrname);
+	       errno = _errno;
 	       return -1;
 	    }
 	    strncpy(us->un.sun_path+(abstract?1:0), sockname, sizeof(us->un.sun_path));
@@ -2167,8 +2189,10 @@ int xiobind(
 					   infobuff, sizeof(infobuff)),
 		    uslen, strerror(errno));
 	       if (errno != EADDRINUSE) {
+		  int _errno = errno;
 		  free(usrname);
 		  Close(sfd->fd);
+		  errno = _errno;
 		  return STAT_RETRYLATER;
 	       }
 	    } else {
@@ -2181,10 +2205,12 @@ int xiobind(
 
       if (us != NULL) {
 	 if (Bind(sfd->fd, &us->soa, uslen) < 0) {
+	    int _errno = errno;
 	    Msg4(level, "bind(%d, {%s}, "F_Zd"): %s",
 		 sfd->fd, sockaddr_info(&us->soa, uslen, infobuff, sizeof(infobuff)),
 		 uslen, strerror(errno));
 	    Close(sfd->fd);
+	    errno = _errno;
 	    return STAT_RETRYLATER;
 	 }
 	 applyopts_named(us->un.sun_path, opts, PH_PREOPEN);
@@ -2206,8 +2232,12 @@ int xiobind(
       if (us) {
 	 sinp = us;
       } else {
-	 if (pf == AF_INET) {
+	 if (0) {
+	    ;
+#if WITH_IP4
+	 } else if (pf == AF_INET) {
 	    socket_in_init(&sin.ip4);
+#endif
 #if WITH_IP6
 	 } else {
 	    socket_in6_init(&sin.ip6);
@@ -2252,12 +2282,14 @@ int xiobind(
       do {	/* loop over lowport bind() attempts */
 	 *port = htons(i);
 	 if (Bind(sfd->fd, &sinp->soa, sizeof(*sinp)) < 0) {
+	    int _errno = errno;
 	    Msg4(errno==EADDRINUSE?E_INFO:level,
 		 "bind(%d, {%s}, "F_Zd"): %s", sfd->fd,
 		 sockaddr_info(&sinp->soa, sizeof(*sinp), infobuff, sizeof(infobuff)),
 		 sizeof(*sinp), strerror(errno));
-	    if (errno != EADDRINUSE) {
+	    if (_errno != EADDRINUSE) {
 	       Close(sfd->fd);
+	       errno = _errno;
 	       return STAT_RETRYLATER;
 	    }
 	 } else {
@@ -2266,8 +2298,8 @@ int xiobind(
 	 --i;  if (i < XIO_IPPORT_LOWER)  i = IPPORT_RESERVED-1;
 	 if (i == N) {
 	    Msg(level, "no low port available");
-	    /*errno = EADDRINUSE; still assigned */
 	    Close(sfd->fd);
+	    errno = EADDRINUSE;
 	    return STAT_RETRYLATER;
 	 }
       } while (i != N);
@@ -2278,24 +2310,26 @@ int xiobind(
       if (us) {
 	 applyopts(sfd, sfd->fd, opts, PH_BIND);
 	 if (Bind(sfd->fd, &us->soa, uslen) < 0) {
+	    int _errno = errno;
 	    Msg4(level, "bind(%d, {%s}, "F_Zd"): %s",
 		 sfd->fd, sockaddr_info(&us->soa, uslen, infobuff, sizeof(infobuff)),
 		 uslen, strerror(errno));
 	    Close(sfd->fd);
+	    errno = _errno;
 	    return STAT_RETRYLATER;
 	 }
       }
    }
 
    applyopts(sfd, -1, opts, PH_PASTBIND);
-   return 0;
+   return STAT_OK;
 }
 
 /* Handles the SO_REUSEADDR socket option for TCP LISTEN addresses depending on
    Socat option so-reuseaddr:
    Option not applied: set it to 1
    Option applied with a value: set it to the value
-   Option applied eith empty value "so-reuseaddr=": do not call setsockopt() for
+   Option applied with empty value "so-reuseaddr=": do not call setsockopt() for
    SO_REUSEADDR
    Return 0 on success, or -1 with errno when an error occurred.
  */
@@ -2303,15 +2337,25 @@ int xiosock_reuseaddr(int fd, int ipproto, struct opt *opts)
 {
 	union integral val;
 	union integral notnull;
+	int result;
 	int _errno;
 
 	val.u_int = 0;
 	notnull.u_bool = false;
+#if WITH_TCP
 	if (ipproto == IPPROTO_TCP) {
 		val.u_int = 1;
 		notnull.u_bool = true;
 	}
-	retropt_2integrals(opts, OPT_SO_REUSEADDR, &val, &notnull);
+#endif /* WITH_TCP */
+	result = retropt_2integrals(opts, OPT_SO_REUSEADDR, &val, &notnull);
+#if WITH_TCP
+	if (ipproto == IPPROTO_TCP && result < 0) {
+		Info("Setting SO_REUSADDR on TCP listen socket implicitly");
+		val.u_int = 1;
+		notnull.u_bool = true;
+	}
+#endif /* WITH_TCP */
 	if (notnull.u_bool) {
 		if (Setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &val.u_int, sizeof(int))
 		    != 0) {
@@ -2324,3 +2368,6 @@ int xiosock_reuseaddr(int fd, int ipproto, struct opt *opts)
 	}
 	return 0;
 }
+
+#endif /* _WITH_SOCKET */
+

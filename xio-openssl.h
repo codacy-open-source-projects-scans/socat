@@ -5,7 +5,7 @@
 #ifndef __xio_openssl_included
 #define __xio_openssl_included 1
 
-#if WITH_OPENSSL	/* make this address configure dependend */
+#if WITH_OPENSSL	/* make this address configure dependent */
 
 #define SSLIO_BASE 0x53530000	/* "SSxx" */
 #define SSLIO_MASK 0xffff0000

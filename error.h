@@ -183,7 +183,7 @@
 #define Debug18(m,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15,a16,a17,a18)
 #endif /* !(WITH_MSGLEVEL <= E_DEBUG) */
 
-/* message with software controlled serverity */
+/* message with software controlled severity */
 #if WITH_MSGLEVEL <= E_FATAL
 #define Msg(l,m) msg(l,"%s",m)
 #define Msg1(l,m,a1) msg(l,m,a1)

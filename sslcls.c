@@ -368,6 +368,7 @@ int sycSSL_connect(SSL *ssl) {
    int result;
    Debug1("SSL_connect(%p)", ssl);
    result = SSL_connect(ssl);
+   if (!diag_in_handler) diag_flush();
    Debug1("SSL_connect() -> %d", result);
    return result;
 }

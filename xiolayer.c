@@ -48,7 +48,8 @@ int xio_chdir(
 		free(tmp_dir);
 		return -1;
 	}
-	*orig_dir = Realloc(*orig_dir, strlen(*orig_dir)+1);
+	/*0 *orig_dir = Realloc(*orig_dir, strlen(*orig_dir)+1); */
+	*orig_dir = Realloc3(*orig_dir, strlen(*orig_dir)+1, PATH_MAX);
 
 	if (Chdir(tmp_dir) < 0) {
 		Error2("chdir(\"%s\"): %s", tmp_dir, strerror(errno));

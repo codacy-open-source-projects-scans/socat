@@ -282,6 +282,8 @@ int main(int argc, const char *argv[]) {
 	    socat_opts.total_timeout.tv_usec =
 	       (rto-socat_opts.total_timeout.tv_sec) * 1000000;
 	 }
+	 xioparms.total_timeout.tv_sec  = socat_opts.total_timeout.tv_sec;
+	 xioparms.total_timeout.tv_usec = socat_opts.total_timeout.tv_usec;
 	 break;
       case 'u':  if (arg1[0][2])  { socat_opt_hint(stderr, arg1[0][1], arg1[0][2]); Exit(1); }
 	 socat_opts.lefttoright = true; break;
@@ -783,7 +785,7 @@ int socat(const char *address1, const char *address2) {
       int i;
       for (i = 0; i < NUMUNKNOWN; ++i) {
 	 if (XIO_RDSTREAM(sock1)->para.exec.pid == diedunknown[i]) {
-	    /* child has alread died... but it might have put regular data into
+	    /* Child has already died... but it might have put regular data into
 	       the communication channel, so continue */
 	    Info2("child "F_pid" has already died with status %d",
 		  XIO_RDSTREAM(sock1)->para.exec.pid, statunknown[i]);
@@ -826,7 +828,7 @@ int socat(const char *address1, const char *address2) {
       int i;
       for (i = 0; i < NUMUNKNOWN; ++i) {
 	 if (XIO_RDSTREAM(sock2)->para.exec.pid == diedunknown[i]) {
-	    /* child has alread died... but it might have put regular data into
+	    /* Child has already died... but it might have put regular data into
 	       the communication channel, so continue */
 	    Info2("child "F_pid" has already died with status %d",
 		  XIO_RDSTREAM(sock2)->para.exec.pid, statunknown[i]);
@@ -863,11 +865,12 @@ int childleftdata(xiofile_t *xfd) {
        XIO_RDSTREAM(xfd)->para.exec.pid == 0) {
       struct timeval timeout = { 0, 0 };
 
-      if (XIO_READABLE(xfd) && !(XIO_RDSTREAM(xfd)->eof >= 2 && !XIO_RDSTREAM(xfd)->ignoreeof)) {
-	 in.fd = XIO_GETRDFD(xfd);
-	 in.events = POLLIN/*|POLLRDBAND*/;
-	 in.revents = 0;
-      }
+      if (XIO_RDSTREAM(xfd)->eof >= 2 && !XIO_RDSTREAM(xfd)->ignoreeof)
+	 return 0;
+
+      in.fd = XIO_GETRDFD(xfd);
+      in.events = POLLIN/*|POLLRDBAND*/;
+      in.revents = 0;
       do {
 	 int _errno;
 	 retval = xiopoll(&in, 1, &timeout);
@@ -875,7 +878,7 @@ int childleftdata(xiofile_t *xfd) {
       } while (retval < 0 && errno == EINTR);
 
       if (retval < 0) {
-	 Error5("xiopoll({%d,%0o}, 1, {"F_tv_sec"."F_tv_usec"}): %s",
+	 Error5("xiopoll({%d,0%o}, 1, {"F_tv_sec"."F_tv_usec"}): %s",
 		in.fd, in.events, timeout.tv_sec, timeout.tv_usec,
 		strerror(errno));
 	 return -1;
@@ -1013,7 +1016,7 @@ int _socat(void) {
       /* for ignoreeof */
       if (polling) {
 	 if (!wasaction) {
-	    if (socat_opts.total_timeout.tv_usec <= 1000000) {
+	    if (socat_opts.total_timeout.tv_usec < 1000000) {
 	       if (total_timeout.tv_usec < socat_opts.pollintv.tv_usec) {
 		  total_timeout.tv_usec += 1000000;
 		  total_timeout.tv_sec  -= 1;
@@ -1131,7 +1134,7 @@ int _socat(void) {
 	 */
 
       if (retval < 0) {
-	 Error11("xiopoll({%d,%0o}{%d,%0o}{%d,%0o}{%d,%0o}, 4, {"F_tv_sec"."F_tv_usec"}): %s",
+	 Error11("xiopoll({%d,0%o}{%d,0%o}{%d,0%o}{%d,0%o}, 4, {"F_tv_sec"."F_tv_usec"}): %s",
 		 fds[0].fd, fds[0].events, fds[1].fd, fds[1].events,
 		 fds[2].fd, fds[2].events, fds[3].fd, fds[3].events,
 		 timeout.tv_sec, timeout.tv_usec, strerror(errno));
@@ -1336,7 +1339,6 @@ int _socat(void) {
    should be at least MAXTIMESTAMPLEN bytes long.
    returns 0 on success or -1 if an error occurred */
 int gettimestamp(char *timestamp) {
-   size_t bytes;
 #if HAVE_CLOCK_GETTIME
    struct timespec now;
 #elif HAVE_PROTOTYPE_LIB_gettimeofday
@@ -1364,17 +1366,16 @@ int gettimestamp(char *timestamp) {
    }
 #endif
 #if HAVE_STRFTIME
-   bytes = strftime(timestamp, 20, "%Y/%m/%d %H:%M:%S", localtime(&nowt));
+   strftime(timestamp, 20, "%Y/%m/%d %H:%M:%S", localtime(&nowt));
 #if HAVE_CLOCK_GETTIME
-   bytes += sprintf(timestamp+19, "."F_tv_nsec" ", now.tv_nsec/1000);
+   sprintf(timestamp+19, "."F_tv_nsec" ", now.tv_nsec/1000);
 #elif HAVE_PROTOTYPE_LIB_gettimeofday
-   bytes += sprintf(timestamp+19, "."F_tv_usec" ", now.tv_usec);
+   sprintf(timestamp+19, "."F_tv_usec" ", now.tv_usec);
 #else
    strncpy(&timestamp[bytes++], " ", 2);
 #endif
 #else
    strcpy(timestamp, ctime(&nowt));
-   bytes = strlen(timestamp);
 #endif
    return 0;
 }

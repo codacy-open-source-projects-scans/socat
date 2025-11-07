@@ -10,7 +10,7 @@
 <h2>Introduction</h2>
 <p>Beginning with version 1.7.0 socat provides means to freely control 
   important aspects of socket handling. This allows to experiment with socket
-  types and protocols that are not explicitely implemented in socat.
+  types and protocols that are not explicitly implemented in socat.
 </p>
 
 <p>The related socat features fall into three major categories:<p>
@@ -216,7 +216,7 @@ struct sockaddr_at {
 </p>
   
 <p>The address family component must be omitted from the socket address because
-  it is added by socat implicitely. The resulting hexadecimal representation of
+  it is added by socat implicitly. The resulting hexadecimal representation of
   the target socket address is therefore:
 </p>
 <tt>x40x00xff00xf3x00x0000000000000000</tt>
@@ -287,7 +287,7 @@ struct sockaddr_at {
 and for bind and range options. The basis is the <tt>struct sockaddr_*</tt> for
 the respective address family that should be declared in the C include files.
 Please keep in mind that their first two bytes (<tt>sa_family</tt> and - on BSD
-- <tt>sa_len</tt>) are implicitely prepended by socat.</p>
+- <tt>sa_len</tt>) are implicitly prepended by socat.</p>
 
 <h4>Linux on 32bit Intel:</h4>
 

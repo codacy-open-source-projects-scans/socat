@@ -8,7 +8,7 @@
 extern const struct optdesc opt_o_rdonly;
 extern const struct optdesc opt_o_wronly;
 extern const struct optdesc opt_o_rdwr;
-extern const struct optdesc opt_o_create;
+extern const struct optdesc opt_o_creat;
 extern const struct optdesc opt_o_excl;
 extern const struct optdesc opt_o_noctty;
 extern const struct optdesc opt_o_sync;

@@ -65,7 +65,7 @@ void dummy(void) {
 #else /* !defined(ENABLE_APPLYOPT) */
 
 #include "xiosysincludes.h"
-#if WITH_STREAMS        /* make this address configure dependend */
+#if WITH_STREAMS        /* make this address configure dependent */
 #include "xioopen.h"
 
 #include "xio-fd.h"

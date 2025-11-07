@@ -12,6 +12,7 @@
 #include "xio-progcall.h"
 
 #include "xio-socket.h"
+#include "xio-socketpair.h"
 
 
 /* these options are used by address pty too */
@@ -23,7 +24,7 @@ const struct optdesc opt_ptmx    = { "ptmx",      NULL, OPT_PTMX,        GROUP_P
 #endif
 const struct optdesc opt_sitout_eio = { "sitout-eio", NULL, OPT_SITOUT_EIO, GROUP_PTY, PH_OFFSET, TYPE_TIMEVAL, OFUNC_OFFSET, XIO_OFFSETOF(para.exec.sitout_eio), XIO_SIZEOF(para.exec.sitout_eio) };
 
-#if WITH_EXEC || WITH_SYSTEM
+#if WITH_EXEC || WITH_SYSTEM || WITH_SHELL
 
 #define MAXPTYNAMELEN 64
 
@@ -623,7 +624,7 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
    *optsp = popts;
    return pid;	/* indicate parent (main) process */
 }
-#endif /* WITH_EXEC || WITH_SYSTEM */
+#endif /* WITH_EXEC || WITH_SYSTEM || WITH_SHELL */
 
 
 int setopt_path(struct opt *opts, char **path) {

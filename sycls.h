@@ -148,6 +148,7 @@ struct hostent *Getipnodebyname(const char *name, int af, int flags,
 void *Malloc(size_t size);
 void *Calloc(size_t nmemb, size_t size);
 void *Realloc(void *ptr, size_t size);
+void *Realloc3(void *ptr, size_t size, size_t oldsize);
 int Tcgetattr(int fd, struct termios *termios_p);
 int Tcsetattr(int fd, int optional_actions, struct termios *termios_p);
 char *Ttyname(int fd);
@@ -257,6 +258,7 @@ void Add_history(const char *string);
 #define Malloc(s) malloc(s)
 #define Calloc(n,s) calloc(n,s)
 #define Realloc(p,s) realloc(p,s)
+#define Realloc3(p,s,o) realloc(p,s)
 #define Tcgetattr(f,t) tcgetattr(f,t)
 #define Tcsetattr(f,o,t) tcsetattr(f,o,t)
 #define Ttyname(f) ttyname(f)

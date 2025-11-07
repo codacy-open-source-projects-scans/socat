@@ -120,7 +120,7 @@ static int xioopen_tun(
    if (retropt_bool(opts, OPT_IFF_NO_PI, &no_pi) == 0) {
       if (no_pi) {
 	 ifr.ifr_flags |= IFF_NO_PI;
-#if 0 /* not neccessary for now */
+#if 0 /* not necessary for now */
       } else {
 	 ifr.ifr_flags &= ~IFF_NO_PI;
 #endif
@@ -139,7 +139,7 @@ static int xioopen_tun(
    /* we seem to need a socket for manipulating the interface */
    if ((sockfd = Socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
       Error1("socket(PF_INET, SOCK_DGRAM, 0): %s", strerror(errno));
-      sockfd = sfd->fd;	/* desparate fallback attempt */
+      sockfd = sfd->fd;	/* desperate fallback attempt */
    }
 
    /*--------------------- setting interface address and netmask ------------*/

@@ -37,6 +37,7 @@ while [ "$1" ]; do
 	X-q) QUIET=1; OPTS="-d0" ;;
 	X-d*|X-l?*) OPTS="$OPTS $1" ;;
 	X-b|X-S|X-t|X-T|X-l) OPT=$1; shift; OPTS="$OPTS $OPT $1" ;;
+	X--experimental) ;;
 	X-) break ;;
 	X-*) echo "Unknown option \"$1\"" >&2
 	     usage >&2

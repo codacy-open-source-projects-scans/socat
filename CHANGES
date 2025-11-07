@@ -1,4 +1,208 @@
 ﻿
+####################### V 1.8.0.3:
+
+Security:
+	readline.sh has new option -lf <logfile> for stderr. If this option is
+	not given it logs to a file in . (cwd) only when . is not writable by
+	other users.
+
+Corrections:
+	Fixed display of option phases in help output.
+
+	filan -s  displayed "(stream)" instead of "tcp" with addresses
+	(regression).
+
+	Fixed a bug that made ignoreeof fail in 1.8.0.0 and 1.8.0.1;
+	corrected test IGNOREEOF.
+	Thanks to Rusty Bird for the precise problem report.
+
+	Fixed the regression introduced with version 1.8.0.1 that in socks5
+	addresses the explicit socksport (2nd address parameter) was ignored.
+	Thanks to Jakub Fišer for reporting this bug.
+
+	Do not log simple successful write with NOTICE level.
+
+	On partial write to not poll with sleep() but use select()/poll().
+
+	Partial write situations respect total inactivity timeout when
+	nonblocking.
+
+	Fixed a bug that could lead to error "xiopoll(...): Bad file descriptor"
+	or to undefined behaviour before terminating Socat with addresses EXEC,
+	SYSTEM, or SHELL.
+
+	Option ip-add-source-membership did not work.
+	Thanks to Duncan Sands and others for reporting this issue and sending
+	the fix.
+
+	Option ip-add-membership with only two parameters crashed or failed
+	when malloc() does not initialize memory with zeros.
+	Thanks to Nicolas Cavallari for reporting and fixing this bug.
+
+	The readline() library function does not output the newline of empty
+	input lines. Changed Socat to explicitly print the newline in this
+	case.
+
+	Fixed implementation of options o-creat, o-excl, and o-cloexec with
+	POSIXMQ-* addresses.
+	POSIXMQ addresses are no longer experimental.
+
+	With version 1.8.0.0, and with 1.8.0.1 and option -0, the following
+	command failed:
+	socat UDP-LISTEN:1234,fork,reuseaddr,bind=127.0.0.1 -
+	Message: "E xioopen_ipdgram_listen(): unknown address family 0":
+	Thanks to Brian Woo for reporting this issue.
+	Test: UDP_LISTEN_BIND4
+
+	Protected SSL_connect() from SIGCHLD,SIGUSR1.
+
+	Nanosleep() trace output now in decimal form.
+
+	UNIX-LISTEN with bind option terminated with INTERNAL error, this is
+	now handled properly.
+	Test: UNIX_L_BIND
+
+	Removed unused bytes variable from gettimestamp(), corrected #elsif,
+	and socks4 record length.
+	Thanks to clang-18 and gcc-13.
+
+	Address TCP-CONNECT, when target address resolves to both IPv4 and
+	IPv6, now tries to take into account bind address for protocol
+	selection.
+
+	Reworked and harmonized ipapp client addresses.
+	Tests: TCP_CONNECT_RETRY SCTP_CONNECT_RETRY DCCP_CONNECT_RETRY
+	OPENSSL_CONNECT_RETRY SOCKS4_RETRY SOCKS5_CONNECT_RETRY
+	PROXY_CONNECT_RETRY
+
+	Socks and proxy clients now also support option max-children.
+	Tests: TCP_CONNECT_MAXCHILDREN SCTP_CONNECT_MAXCHILDREN
+	DCCP_CONNECT_MAXCHILDREN OPENSSL_CONNECT_MAXCHILDREN
+	SOCKS4_MAXCHILDREN SOCKS5_CONNECT_MAXCHILDREN PROXY_CONNECT_MAXCHILDREN
+
+	On failure of getpwuid() (used in options su and su-d) now consider
+	errno.
+
+	When IP4 was completed deconfigured, UDP6-RECVFROM with range option
+	failed.
+
+	Fixed preprocessor directives in macro invocation.
+	Thanks to Mario de Weerd for reporting this issue.
+
+	CONNECT addresses could use a wrong IPPROTO when getaddrinfo() does not
+	support the selected one (at least on Debian-4 with SCTP).
+
+	socat -h (help) did not show option groups POSIXMQ, SCTP, DCCP, and
+	UDPLITE of addresses.
+
+Features:
+	POSIXMQ-RECV now takes option o-nonblock; this, in combination with -T,
+	makes it possible to terminate Socat in case the queue is empty.
+
+	New option posixmq-flush (mq-flush) for POSIXMQ addresses empties the
+	queue before starting to transfer data.
+	Test: LINUX_POSIXMQ_FLUSH
+
+	New options posixmq-maxmsg, posixmq-msgsize.
+	Tests: POSIXMQ_MAXMSG POSIXMQ_MSGSIZE
+
+	POSIXMQ is now an alias for POSIXMQ-BIDIRECTIONAL. It can also be used
+	in unidirectional context.
+
+	Procan uses getresuid() and getresgid() when available, to determine
+	the saved set-user-ID.
+
+	Procan prints more C-defines, esp.O_*, AI_*, EAI_*; __GLIBC__;
+	prints some C-defines in oct and hex;
+	added option -V
+
+	Procan tells if char is signed or unsigned
+
+	Socat now prints an info message when implicitly setting SO_REUSEADDR.
+	Thanks to Michael Renner for this suggestion.
+
+	Added generic options setsockopt-socket and setsockopt-connected that
+	are applied after socket() or when connected.
+
+	POSIXMQ addresses now print a warning when options posixmq-maxmsg or
+	posixmq-msgsize were not applied.
+
+	New address POSIXMQ-WRITE does the same as POSIXMQ-SEND, as counterpart
+	of POSIXMQ-READ.
+
+Building:
+	Disabling certain features during configure could break build process.
+
+	Again fixes a few disable problems.
+
+Porting:
+	Fix for old FreeBSD.
+
+	Fixes for old Debian
+
+	Fixes for old Scientific/RHEL
+
+	Socat failed to build on platforms without flock() function (AIX,
+	Solaris) due to a missing guard.
+
+	Newer Linux distributions do not provide libwrap: do not leave unused
+	variable.
+
+	Newer Linux distributions deprecate usleep, replace it.
+
+	OpenSSL-3 loudly deprecates some functions or macros, replace a first
+	bunch of them.
+
+	Fixes for FreeBSD-15 (DCCP)
+
+	Fix for compiling on Solaris-11
+
+Testing:
+	test.sh produces file results.txt with columns of test numbers, names,
+	and results.
+
+	Fixed a few testing issues.
+
+	Added test script sock5server-echo.sh for SOCKS5-CONNECT and
+	SOCKS5-LISTEN, and appropriate tests.
+	SOCKS5 addresses are no longer experimental.
+	Tests: SOCKS5CONNECT_TCP4 SOCKS5LISTEN_TCP4
+
+	Added a developer test that overwrites malloc'ed memory with non-zeros.
+
+	Newer Linux distributions now deprecate usleep; replaced it in test.sh
+
+	UDPLITE4STREAM was trice, changed one of them to UDPLITE6STREAM.
+
+	Catch problems caused by ISPs that filter *.dest-unreach.net records.
+
+Documentation:
+	Removed obsolete CHANGES.ISO-8859-1 file.
+
+	Corrected lots of misspelling and typos.
+	Thanks to Mario de Weerd for reporting these issues.
+
+	Improved README file.
+
+	Better explained benefit of UDP-DATAGRAM address type.
+
+####################### V 1.8.0.2:
+
+Security:
+	Socat security advisory 9
+	CVE-2024-54661: Arbitrary file overwrite
+	Socat 1.6.0.0 through 1.8.0.1 and version 2 distributions contain a
+	wrapper script "readline.sh" that uses a predictable temporary
+	directory, allowing unprivileged users to overwrite arbitrary files
+	belonging to the scripts caller.
+	This is fixed in Version 1.8.0.2
+	Mitigating factors: readline.sh is usually neither installed in a bin
+	directory nor is it documented. Major Linux distributions install it in
+	examples/ or doc/; however it is invoked by test.sh script.
+	Thanks to Wolfgang Frisch from SuSE for finding and reporting this
+	issue.
+	Test: READLINE_SH_OVERWRITE
+
 ####################### V 1.8.0.1:
 
 Corrections:
@@ -52,6 +256,9 @@ Corrections:
 
 	Print warning about not checking CRLs in OpenSSL only in the first
 	child process.
+
+	Fixed preprocessor directives in macro invocation.
+	Thanks to Mario de Weerd for reporting this issue.
 
 Features:
 	Total inactivity timeout option -T 0 now means 0.0 seconds; up to
@@ -220,11 +427,11 @@ Features:
 	no IP version is preferred by build, environment, option, or address
 	type, Socat chooses IPv6 because this might activate both versions (but
 	check option ipv6-v6only).
-	Added option ai-passive to control this flag explicitely.
+	Added option ai-passive to control this flag explicitly.
 
 	New option ai-v4mapped (v4mapped) sets or unsets the AI_V4MAPPED flag
 	of the resolver. For Socat addresses requiring IPv6 addresses, this
-	resolves IPv4 addresses to the approriate IPv6 address [::ffff:*:*].
+	resolves IPv4 addresses to the appropriate IPv6 address [::ffff:*:*].
 
 	DNS resolver Options (res-*) are now set for the complete open phase of
 	the address, not per getaddrinfo() invocation.
@@ -417,14 +624,14 @@ Porting:
 	Some corrections for better 32bit systems support.
 
 Testing:
-	Removed obselete parts from test.sh
+	Removed obsolete parts from test.sh
 
 	test.sh: Introduced function checkcond
 
 	Renamed test.sh option -foreign to -internet
 
 Documentation:
-	Removed obselete file doc/xio.help
+	Removed obsolete file doc/xio.help
 
 	Added doc for option ipv6-join-group (ipv6-add-membership)
 	Thanks to Martin Buck for sending the patch.
@@ -437,7 +644,7 @@ Documentation:
 
 Corrections:
 	On connect() failure and in some other situations Socat tries to get
-	detailled information about the error with recvmsg(). Error return of
+	detailed information about the error with recvmsg(). Error return of
 	this function is now logged as Info instead of Warn.
 
 	Tests of the correction of the "IP_ADD_SOURCE_MEMBERSHIP but not struct
@@ -481,7 +688,7 @@ Corrections:
 	Thanks to Gordon W.Ross for reporting and fixing this issue.
 	Test: RESTORE_TTY
 
-	The OpenSSL client SNI parameter, when not explicitely specified, is
+	The OpenSSL client SNI parameter, when not explicitly specified, is
 	derived from option commonname or rom target server name. This is not
 	useful with IP addresses, which Socat now checks and avoids.
 
@@ -512,7 +719,7 @@ Coding:
 
 	fcntl() trace prints flags now in hexadecimal.
 
-	Stream dump options -r and -R now open their pathes with CLOEXEC to
+	Stream dump options -r and -R now open their paths with CLOEXEC to
 	prevent leaking into sub processes.
 	Test: EXEC_SNIFF
 
@@ -811,7 +1018,7 @@ Corrections:
 	Print a message when readbytes option causes EOF
 
 	The ip-recverr option had no effect. Corrected and improved its
-	handling of ancilliary messages, so it is able to analyze ICMP error
+	handling of ancillary messages, so it is able to analyze ICMP error
 	packets (Linux only?)
 
 	Setgui(), Setuid() calls in xio-progcall.c were useless.
@@ -845,11 +1052,11 @@ Corrections:
 
 	Under certain conditions OpenSSL stream connections, in particular bulk
 	data transfer in unidirectional mode, failed during transfer or near
-	its with Connection reset by peer on receiver side.
+	its end with Connection reset by peer on receiver side.
 	This happened with Socat versions 1.7.3.3 to 1.7.4.0. Reasons were
 	lazy SSL shutdown handling on the sender side in combination with
 	SSL_MODE_AUTO_RETRY turned off.
-	Fix: After SSH_shutdown but before socket shutdown call SSL_read()
+	Fix: After SSL_shutdown() but before socket shutdown call SSL_read()
 	Test: OPENSSL_STREAM_TO_SERVER
 	Fixes Red Hat issue 1870279.
 
@@ -949,7 +1156,7 @@ Porting:
 	ai_protocol=0 and try again
 	Test: SCTP_SERVICENAME
 
-	Per file filesystem options were still named ext2-* and depended on
+	Per file filesystem options were still named ext2-* and dependent on
 	<linux/ext2_fs.h>. Now they are called fs-* and depend on <linux/fs.h>.
 	These fs-* options are also available on old systems with ext2_fs.h
 
@@ -962,14 +1169,14 @@ Porting:
 	SSL_library_init.
 
 	With OPENSSL_API_COMPAT=0x10000000L the files openssl/dh.h, openssl/bn.h
-	must explicitely be included.
+	must explicitly be included.
 	Thanks to Rosen Penev for reporting and sending a patch.
 
 Testing:
 	test.sh now produces a list of tests that could not be performed for
 	any reason. This helps to analyse these cases.
 
-	OpenSSL s_server appearently started to neglect TCPs half close feature.
+	OpenSSL s_server apparently started to neglect TCPs half close feature.
 	Test OPENSSL_TCP4 has been changed to tolerate this.
 
 	OpenSSL changed its behaviour when connection is rejected. Tests
@@ -1163,7 +1370,7 @@ Corrections:
 Porting:
 	OpenSSL functions TLS1_client_method() and similar are 
 	deprecated. Socat now uses recommended TLS_client_method(). The old
-	functions and dependend option openssl-method can still be
+	functions and dependent option openssl-method can still be
 	used when configuring socat with --enable-openssl-method
 
 	Shell scripts in socat distribution are now headed with:
@@ -1205,7 +1412,7 @@ Testing:
 	More corrections to test.sh:
 	Language settings could still influence test results
 	netstat was still required
-	Suppress usleep deprecated messag
+	Suppress usleep deprecated message
 	Force use of IPv4 with some certificates
 	Set timeout for UDPxMAXCHILDREN tests
 
@@ -1358,7 +1565,7 @@ testing:
 
 docu:
 	Corrected source of socat man page to correctly show man references
-	like socket(2); removed obseolete entries from See Also
+	like socket(2); removed obsolete entries from See Also
 
 	Docu and some comments mentioned addresses SSL-LISTEN and SSL-CONNECT
 	that do not exist (OPENSSL-LISTEN, SSL-L; and OPENNSSL-CONNECT, SSL
@@ -1393,6 +1600,7 @@ security:
 
 	Socat security advisory 7
 	MSVR-1499
+	CVE-2016-2217
 	In the OpenSSL address implementation the hard coded 1024 bit DH p
 	parameter was not prime. The effective cryptographic strength of a key
 	exchange using these parameters was weaker than the one one could get by
@@ -1400,7 +1608,7 @@ security:
 	parameters were chosen, the existence of a trapdoor that makes possible
 	for an eavesdropper to recover the shared secret from a key exchange
 	that uses them cannot be ruled out.
-	Futhermore, 1024bit is not considered sufficiently secure.
+	Furthermore, 1024bit is not considered sufficiently secure.
 	Fix: generated a new 2048bit prime.
 	Thanks to Santiago Zanella-Beguelin and Microsoft Vulnerability
 	Research (MSVR) for finding and reporting this issue.
@@ -1414,7 +1622,7 @@ security:
 	safe functions in signal handlers that could freeze socat, allowing
 	denial of service attacks.
 	Many changes in signal handling and the diagnostic messages system were
-	applied to make the code async signal safe but still provide detailled
+	applied to make the code async signal safe but still provide detailed
 	logging from signal handlers:
 	Coded function vsnprintf_r() as async signal safe incomplete substitute
 	of libc vsnprintf()
@@ -1502,7 +1710,7 @@ corrections:
 	Issue reported by Hendrik.
 
 	Added option termios-cfmakeraw that calls cfmakeraw() and is preferred
-	over option raw which is now obsolote. On SysV systems this call is
+	over option raw which is now obsolete. On SysV systems this call is
 	simulated by appropriate setting.
 	Thanks to Youfu Zhang for reporting issue with option raw.
 
@@ -1515,7 +1723,7 @@ porting:
 	Thanks to Ross Burton and Danomi Manchego for reporting this issue.
 
 	Debian Bug#764251: Set the build timestamp to a deterministic time:
-	support external BUILD_DATE env var to allow to build reproducable
+	support external BUILD_DATE env var to allow to build reproducible
 	binaries
 
 	Joachim Fenkes provided an new adapted spec file.
@@ -1636,7 +1844,7 @@ porting:
 	autoconf now prefers configure.ac over configure.in
 	Thanks to Michael Vastola for sending a patch.
 
-	type of struct cmsghdr.cmsg is system dependend, determine it with
+	type of struct cmsghdr.cmsg is system dependent, determine it with
 	configure; some more print format corrections
 
 docu:
@@ -1690,7 +1898,7 @@ corrections:
 	socket using address GOPEN. Thanks to Martin Forssen for bug report and
 	patch.
 
-	UDP-LISTEN would alway set SO_REUSEADDR even without fork option and
+	UDP-LISTEN would always set SO_REUSEADDR even without fork option and
 	when user set it to 0. Thanks to Michal Svoboda for reporting this bug.
 
 	UNIX-CONNECT did not support half-close. Thanks to Greg Hughes who
@@ -1923,7 +2131,7 @@ new features:
 
 	added generic socket addresses: SOCKET-CONNECT, SOCKET-LISTEN,
 	SOCKET-SENDTO, SOCKET-RECVFROM, SOCKET-RECV, SOCKET-DATAGRAM allow
-	protocol independent socket handling; all parameters are explicitely
+	protocol independent socket handling; all parameters are explicitly
 	specified as numbers or hex data
 
 	added address options ioctl-void, ioctl-int, ioctl-intp, ioctl-string,
@@ -1996,7 +2204,7 @@ corrections:
 	this bug). test: EXECSPACES
 
 	in ignoreeof polling mode socat also blocked data transfer in the other
-	direction during the 1s wait intervalls (thanks to Jorgen Cederlof for
+	direction during the 1s wait intervals (thanks to Jorgen Cederlof for
 	reporting this bug)
 
 	corrected alphabetical order of options (proxy-auth)
@@ -2422,7 +2630,7 @@ corrections:
 
 	check for /proc at runtime, even if configure found it
 
-	src.rpm accidently supported SuSE instead of RedHat
+	src.rpm accidentally supported SuSE instead of RedHat
 
 ####################### V 1.3.2.0:
 
@@ -2698,7 +2906,7 @@ solved problems and bugs:
 	SOLVED: now uses common TCP service resolver
 
 	PROBLEM: with PIPE, wrong FDs were shown for data transfer loop
-	SOLVED: retrieval of FDs now pays respect to PIPE pecularities
+	SOLVED: retrieval of FDs now pays respect to PIPE peculiarities
 
 	PROBLEM: using address EXEC against an address with IGNOREEOF, socat
 		never terminated
