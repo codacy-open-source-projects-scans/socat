@@ -9,10 +9,15 @@
 
 #include "xio-termios.h"
 
+
+static int xiotermios_tiocswinsz(int fd, int col, int row);
+
+
 /****** TERMIOS addresses ******/
 #if _WITH_TERMIOS
 #if WITH_TERMIOS
 const struct optdesc opt_tiocsctty = { "tiocsctty", "ctty",OPT_TIOCSCTTY,  GROUP_TERMIOS,   PH_LATE2, TYPE_BOOL,     OFUNC_SPEC };
+const struct optdesc opt_tiocswinsz= { "tiocswinsz","winsz",OPT_TIOCSWINSZ, GROUP_TERMIOS,  PH_FD,    TYPE_INT_INT,  OFUNC_TERMIOS_SPEC };
 
 /* it is important for handling of these options that they have PH_FD */
 const struct optdesc opt_brkint  = { "brkint",  NULL, OPT_BRKINT,  GROUP_TERMIOS, PH_FD, TYPE_BOOL, OFUNC_TERMIOS_FLAG, 0, BRKINT };
@@ -238,6 +243,8 @@ const struct optdesc opt_pendin  = { "pendin",  NULL, OPT_PENDIN,  GROUP_TERMIOS
 #endif
 const struct optdesc opt_iexten  = { "iexten",  NULL, OPT_IEXTEN,  GROUP_TERMIOS, PH_FD, TYPE_BOOL,  OFUNC_TERMIOS_FLAG, 3, IEXTEN };
 
+const struct optdesc opt_termios_setflags = { "termios-setflags", "setflags", OPT_TERMIOS_SETFLAGS, GROUP_TERMIOS, PH_FD, TYPE_INT_ULONG, OFUNC_TERMIOS_SETFLAGS, 0, 0 };
+
 const struct optdesc opt_vintr    = { "vintr",  "intr",  OPT_VINTR,    GROUP_TERMIOS, PH_FD, TYPE_BYTE, OFUNC_TERMIOS_CHAR, VINTR };
 const struct optdesc opt_vquit    = { "vquit",  "quit",  OPT_VQUIT,    GROUP_TERMIOS, PH_FD, TYPE_BYTE, OFUNC_TERMIOS_CHAR, VQUIT };
 const struct optdesc opt_verase   = { "verase", "erase", OPT_VERASE,   GROUP_TERMIOS, PH_FD, TYPE_BYTE, OFUNC_TERMIOS_CHAR, VERASE };
@@ -267,10 +274,10 @@ const struct optdesc opt_vwerase  = { "vwerase","werase",OPT_VWERASE,  GROUP_TER
 const struct optdesc opt_vlnext   = { "vlnext", "lnext", OPT_VLNEXT,   GROUP_TERMIOS, PH_FD, TYPE_BYTE, OFUNC_TERMIOS_CHAR, VLNEXT };
 const struct optdesc opt_veol2    = { "veol2",  "eol2",  OPT_VEOL2,    GROUP_TERMIOS, PH_FD, TYPE_BYTE, OFUNC_TERMIOS_CHAR, VEOL2 };
 
-const struct optdesc opt_raw      = { "raw",    NULL,    OPT_RAW,      GROUP_TERMIOS, PH_FD, TYPE_CONST, OFUNC_TERMIOS_SPEC };
-const struct optdesc opt_sane     = { "sane",   NULL,    OPT_SANE,     GROUP_TERMIOS, PH_FD, TYPE_CONST, OFUNC_TERMIOS_SPEC };
-const struct optdesc opt_termios_cfmakeraw = { "termios-cfmakeraw", "cfmakeraw", OPT_TERMIOS_CFMAKERAW, GROUP_TERMIOS, PH_FD, TYPE_CONST, OFUNC_TERMIOS_SPEC };
-const struct optdesc opt_termios_rawer     = { "termios-rawer",     "rawer",     OPT_TERMIOS_RAWER,     GROUP_TERMIOS, PH_FD, TYPE_CONST, OFUNC_TERMIOS_SPEC };
+const struct optdesc opt_raw      = { "raw",    NULL,    OPT_RAW,      GROUP_TERMIOS, PH_FD, TYPE_CONST, OFUNC_TERMIOS_COMB };
+const struct optdesc opt_sane     = { "sane",   NULL,    OPT_SANE,     GROUP_TERMIOS, PH_FD, TYPE_CONST, OFUNC_TERMIOS_COMB };
+const struct optdesc opt_termios_cfmakeraw = { "termios-cfmakeraw", "cfmakeraw", OPT_TERMIOS_CFMAKERAW, GROUP_TERMIOS, PH_FD, TYPE_CONST, OFUNC_TERMIOS_COMB };
+const struct optdesc opt_termios_rawer     = { "termios-rawer",     "rawer",     OPT_TERMIOS_RAWER,     GROUP_TERMIOS, PH_FD, TYPE_CONST, OFUNC_TERMIOS_COMB };
 
 #if HAVE_TERMIOS_ISPEED
 const struct optdesc opt_ispeed = { "ispeed", NULL, OPT_ISPEED, GROUP_TERMIOS, PH_FD, TYPE_UINT, OFUNC_TERMIOS_SPEED, 0/*in*/ };
@@ -302,7 +309,12 @@ union {
    tcflag_t flags[4];
 } _xiotermios_data;
 
-int xiotermios_setflag(int fd, int word, tcflag_t mask) {
+int xiotermios_setflag(
+	int fd,
+	int word,	/* index into struct termios tcflag_t:
+			   0: c_iflag;  1: o;  2: c;  3: l */
+	tcflag_t mask)
+{
    if (!_xiotermios_doit) {
       if (Tcgetattr(fd, &_xiotermios_data.termarg) < 0) {
 	 Error3("tcgetattr(%d, %p): %s",
@@ -353,6 +365,29 @@ int xiotermios_char(int fd, int n, unsigned char c) {
    }
    _xiotermios_data.termarg.c_cc[n] = c;
    return 0;
+}
+
+int xiotermios_setflags(
+	int fd,
+	int word,
+	tcflag_t val)
+{
+	if (word < 0 || word >=4) {
+		Error3("xiotermios_setflags(fd=%d, word=%d, val=%u): word must be 0..3",
+		       fd, word, val);
+		errno = EINVAL;
+		return -1;
+	}
+	if (!_xiotermios_doit) {
+		if (Tcgetattr(fd, &_xiotermios_data.termarg) < 0) {
+			Error3("tcgetattr(%d, %p): %s",
+			       fd, &_xiotermios_data.termarg, strerror(errno));
+			return -1;
+		}
+		_xiotermios_doit = true;
+	}
+	_xiotermios_data.flags[word] = val;
+	return 0;
 }
 
 #if HAVE_TERMIOS_ISPEED || HAVE_TERMIOS_OSPEED
@@ -447,7 +482,7 @@ int xiotermios_speed(int fd, int n, speed_t speed) {
 #  define XCASE 0
 #endif
 
-int xiotermios_spec(int fd, int optcode) {
+int xiotermios_flagscomb(int fd, int optcode) {
    if (!_xiotermios_doit) {
       if (Tcgetattr(fd, &_xiotermios_data.termarg) < 0) {
 	 Error3("tcgetattr(%d, %p): %s",
@@ -497,6 +532,7 @@ int xiotermios_spec(int fd, int optcode) {
       _xiotermios_data.termarg.c_lflag |= (ISIG|ICANON|IEXTEN|ECHO|ECHOE|ECHOK|ECHOCTL|ECHOKE);
       /*! "sets characters to their default values... - which? */
       break;
+
    case OPT_TERMIOS_CFMAKERAW:
 #if HAVE_CFMAKERAW
       cfmakeraw(&_xiotermios_data.termarg);
@@ -527,6 +563,60 @@ int xiotermios_flush(int fd) {
       _xiotermios_doit = false;
    }
    return 0;
+}
+
+int xiotermios_spec(
+	int fd,
+	struct opt *opt)
+{
+	switch (opt->desc->optcode) {
+
+	case OPT_TIOCSWINSZ:
+		return xiotermios_tiocswinsz(fd, opt->value.u_int,
+					     opt->value2.u_int);
+
+	default:
+		Error1("xiotermios_spec(): Internal error: optcode %d not handled",
+		       opt->desc->optcode);
+		return -1;
+	}
+
+}
+
+
+/* Tries to set the size of a (pseudo) terminal */
+static int xiotermios_tiocswinsz(
+	int fd,
+	int col,
+	int row)
+{
+	struct winsize winsz = { 0 };
+
+	/* The kernel interface takes unsigned int */
+	if (row < 0) {
+		Warn2("xiotermios_tiocswinsz(): row %d is outside range 0..%hu, falling back to 0", row, USHRT_MAX);
+		row = 0;
+	} else if (row > USHRT_MAX) {
+		Warn3("xiotermios_tiocswinsz(): row %d is outside range 0..%hu, falling back to %hu", row, USHRT_MAX, USHRT_MAX);
+		row = USHRT_MAX;
+	}
+	winsz.ws_row = row;
+
+	if (col < 0) {
+		Warn2("xiotermios_tiocswinsz(): col %d is outside range 0..%hu, falling back to 0", col, USHRT_MAX);
+		col = 0;
+	} else if (col > USHRT_MAX) {
+		Warn3("xiotermios_tiocswinsz(): col %d is outside range 0..%hu, falling back to %hu", col, USHRT_MAX, USHRT_MAX);
+		col = USHRT_MAX;
+	}
+	winsz.ws_col = col;
+
+	if (Ioctl(fd, TIOCSWINSZ, &winsz) < 0) {
+		Error4("ioctl(%d, TIOCSWINSZ, { %hu,%hu }: %s",
+		       fd, winsz.ws_col, winsz.ws_row, strerror(errno));
+		return -1;
+	}
+	return 0;
 }
 
 #endif /* _WITH_TERMIOS */

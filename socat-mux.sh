@@ -97,7 +97,7 @@ if [ -z "$PORT1" -o -z "$PORT2" ]; then
 	exit 1
     fi
     PORT1= PORT2=
-    while [ -z "$PORT1" -o -z "$PORT2" -o "$PORT1" = "$PORT2" ] || ss -aun |grep -e ":$PORT1\>" -e ":$PORT2\>" >/dev/null; do
+    while [ -z "$PORT1" -o -z "$PORT2" -o "$PORT1" = "$PORT2" ] || ss -aun |grep -e ":$PORT1[[:space:]]" -e ":$PORT2[[:space:]]" >/dev/null; do
 	if [ -z "$LOWPORT" ]; then
 	    PORT1=$((16384+RANDOM))
 	    PORT2=$((16384+RANDOM))

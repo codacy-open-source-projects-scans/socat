@@ -264,6 +264,12 @@
 /* Define if you have the <netinet6/in6.h> header file.  */
 #undef HAVE_NETINET6_IN6_H
 
+/* Define if you have the <asm/types.h> header file.  */
+#undef HAVE_ASM_TYPES_H
+
+/* Define if you have the <linux/rtnetlink.h> header file.  */
+#undef HAVE_LINUX_RTNETLINK_H
+
 /* Define if you have the <arpa/nameser.h> header file.  */
 #undef HAVE_ARPA_NAMESER_H
 
@@ -672,6 +678,7 @@
 #undef HAVE_BASIC_OFF64_T
 #undef HAVE_BASIC_DEV_T
 #undef HAVE_BASIC_SPEED_T
+#undef HAVE_BASIC_TCFLAG_T
 
 #undef HAVE_BASIC_SOCKLEN_T
 
@@ -722,6 +729,7 @@
 #undef WITH_GOPEN
 #undef WITH_TERMIOS
 #undef WITH_PIPE
+#undef WITH_STALL
 #undef WITH_SOCKETPAIR
 #undef WITH_UNIX
 #undef WITH_ABSTRACT_UNIXSOCKET
@@ -752,6 +760,7 @@
 #undef WITH_FS
 #undef WITH_OPENSSL
 #undef WITH_OPENSSL_METHOD
+#define WITH_TEXT 1
 #undef WITH_RESOLVE
 #undef WITH_RES_DEPRECATED 	/* AAONLY,PRIMARY */
 #define WITH_STREAMS 1

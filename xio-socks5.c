@@ -6,7 +6,7 @@
 
 /*
 * At the moment UDP ASSOCIATE is not supported, but CONNECT and BIND are.
-* At the moment no authentication methods are supported (i.e only NO AUTH),
+* At the moment GSSAPI authentication method is not supported,
 * which is technically not compliant with RFC1928.
 */
 
@@ -29,7 +29,10 @@
 #define SOCKS5_MAX_REPLY_SIZE	(6 + 256)
 
 #define SOCKS5_AUTH_NONE		0
-#define SOCKS5_AUTH_FAIL		0xff
+#define SOCKS5_AUTH_USER_PASS		2
+
+#define SOCKS5_AUTH_SUCCESS		0
+#define SOCKS5_AUTH_NO_METH		0xff
 
 #define SOCKS5_COMMAND_CONNECT		1
 #define SOCKS5_COMMAND_BIND		2
@@ -54,6 +57,7 @@ static int xioopen_socks5(int argc, const char *argv[], struct opt *opts, int xi
 const struct addrdesc xioaddr_socks5_connect = { "SOCKS5-CONNECT", 1+XIO_RDWR, xioopen_socks5, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_IP_SOCKS|GROUP_CHILD|GROUP_RETRY, SOCKS5_COMMAND_CONNECT, 0, 0 HELP(":<socks-server>[:<socks-port>]:<target-host>:<target-port>") };
 
 const struct addrdesc xioaddr_socks5_listen  = { "SOCKS5-LISTEN",  1+XIO_RDWR, xioopen_socks5, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_IP_SOCKS|GROUP_CHILD|GROUP_RETRY, SOCKS5_COMMAND_BIND,    0, 0 HELP(":<socks-server>[:<socks-port>]:<listen-host>:<listen-port>") };
+
 
 static const char * _xioopen_socks5_strerror(uint8_t r)
 {
@@ -90,17 +94,30 @@ static const char * _xioopen_socks5_strerror(uint8_t r)
 * send(0x050100) followed by "return read() == 0x0500", but will be easier to
 * extend for other auth mode support.
 */
-static int _xioopen_socks5_handshake(struct single *sfd, int level)
+static int _xioopen_socks5_handshake(
+	struct single *sfd,
+	char *socksuser,
+	char *sockspass,
+	int level)
 {
 	int result;
 	ssize_t bytes;
 	struct socks5_server_hello server_hello;
-	int nmethods = 1;	/* support only 1 auth method - no auth */
-	int client_hello_size =
-		sizeof(struct socks5_client_hello) +
-		(sizeof(uint8_t) * nmethods);
+	uint8_t auth_method = SOCKS5_AUTH_NONE;
+	int nmethods = 1;	/* support 2 auth method2: none, user+pw */
+	int client_hello_size;
+	struct socks5_client_hello *client_hello;
 
-	struct socks5_client_hello *client_hello = Malloc(client_hello_size);
+	if (socksuser != NULL ||
+	    sockspass != NULL) {
+		auth_method = SOCKS5_AUTH_USER_PASS;
+		++nmethods;
+	}
+	client_hello_size =
+		sizeof(struct socks5_client_hello) +
+		(nmethods * sizeof(uint8_t));
+
+	client_hello = Malloc(client_hello_size);
 	if (client_hello == NULL) {
 		Msg2(level, "malloc(%d): %s",
 			client_hello_size, strerror(errno));
@@ -114,14 +131,15 @@ static int _xioopen_socks5_handshake(struct single *sfd, int level)
 
 	unsigned char *server_hello_ptr = (unsigned char *)&server_hello;
 
-	/* SOCKS5 Hello with 1 authentication mechanism -
-	   0x00 NO AUTHENTICATION */
+	/* SOCKS5 Hello with 1 or 2 authentication mechanisms */
 	client_hello->version	= SOCKS5_VERSION;
-	client_hello->nmethods	= 1;
+	client_hello->nmethods	= nmethods;
 	client_hello->methods[0]= SOCKS5_AUTH_NONE;
+	if (auth_method == SOCKS5_AUTH_USER_PASS)
+		client_hello->methods[1] = SOCKS5_AUTH_USER_PASS;
 
 	/* Send SOCKS5 Client Hello */
-	Info2("sending socks5 client hello version=%d nmethods=%d",
+	Info2("sending SOCKS5 client hello version=%d nmethods=%d",
 		client_hello->version,
 		client_hello->nmethods);
 #if WITH_MSGLEVEL <= E_DEBUG
@@ -130,7 +148,7 @@ static int _xioopen_socks5_handshake(struct single *sfd, int level)
 		if ((msgbuf = Malloc(3 * client_hello_size)) != NULL) {
 			xiohexdump((unsigned char *)client_hello,
 				   client_hello_size, msgbuf);
-			Debug1("sending socks5 client hello %s", msgbuf);
+			Debug1("sending SOCKS5 client hello %s", msgbuf);
 			free(msgbuf);
 		}
 	}
@@ -151,7 +169,7 @@ static int _xioopen_socks5_handshake(struct single *sfd, int level)
 	free(client_hello);
 
 	bytes = 0;
-	Info("waiting for socks5 reply");
+	Info("waiting for SOCKS5 server hello");
 	while (bytes >= 0) {
 		do {
 			result = Read(sfd->fd, server_hello_ptr + bytes,
@@ -195,7 +213,7 @@ static int _xioopen_socks5_handshake(struct single *sfd, int level)
 		server_hello.method);
 
 	if (server_hello.version != SOCKS5_VERSION) {
-		Msg2(level, "SOCKS5 Server Hello version was %d, not the expected %d, peer might not be a SOCKS5 server",
+		Msg2(level, "SOCKS5 server hello version was %d, not the expected %d, peer might not be a SOCKS5 server",
 			server_hello.version, SOCKS5_VERSION);
 		if (Close(sfd->fd) < 0) {
 			Info2("close(%d): %s", sfd->fd, strerror(errno));
@@ -203,15 +221,28 @@ static int _xioopen_socks5_handshake(struct single *sfd, int level)
 		return STAT_RETRYLATER;
 	}
 
-	if (server_hello.method == SOCKS5_AUTH_FAIL) {
+	if (server_hello.method == SOCKS5_AUTH_NO_METH) {
 		Msg(level, "SOCKS5 authentication negotiation failed - client & server have no common supported methods");
 		if (Close(sfd->fd) < 0) {
 			Info2("close(%d): %s", sfd->fd, strerror(errno));
 		}
 		return STAT_RETRYLATER;
 	}
+	Info1("SOCKS5 server chose authentication method %u", server_hello.method);
 
-	if (server_hello.method != SOCKS5_AUTH_NONE) {
+	if (server_hello.method == SOCKS5_AUTH_NONE) {
+		/* Server accepted using no auth */
+		Notice("SOCKS5 session is authenticated");
+		return STAT_OK;
+	}
+
+	if (auth_method == SOCKS5_AUTH_NONE) {
+		Error("authentication with SOCKS5 server failed");
+		return STAT_NORETRY;
+	}
+	if (server_hello.method != SOCKS5_AUTH_NONE &&
+	    (auth_method == SOCKS5_AUTH_USER_PASS &&
+	     server_hello.method != SOCKS5_AUTH_USER_PASS)) {
 		Msg1(level, "SOCKS5 server requested unsupported auth method (%d)",
 		     server_hello.method);
 		if (Close(sfd->fd) < 0) {
@@ -220,7 +251,85 @@ static int _xioopen_socks5_handshake(struct single *sfd, int level)
 		return STAT_RETRYLATER;
 	}
 
-	/* Server accepted using no auth */
+	if (auth_method == SOCKS5_AUTH_USER_PASS) {
+		unsigned int username_len;
+		unsigned int password_len;
+		size_t auth_request_size;
+		uint8_t *auth_request;
+
+		username_len = strlen(socksuser);
+		password_len = strlen(sockspass);
+		auth_request_size = (1 +1+username_len +1+password_len);
+		auth_request = Malloc(auth_request_size);
+		if (auth_request == NULL) {
+			Msg2(level, "malloc("F_Zu"): %s",
+			     auth_request_size, strerror(errno));
+			if (Close(sfd->fd) < 0) {
+				Info2("close(%d): %s", sfd->fd, strerror(errno));
+			}
+
+			/* malloc failed - could succeed later, so retry then */
+			return STAT_RETRYLATER;
+		}
+		auth_request[0] = 0x01; 	/* by spec */
+		auth_request[1] = username_len;
+		memcpy(&auth_request[2], socksuser, username_len);
+		auth_request[2+username_len] = password_len;
+		memcpy(&auth_request[2+username_len+1], sockspass,
+		       password_len);
+		Info("sending SOCKS5 user-pass authentication");
+#if WITH_MSGLEVEL <= E_INFO
+		{
+			size_t pwlen = strlen(sockspass);
+			if (pwlen >= 256)
+				pwlen = 255;
+			char stars[256];
+			memset(stars, '*', pwlen);
+			stars[pwlen] = '\0';
+			Info2("sending SOCKS5 auth request \"%s\":%s",
+			      socksuser, stars);
+		}
+#endif
+		if (writefull(sfd->fd, auth_request, auth_request_size, NULL) < 0) {
+			Msg4(level, "write(%d, %p, "F_Zu"): %s",
+			     sfd->fd, auth_request, auth_request_size,
+			     strerror(errno));
+			if (Close(sfd->fd) < 0) {
+				Info2("close(%d): %s", sfd->fd, strerror(errno));
+			}
+			free(auth_request);
+
+			/* writefull() failed, but might succeed later, so RETRYLATER */
+			return STAT_RETRYLATER;
+		}
+
+	}
+	Info("SOCKS5: waiting for authentication result");
+	{
+		struct {
+			uint8_t ver;
+			uint8_t status;
+		} socks5_auth_reply;
+		ssize_t result;
+
+		result = readfull(sfd->fd, &socks5_auth_reply,
+				  sizeof(socks5_auth_reply), NULL, E_WARN);
+		if (result < 0) {
+			Error1("reading SOCKS5 authentication result failed: %s",
+			       strerror(result));
+			return STAT_RETRYLATER;
+		}
+		if (result == 0) {
+			Error("reading SOCKS5 authentication result failed: EOF");
+			return STAT_RETRYLATER;
+		}
+		if (socks5_auth_reply.status != SOCKS5_AUTH_SUCCESS) {
+			Error1("SOCKS5 authentication for user \"%s\" failed",
+			       socksuser);
+			return STAT_RETRYLATER;
+		}
+		Notice("SOCKS5 authentication succeeded");
+	}
 	return STAT_OK;
 }
 
@@ -313,9 +422,10 @@ static int _xioopen_socks5_read_reply(
 	while (bytes_to_read >= 0) {
 		Info("reading SOCKS5 reply");
 		do {
-			result = Read(sfd->fd,
-				      ((unsigned char *)reply) + bytes_read,
-				      bytes_to_read-bytes_read);
+			result = readfull(sfd->fd,
+					  ((unsigned char *)reply) + bytes_read,
+					  bytes_to_read-bytes_read,
+					  NULL, level-1);
 		} while (result < 0 && errno == EINTR);
 		if (result < 0) {
 			Msg4(level, "read(%d, %p, %d): %s",
@@ -412,7 +522,7 @@ static int _xioopen_socks5_request(
 		return STAT_NORETRY;
 	}
 
-	Info4("sending socks5 request version=%d command=%d reserved=%d address_type=%d",
+	Info4("sending SOCKS5 request version=%d command=%d reserved=%d address_type=%d",
 		req->version, req->command, req->reserved, req->address_type);
 
 #if WITH_MSGLEVEL <= E_DEBUG
@@ -420,7 +530,7 @@ static int _xioopen_socks5_request(
 		char *msgbuf;
 		if ((msgbuf = Malloc(3 * bytes)) != NULL) {
 			xiohexdump((const unsigned char *)req, bytes, msgbuf);
-			Debug1("sending socks5 request %s", msgbuf);
+			Debug1("sending SOCKS5 request %s", msgbuf);
 			free(msgbuf);
 		}
 	}
@@ -516,6 +626,8 @@ static int xioopen_socks5(
 	int socktype = SOCK_STREAM;
 	int pf = PF_UNSPEC;
 	int ipproto = IPPROTO_TCP;
+	char *socksuser = NULL;
+	char *sockspass = NULL;
 	int level, result;
 	struct opt *opts0 = NULL;
 	struct single *sfd = &xxfd->stream;
@@ -544,8 +656,8 @@ static int xioopen_socks5(
 
 	/* Apply and retrieve some options */
 	result = _xioopen_ipapp_init(sfd, xioflags, opts,
-			        &dofork, &maxchildren,
-			        &pf, &socktype, &ipproto);
+				     &dofork, &maxchildren,
+				     &pf, &socktype, &ipproto, -1);
 	if (result != STAT_OK)
 		return result;
 
@@ -553,6 +665,23 @@ static int xioopen_socks5(
 		return STAT_NORETRY;
 	}
 	/*! possible memory leak */
+
+	retropt_string(opts, OPT_SOCKSUSER, &socksuser);
+	retropt_string(opts, OPT_SOCKSPASS, &sockspass);
+
+	if (socksuser != NULL ||
+	    sockspass != NULL) {
+		if (socksuser == NULL) {
+			const char defuser[] = "anonymous";
+			Warn1("SOCKS5 password without username, falling back to \"%s\"",
+			      defuser);
+			socksuser = strdup(defuser);
+		}
+		if (sockspass == NULL) {
+			Warn("SOCKS5 username without password");
+			sockspass = strdup(""); 	/* prevent SIGSEGV */
+		}
+	}
 
 	opts0 = opts;
 	opts = NULL;
@@ -632,7 +761,8 @@ static int xioopen_socks5(
 			return result;
 		}
 
-		result = _xioopen_socks5_handshake(sfd, level);
+		result = _xioopen_socks5_handshake(sfd, socksuser, sockspass,
+						   level);
 		switch (result) {
 		case STAT_OK: break;
 #if WITH_RETRY
@@ -648,7 +778,7 @@ static int xioopen_socks5(
 #endif /* WITH_RETRY */
 			/* FALLTHROUGH */
 		default:
-			Error3("%s:%s:%s: Connection failed", argv[0], socks_server, socks_port);
+			Error3("%s:%s:%s: handshake failed", argv[0], socks_server, socks_port);
 			freeopts(opts0);
 			freeopts(opts);
 			return result;

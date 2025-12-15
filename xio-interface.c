@@ -10,6 +10,7 @@
 
 #include "xioopen.h"
 #include "xio-socket.h"
+#include "xio-netlink.h"
 #include "xio-ascii.h"
 
 #include "xio-interface.h"
@@ -43,6 +44,9 @@ const struct optdesc opt_iff_portsel     = { "iff-portsel",     "portsel",     O
 const struct optdesc opt_iff_automedia   = { "iff-automedia",   "automedia",   OPT_IFF_AUTOMEDIA,   GROUP_INTERFACE, PH_OFFSET, TYPE_BOOL,     OFUNC_OFFSET_MASKS, XIO_OFFSETOF(para.interface.iff_opts), XIO_SIZEOF(para.interface.iff_opts), IFF_AUTOMEDIA };
 #endif
 /*const struct optdesc opt_iff_dynamic   = { "iff-dynamic",     "dynamic",     OPT_IFF_DYNAMIC,     GROUP_INTERFACE, PH_OFFSET, TYPE_BOOL,     OFUNC_OFFSET_MASKS, XIO_OFFSETOF(para.interface.iff_opts), XIO_SIZEOF(short), IFF_DYNAMIC };*/
+#if HAVE_LINUX_RTNETLINK_H
+const struct optdesc opt_interface_mtu   = { "interface-mtu",   "if-mtu",      OPT_INTERFACE_MTU,   GROUP_INTERFACE, PH_LATE, TYPE_UINT,     OFUNC_SPEC };
+#endif
 #ifdef PACKET_AUXDATA
 const struct optdesc opt_retrieve_vlan   = { "retrieve-vlan",   NULL,          OPT_RETRIEVE_VLAN,   GROUP_INTERFACE, PH_LATE, TYPE_CONST,    OFUNC_SPEC };
 #endif
@@ -67,6 +71,7 @@ int _xioopen_interface(const char *ifname,
    bool needbind = false;
    char *bindstring = NULL;
    struct sockaddr_ll sall = { 0 };
+   unsigned int mtu = 0;
    int rc;
 
    if (ifindex(ifname, &ifidx, -1) < 0) {
@@ -100,7 +105,14 @@ int _xioopen_interface(const char *ifname,
    us.ll.sll_ifindex = ifidx;
    uslen = sizeof(sall);
    needbind = true;
-   sfd->peersa = (union sockaddr_union)us;
+   /* sfd->peersa = (union sockaddr_union)us; */ /* gcc --pedantic */
+   sfd->peersa = *(union sockaddr_union *)&us;
+
+#if HAVE_LINUX_RTNETLINK_H
+   if (retropt_uint(opts, OPT_INTERFACE_MTU, &mtu) == 0) {
+      xio_netlink_mtu(ifidx, mtu);
+   }
+#endif /* HAVE_LINUX_RTNETLINK_H */
 
    rc =
       _xioopen_dgram_sendto(needbind?&us:NULL, uslen,

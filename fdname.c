@@ -260,13 +260,13 @@ int sockname(int fd, FILE *outfile, char style) {
    rc = Getsockopt(fd, SOL_SOCKET, SO_PROTOTYPE,  &proto,         &optlen);
 #endif
    if (rc < 0) {
-      Notice5("getsocktop(%d, SOL_SOCKET, "
 #ifdef SO_PROTOCOL
-	    "SO_PROTOCOL"
+      Notice5("getsocktop(%d, SOL_SOCKET, SO_PROTOCOL, &%p, {"F_socklen"}): errno=%d (%s)",
+	      fd, &proto, optlen, errno, strerror(errno));
 #else
-	    "SO_PROTOTYPE"
+      Notice5("getsocktop(%d, SOL_SOCKET, SO_PROTOTYPE, &%p, {"F_socklen"}): errno=%d (%s)",
+	      fd, &proto, optlen, errno, strerror(errno));
 #endif
-	    ", &%p, {"F_socklen"}): errno=%d (%s)", fd, &proto, optlen, errno, strerror(errno));
    }
 #endif /* defined(SO_PROTOCOL) || defined(SO_PROTOTYPE) */
    optlen = sizeof(opttype);
@@ -278,39 +278,63 @@ int sockname(int fd, FILE *outfile, char style) {
    Getsockopt(fd, SOL_SOCKET, SO_ACCEPTCONN, &optacceptconn, &optlen);
 #endif
 
+   socknamelen = sizeof(sockname);
+   result = Getsockname(fd, &sockname.soa, &socknamelen);
+   if (result < 0) {
+      Error2("getsockname(%d): %s", fd, strerror(errno));
+      return -1;
+   }
+
 #if (WITH_IP4 || WITH_IP6) && ( defined(SO_PROTOCOL) || defined(SO_PROTOTYPE) )
+   if (sockname.soa.sa_family == AF_INET ||
+       sockname.soa.sa_family == AF_INET6) {
 #if HAVE_GETPROTOBYNUMBER_R==1 /* Linux */
-   rc = getprotobynumber_r(proto, &protoent, protoname, sizeof(protoname), &protoentp);
-   if (protoentp == NULL) {
-      Warn2("sockname(): getprotobynumber_r(proto=%d, ...): %s",
-	    proto, strerror(rc));
-   }
-   strncpy(protoname, protoentp->p_name, sizeof(protoname));
+      rc = getprotobynumber_r(proto, &protoent, protoname, sizeof(protoname), &protoentp);
+      if (protoentp == NULL) {
+	 Warn2("sockname(): getprotobynumber_r(proto=%d, ...): %s",
+	       proto, strerror(rc));
+      } else
+	 strncpy(protoname, protoentp->p_name, sizeof(protoname));
 #elif HAVE_GETPROTOBYNUMBER_R==2 /* Solaris */
-   {
+      {
 #     define FILAN_GETPROTOBYNUMBER_R_BUFLEN 1024
-      char buffer[FILAN_GETPROTOBYNUMBER_R_BUFLEN];
-      protoentp = getprotobynumber_r(proto, &protoent, buffer, FILAN_GETPROTOBYNUMBER_R_BUFLEN);
-      strncpy(protoname, protoentp->p_name, sizeof(protoname));
-   }
+	 char buffer[FILAN_GETPROTOBYNUMBER_R_BUFLEN];
+	 protoentp = getprotobynumber_r(proto, &protoent, buffer, FILAN_GETPROTOBYNUMBER_R_BUFLEN);
+	 if (protoentp == NULL) {
+	    Warn2("sockname(): getprotobynumber_r(proto=%d, ...): %s",
+		  proto, strerror(rc));
+	 } else {
+	    strncpy(protoname, protoentp->p_name, sizeof(protoname));
+	 }
+      }
 #elif HAVE_GETPROTOBYNUMBER_R==3 /* AIX, OpenBSD */
-   {
-      struct protoent_data proto_data = { 0 }; 	/* OpenBSD might SIGSEGV */
-      rc = getprotobynumber_r(proto, &protoent, &proto_data);
-      if (rc == 0) {
-	 strncpy(protoname, protoent.p_name, sizeof(protoname));
-	 endprotoent_r(&proto_data);
+      {
+	 struct protoent_data proto_data = { 0 }; 	/* OpenBSD might SIGSEGV */
+	 rc = getprotobynumber_r(proto, &protoent, &proto_data);
+	 if (rc == 0) {
+	    strncpy(protoname, protoent.p_name, sizeof(protoname));
+	    endprotoent_r(&proto_data);
+	 }
+      }
+#endif
+      if (strlen(protoname) == 0) {
+	 switch (proto) {
+	 case IPPROTO_TCP:     strcpy(protoname, "tcp"); break;
+	 case IPPROTO_UDP:     strcpy(protoname, "udp"); break;
+#if IPPROTO_DCCP
+	 case IPPROTO_DCCP:    strcpy(protoname, "dccp"); break;
+#endif
+#if IPPROTO_SCTP
+	 case IPPROTO_SCTP:    strcpy(protoname, "sctp"); break;
+#endif
+#if IPPROTO_UDPLITE
+	 case IPPROTO_UDPLITE: strcpy(protoname, "udplite"); break;
+#endif
+	 default: sprintf(protoname, "proto%d", proto); break;
+	 }
       }
    }
-#else
-   switch (proto) {
-   case IPPROTO_TCP:  strcpy(protoname, "tcp"); break;
-   case IPPROTO_UDP:  strcpy(protoname, "udp"); break;
-   case IPPROTO_SCTP: strcpy(protoname, "sctp"); break;
-   default: sprintf(protoname, "proto%d", proto); break;
-   }
-#endif
-#else /* ! (defined(SO_PROTOCOL) || defined(SO_PROTOTYPE)) */
+#else /* ! ( (WITH_IP4 || WITH_IP6) && (defined(SO_PROTOCOL) || defined(SO_PROTOTYPE)) ) */
    if (opttype == SOCK_STREAM) {
       strcpy(protoname, "(stream)");
    } else if (opttype == SOCK_DGRAM) {
@@ -338,13 +362,7 @@ int sockname(int fd, FILE *outfile, char style) {
    } else {
       strcpy(protoname, "socket");
    }
-#endif /* ! (defined(SO_PROTOCOL) || defined(SO_PROTOTYPE)) */
-   socknamelen = sizeof(sockname);
-   result = Getsockname(fd, &sockname.soa, &socknamelen);
-   if (result < 0) {
-      Error2("getsockname(%d): %s", fd, strerror(errno));
-      return -1;
-   }
+#endif /* ! ( (WITH_IP4 || WITH_IP6) && (defined(SO_PROTOCOL) || defined(SO_PROTOTYPE)) ) */
 
    peernamelen = sizeof(peername);
    result = Getpeername(fd, (struct sockaddr *)&peername, &peernamelen);

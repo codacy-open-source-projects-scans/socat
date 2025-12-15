@@ -562,6 +562,16 @@ void socat_version(FILE *fd) {
 #else
    fputs("  #undef WITH_PIPE\n", fd);
 #endif
+#ifdef WITH_STALL
+   fprintf(fd, "  #define WITH_STALL %d\n", WITH_STALL);
+#else
+   fputs("  #undef WITH_STALL\n", fd);
+#endif
+#ifdef WITH_TEXT
+   fprintf(fd, "  #define WITH_TEXT %d\n", WITH_TEXT);
+#else
+   fputs("  #undef WITH_TEXT\n", fd);
+#endif
 #ifdef WITH_SOCKETPAIR
    fprintf(fd, "  #define WITH_SOCKETPAIR %d\n", WITH_SOCKETPAIR);
 #else
@@ -789,7 +799,6 @@ int socat(const char *address1, const char *address2) {
 	       the communication channel, so continue */
 	    Info2("child "F_pid" has already died with status %d",
 		  XIO_RDSTREAM(sock1)->para.exec.pid, statunknown[i]);
-	    ++num_child; 	/* it was counted as anonymous child, undo */
 	    if (statunknown[i] != 0) {
 	       return 1;
 	    }

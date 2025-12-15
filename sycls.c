@@ -689,14 +689,17 @@ int Flock(int fd, int operation) {
 }
 #endif /* HAVE_FLOCK */
 
-int Ioctl(int d, int request, void *argp) {
+/* Note that `request` is `int` in POSIX, but it is `unsigned long` for some
+   OSes e.g. Linux and OpenBSD.  This matters in some cases where truncation
+   would happen, so define it as `unsigned long` here. */
+int Ioctl(int d, unsigned long request, void *argp) {
    int retval, _errno;
    if (!diag_in_handler) diag_flush();
 #if WITH_SYCLS
    if (argp > (void *)0x10000) {	/* fuzzy...*/
-      Debug4("ioctl(%d, 0x%x, %p{%lu})", d, request, argp, *(unsigned long *)argp);
+      Debug7("ioctl(%d, 0x%lx, %p{0x%02x %02x %02x %02x})", d, request, argp, *(uint8_t *)argp, ((uint8_t *)argp)[1], ((uint8_t *)argp)[2], ((uint8_t *)argp)[3]);
    } else {
-      Debug3("ioctl(%d, 0x%x, 0x%p)", d, request, argp);
+      Debug3("ioctl(%d, 0x%lx, 0x%p)", d, request, argp);
    }
 #endif /* WITH_SYCLS */
    retval = ioctl(d, request, argp);
@@ -712,11 +715,14 @@ int Ioctl(int d, int request, void *argp) {
    return retval;
 }
 
-int Ioctl_int(int d, int request, int arg) {
+/* Note that `request` is `int` in POSIX, but it is `unsigned long` for some
+   OSes e.g. Linux and OpenBSD.  This matters in some cases where truncation
+   would happen, so define it as `unsigned long` here. */
+int Ioctl_int(int d, unsigned long request, int arg) {
    int retval, _errno;
    if (!diag_in_handler) diag_flush();
 #if WITH_SYCLS
-   Debug3("ioctl(%d, 0x%x, %d)", d, request, arg);
+   Debug3("ioctl(%d, 0x%lx, %d)", d, request, arg);
 #endif /* WITH_SYCLS */
    retval = ioctl(d, request, arg);
    _errno = errno;
@@ -1506,11 +1512,11 @@ struct hostent *Getipnodebyname(const char *name, int af, int flags,
 
 void *Malloc(size_t size) {
    void *result;
-   Debug1("malloc("F_Zd")", size);
+   Debug1("malloc("F_Zu")", size);
    result = malloc(size);
    Debug1("malloc() -> %p", result);
    if (result == NULL) {
-      Error1("malloc("F_Zd"): out of memory", size);
+      Error1("malloc("F_Zu"): out of memory", size);
       return NULL;
    }
 #if WITH_DEVTESTS
@@ -1521,11 +1527,11 @@ void *Malloc(size_t size) {
 
 void *Calloc(size_t nmemb, size_t size) {
    void *result;
-   Debug2("calloc("F_Zd", "F_Zd")", nmemb, size);
+   Debug2("calloc("F_Zu", "F_Zu")", nmemb, size);
    result = calloc(nmemb, size);
    Debug1("calloc() -> %p", result);
    if (result == NULL) {
-      Error2("calloc("F_Zd", "F_Zd"): out of memory", nmemb, size);
+      Error2("calloc("F_Zu", "F_Zu"): out of memory", nmemb, size);
       return NULL;
    }
    return result;
@@ -1533,11 +1539,11 @@ void *Calloc(size_t nmemb, size_t size) {
 
 void *Realloc(void *ptr, size_t size) {
    void *result;
-   Debug2("realloc(%p, "F_Zd")", ptr, size);
+   Debug2("realloc(%p, "F_Zu")", ptr, size);
    result = realloc(ptr, size);
    Debug1("realloc() -> %p", result);
    if (result == NULL) {
-      Error2("realloc(%p, "F_Zd"): out of memory", ptr, size);
+      Error2("realloc(%p, "F_Zu"): out of memory", ptr, size);
       return NULL;
    }
    return result;
@@ -1550,7 +1556,7 @@ void *Realloc3(void *ptr, size_t size, size_t oldsize) {
       return result;
 #if WITH_DEVTESTS
    if (size > oldsize)
-      memset(result+oldsize, 0x55, size-oldsize);
+      memset((char *)result+oldsize, 0x55, size-oldsize);
 #endif /* WITH_DEVTESTS */
    return result;
 }

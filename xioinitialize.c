@@ -259,9 +259,10 @@ pid_t xio_fork(bool subchild,
    /* parent process */
    if (!subchild) {
       ++num_child;
+      Info1("number of children increased to %d", num_child);
       first_child = false;
    }
-   Info1("number of children increased to %d", num_child);
+   Info1("number of children is now %d", num_child);
    Notice1("forked off child process "F_pid, pid);
    /* gdb recommends to have env controlled sleep after fork */
    if (forkwaitstring = getenv("SOCAT_FORK_WAIT")) {

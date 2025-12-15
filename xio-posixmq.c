@@ -26,7 +26,7 @@ const struct addrdesc xioaddr_posixmq_receive = { "POSIXMQ-RECEIVE",       1+XIO
 const struct addrdesc xioaddr_posixmq_send    = { "POSIXMQ-SEND",          1+XIO_WRONLY, xioopen_posixmq, GROUP_FD|GROUP_OPEN|GROUP_NAMED|GROUP_POSIXMQ|GROUP_RETRY|GROUP_CHILD,      XIO_WRONLY, 0, 0 HELP(":<mqname>") };
 const struct addrdesc xioaddr_posixmq_write   = { "POSIXMQ-WRITE",         1+XIO_WRONLY, xioopen_posixmq, GROUP_FD|GROUP_OPEN|GROUP_NAMED|GROUP_POSIXMQ|GROUP_RETRY|GROUP_CHILD,      XIO_WRONLY, 0, 0 HELP(":<mqname>") };
 
-const struct optdesc opt_posixmq_priority   = { "posixmq-priority",   "mq-prio",  OPT_POSIXMQ_PRIORITY,   GROUP_POSIXMQ, PH_INIT, TYPE_BOOL, OFUNC_OFFSET, XIO_OFFSETOF(para.posixmq.prio), XIO_SIZEOF(para.posixmq.prio), 0 };
+const struct optdesc opt_posixmq_priority   = { "posixmq-priority",   "mq-prio",  OPT_POSIXMQ_PRIORITY,   GROUP_POSIXMQ, PH_INIT, TYPE_UINT, OFUNC_OFFSET, XIO_OFFSETOF(para.posixmq.prio), XIO_SIZEOF(para.posixmq.prio), 0 };
 const struct optdesc opt_posixmq_flush      = { "posixmq-flush",      "mq-flush", OPT_POSIXMQ_FLUSH,      GROUP_POSIXMQ, PH_EARLY, TYPE_BOOL, OFUNC_SPEC,   0,                               0,                             0 };
 const struct optdesc opt_posixmq_maxmsg     = { "posixmq-maxmsg",     "mq-maxmsg",  OPT_POSIXMQ_MAXMSG,   GROUP_POSIXMQ, PH_OPEN,  TYPE_LONG, OFUNC_SPEC,   0,                               0,                             0 };
 const struct optdesc opt_posixmq_msgsize    = { "posixmq-msgsize",    "mq-msgsize", OPT_POSIXMQ_MSGSIZE,  GROUP_POSIXMQ, PH_OPEN,  TYPE_LONG, OFUNC_SPEC,   0,                               0,                             0 };
@@ -71,6 +71,12 @@ static int xioopen_posixmq(
 	if (argc != 2) {
 		xio_syntax(argv[0], 1, argc-1, addrdesc->syntax);
 		return STAT_NORETRY;
+	}
+
+	if (addrdesc == &xioaddr_posixmq_bidir &&
+	    dirs == XIO_RDWR &&
+	    !strcasecmp(argv[0], "POSIXMQ")) {
+		Error("Keyword \"POSIXMQ\" in bidirectional mode might unwanted flush the queue; use \"POSIXMQ-BIDIRECTIONAL\" to confirm usage");
 	}
 
 	name = argv[1];

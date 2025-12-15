@@ -13,7 +13,6 @@
 
 #if WITH_STDIO
 
-static int xioopen_stdio(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *fd, const struct addrdesc *addrdesc);
 static int xioopen_stdfd(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *xfd, const struct addrdesc *addrdesc);
 
 
@@ -33,18 +32,16 @@ int xioopen_stdio_bi(xiofile_t *sock) {
    groups_t groups1 = xioaddr_stdio.groups;
    int result;
 
-   if (xioopen_makedual(sock) < 0) {
-      return -1;
+   if (xioopen_makedual(sock, NULL) == NULL) {
+      return STAT_NORETRY;
    }
 
    sock->dual.stream[0]->tag = XIO_TAG_RDONLY;
    sock->dual.stream[0]->fd = 0 /*stdin*/;
    sock->dual.stream[1]->tag = XIO_TAG_WRONLY;
    sock->dual.stream[1]->fd = 1 /*stdout*/;
-   if (sock->dual.stream[0]->howtoend == END_UNSPEC)
-      sock->dual.stream[0]->howtoend = END_NONE;
-   if (sock->dual.stream[1]->howtoend == END_UNSPEC)
-      sock->dual.stream[1]->howtoend = END_NONE;
+   sock->dual.stream[0]->howtoend = END_NONE;
+   sock->dual.stream[1]->howtoend = END_NONE;
 
 #if WITH_TERMIOS
    if (Isatty(sock->dual.stream[0]->fd)) {
@@ -137,7 +134,7 @@ int xioopen_stdio_bi(xiofile_t *sock) {
 
 /* wrap around unidirectional xioopensingle and xioopen_fd to automatically determine stdin or stdout fd depending on rw.
    Do not set FD_CLOEXEC flag. */
-static int xioopen_stdio(
+int xioopen_stdio(
 	int argc,
 	const char *argv[],
 	struct opt *opts,

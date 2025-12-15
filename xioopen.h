@@ -43,7 +43,7 @@ extern const char *filetypenames[];
 extern const struct addrname addressnames[];
 extern const struct optname optionnames[];
 
-extern int xioopen_makedual(xiofile_t *file);
+extern union bipipe *xioopen_makedual(xiofile_t *file, struct single *sfd0);
 
 #if WITH_HELP
 extern int xio_syntax(const char *addr, int expectnum, int isnum, const char *syntax);

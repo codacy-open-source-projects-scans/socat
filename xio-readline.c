@@ -204,9 +204,11 @@ ssize_t xioread_readline(struct single *pipe, void *buff, size_t bufsiz) {
       if (line == NULL) {
 	 return 0;	/* EOF */
       }
+#if 0
       if (strlen(line) == 0) {
 	 Write(STDOUT_FILENO, "\n", 1);
       }
+#endif
 #if _WITH_TERMIOS
       xiotermios_clrflag(pipe->fd, 3, ECHO);
       xiotermios_flush(pipe->fd);
@@ -241,7 +243,7 @@ void xioscan_readline(struct single *pipe, const void *buff, size_t bytes) {
 	 const void *peol = Max(pcr, plf);
 	 /* forget old prompt */
 	 pipe->para.readline.dynend = pipe->para.readline.dynprompt;
-	 len -= (peol+1 - ptr);
+	 len -= ((char *)peol+1 - (char *)ptr);
 	 /* new prompt starts here */
 	 ptr = (const char *)peol+1;
       }

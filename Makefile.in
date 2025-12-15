@@ -54,7 +54,9 @@ XIOSRCS = xioinitialize.c xiohelp.c xioparam.c xiodiag.c xioopen.c xioopts.c \
 	xio-progcall.c xio-exec.c xio-system.c xio-shell.c \
 	xio-termios.c xio-readline.c \
 	xio-pty.c xio-openssl.c xio-streams.c xio-namespaces.c \
-	xio-ascii.c xiolockfile.c xio-tcpwrap.c xio-fs.c xio-tun.c
+	xio-ascii.c xiolockfile.c xio-tcpwrap.c xio-fs.c xio-tun.c \
+	xio-stall.c xio-text.c xio-netlink.c
+
 XIOOBJS = $(XIOSRCS:.c=.o)
 UTLSRCS = error.c dalan.c procan.c procan-cdefs.c hostan.c fdname.c sysutils.c utils.c nestlex.c vsnprintf_r.c snprinterr.c @FILAN@ sycls.c @SSLCLS@
 UTLOBJS = $(UTLSRCS:.c=.o)
@@ -72,15 +74,15 @@ HFILES = sycls.h sslcls.h error.h dalan.h procan.h filan.h hostan.h sysincludes.
 	xio-socks.h xio-socks5.h xio-proxy.h xio-progcall.h xio-exec.h \
 	xio-system.h xio-shell.h xio-termios.h xio-readline.h \
 	xio-pty.h xio-openssl.h xio-streams.h xio-namespaces.h \
-	xio-ascii.h xiolockfile.h xio-tcpwrap.h xio-fs.h xio-tun.h
-
+	xio-ascii.h xiolockfile.h xio-tcpwrap.h xio-fs.h xio-tun.h \
+	xio-stall.h xio-text.h xio-netlink.h
 
 DOCFILES = README README.FIPS CHANGES FILES EXAMPLES PORTING SECURITY DEVELOPMENT doc/socat.yo doc/socat.1 doc/socat.html FAQ BUGREPORTS COPYING COPYING.OpenSSL doc/dest-unreach.css doc/socat-openssltunnel.html doc/socat-multicast.html doc/socat-tun.html doc/socat-genericsocket.html
 SHFILES = socat-chain.sh socat-mux.sh socat-broker.sh \
 	daemon.sh mail.sh ftp.sh readline.sh \
 	socat_buildscript_for_android.sh
 TESTFILES = test.sh socks4echo.sh proxyecho.sh readline-test.sh \
-	proxy.sh socks4a-echo.sh socks5server-echo.sh
+	proxy.sh socks4a-echo.sh socks5server-echo.sh socks5server-auth.sh
 
 all: progs doc
 

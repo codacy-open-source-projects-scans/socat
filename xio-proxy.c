@@ -121,7 +121,7 @@ static int xioopen_proxy_connect(
    result =
       _xioopen_ipapp_init(sfd, xioflags, opts,
 			  &dofork, &maxchildren,
-			  &pf, &socktype, &ipproto);
+			  &pf, &socktype, &ipproto, -1);
    if (result != STAT_OK)
        return result;
 

@@ -13,8 +13,9 @@
 
 static xiofile_t *xioallocfd(void);
 
-static xiosingle_t *xioparse_single(const char **addr);
+static int xioparse_single(struct single *sfd, const char **addr);
 static xiofile_t *xioparse_dual(const char **addr);
+static int xioopen_single(struct single *sfd, int xioflags);
 static int xioopen_dual(xiofile_t *xfd, int xioflags);
 
 const struct addrname addressnames[] = {
@@ -257,6 +258,9 @@ const struct addrname addressnames[] = {
    { "SSL-L",		&xioaddr_openssl_listen },
 #endif
 #endif
+#if WITH_STALL
+   { "STALL",			&xioaddr_stall },
+#endif
 #if WITH_STDIO
    { "STDERR",			&xioaddr_stderr },
    { "STDIN",			&xioaddr_stdin },
@@ -289,6 +293,9 @@ const struct addrname addressnames[] = {
 #if WITH_IP6 && WITH_TCP && WITH_LISTEN
    { "TCP6-L",			&xioaddr_tcp6_listen },
    { "TCP6-LISTEN",		&xioaddr_tcp6_listen },
+#endif
+#if WITH_TEXT
+   { "TEXT",			&xioaddr_text },
 #endif
 #if WITH_TUN
    { "TUN",		&xioaddr_tun },
@@ -424,23 +431,60 @@ const struct addrname addressnames[] = {
    { NULL }	/* end marker */
 } ;
 
-int xioopen_single(xiofile_t *xfd, int xioflags);
-
 
 /* prepares a xiofile_t record for dual address type:
    sets the tag and allocates memory for the substreams.
-   returns 0 on success, or <0 if an error occurred.
+   Either xfd or sfd0 must be valid, the other must be NULL.
+   When xfd is valid it becomes the new dual record
+   otherwise, xfd is newly allocated and sfd0 becomes the input stream
+   returns the final xfd on success, or NULL if an error occurred.
 */
-int xioopen_makedual(xiofile_t *file) {
-   file->tag = XIO_TAG_DUAL;
-   file->common.flags = XIO_RDWR;
-   if ((file->dual.stream[0] = (xiosingle_t *)xioallocfd()) == NULL)
-      return -1;
-   file->dual.stream[0]->flags = XIO_RDONLY;
-   if ((file->dual.stream[1] = (xiosingle_t *)xioallocfd()) == NULL)
-      return -1;
-   file->dual.stream[1]->flags = XIO_WRONLY;
-   return 0;
+union bipipe *xioopen_makedual(
+	union bipipe *xfd,
+	struct single *sfd0) {
+   struct single *sfd1;
+
+   if (xfd == NULL && sfd0 == NULL) {
+      Error("xioopen_makedual(): INTERNAL: at least one arg must be preset");
+      return NULL;
+   }
+
+   if (xfd == NULL) {
+      if ((xfd = xioallocfd()) == NULL)
+	 return NULL;
+
+   } else if (sfd0 == NULL) {
+      if ((sfd0 = (xiosingle_t *)xioallocfd()) == NULL)
+	 return NULL;
+      sfd0->argc  = xfd->stream.argc;
+      memcpy(sfd0->argv, xfd->stream.argv, MAXARGV*sizeof(char *));
+      sfd0->addr  = xfd->stream.addr;
+   } else /* both != NULL */ {
+      if ((sfd0 = (xiosingle_t *)xioallocfd()) == NULL)
+	 return NULL;
+      *sfd0 = xfd->stream;
+   }
+
+   if ((sfd1 = (xiosingle_t *)xioallocfd()) == NULL) {
+      return NULL;
+   }
+
+   sfd0->tag   = XIO_TAG_RDONLY;
+   sfd0->flags = XIO_RDONLY;
+
+   sfd1->tag   = XIO_TAG_WRONLY;
+   sfd1->flags = XIO_WRONLY;
+   sfd1->argc  = xfd->stream.argc;
+   memcpy(sfd1->argv, xfd->stream.argv, MAXARGV*sizeof(char *));
+   sfd1->addr  = xfd->stream.addr;
+
+   xfd->tag = XIO_TAG_DUAL;
+   xfd->common.flags = XIO_RDWR;
+   sfd0->flags = XIO_RDWR;
+   xfd->dual.stream[0] = sfd0;
+   xfd->dual.stream[1] = sfd1;
+
+   return xfd;
 }
 
 static xiofile_t *xioallocfd(void) {
@@ -504,7 +548,7 @@ xiofile_t *xioopen(const char *addr,	/* address specification */
       sock[1] = xfd;
    }
    if (xioopen_dual(xfd, xioflags) < 0) {
-      /*!!! free something? */
+      /*! make invalid? */
       return NULL;
    }
 
@@ -515,33 +559,35 @@ xiofile_t *xioopen(const char *addr,	/* address specification */
    return NULL on error */
 static xiofile_t *xioparse_dual(const char **addr) {
    xiofile_t *xfd;
-   xiosingle_t *sfd1;
 
+   if ((xfd = xioallocfd()) == NULL) {
+      return NULL;
+   }
    /* we parse a single address */
-   if ((sfd1 = xioparse_single(addr)) == NULL) {
+   if (xioparse_single(&xfd->stream, addr) < 0) {
       return NULL;
    }
 
    /* and now we see if we reached a dual-address separator */
    if (!strncmp(*addr, xioparms.pipesep, strlen(xioparms.pipesep))) {
-      /* yes we reached it, so we parse the second single address */
+      /* Yes we reached it, so we create a dual address and parse the second
+	 single address */
       *addr += strlen(xioparms.pipesep);
 
-      if ((xfd = xioallocfd()) == NULL) {
-	 free(sfd1); /*! and maybe have free some if its contents */
-	 return NULL;
-      }
+      xfd = xioopen_makedual(NULL, (struct single *)xfd);
       xfd->tag = XIO_TAG_DUAL;
-      xfd->dual.stream[0] = sfd1;
-      if ((xfd->dual.stream[1] = xioparse_single(addr)) == NULL) {
+      xfd->dual.stream[1]->argc = 0;
+      xfd->dual.stream[1]->argv[0] = NULL;
+      if (xioparse_single(xfd->dual.stream[1], addr) < 0) {
+	 free(xfd->dual.stream[1]);
+	 free(xfd->dual.stream[0]);
+	 free(xfd);
 	 return NULL;
       }
 
       return xfd;
    }
-
-   /* a truly single address */
-   xfd = (xiofile_t *)sfd1; sfd1 = NULL;
+   /* xfd is a single address */
 
    return xfd;
 }
@@ -554,13 +600,13 @@ static int xioopen_dual(xiofile_t *xfd, int xioflags) {
 	 Warn("unidirectional open of dual address");
       }
       if (((xioflags&XIO_ACCMODE)+1) & (XIO_RDONLY+1)) {
-	 if (xioopen_single((xiofile_t *)xfd->dual.stream[0], XIO_RDONLY|(xioflags&~XIO_ACCMODE&~XIO_MAYEXEC))
+	 if (xioopen_single(xfd->dual.stream[0], XIO_RDONLY|(xioflags&~XIO_ACCMODE&~XIO_MAYEXEC))
 	     < 0) {
 	    return -1;
 	 }
       }
       if (((xioflags&XIO_ACCMODE)+1) & (XIO_WRONLY+1)) {
-	 if (xioopen_single((xiofile_t *)xfd->dual.stream[1], XIO_WRONLY|(xioflags&~XIO_ACCMODE&~XIO_MAYEXEC))
+	 if (xioopen_single(xfd->dual.stream[1], XIO_WRONLY|(xioflags&~XIO_ACCMODE&~XIO_MAYEXEC))
 	     < 0) {
 	    xioclose((xiofile_t *)xfd->dual.stream[0]);
 	    return -1;
@@ -569,14 +615,15 @@ static int xioopen_dual(xiofile_t *xfd, int xioflags) {
       return 0;
    }
 
-   return xioopen_single(xfd, xioflags);
+   return xioopen_single(&xfd->stream, xioflags);
 }
 
 
-static xiosingle_t *xioparse_single(const char **addr) {
+static int xioparse_single(
+	struct single *sfd,
+	const char **addr) 		/* text from command line incl. ':' */
+{
    const char *addr0 = *addr; 	/* save for error messages */
-   xiofile_t *xfd;
-   xiosingle_t *sfd;
    struct addrname *ae;
    const struct addrdesc *addrdesc = NULL;
    const char *ends[4+1];
@@ -608,10 +655,6 @@ static xiosingle_t *xioparse_single(const char **addr) {
    ends[i++] = ":"/*xioparms.colon*/;		/* default: ":" */
    ends[i++] = NULL;
 
-   if ((xfd = xioallocfd()) == NULL) {
-      return NULL;
-   }
-   sfd = &xfd->stream;
    sfd->argc = 0;
 
    len = sizeof(token); tokp = token;
@@ -658,11 +701,12 @@ static xiosingle_t *xioparse_single(const char **addr) {
 	 if ((sfd->argv[sfd->argc++] = strdup(token)) == NULL) {
 	    Error1("strdup(\"%s\"): out of memory", token);
 	 }
-	 /*! check argc overflow */
+	 /*! check sfd->argc overflow */
 #endif /* WITH_GOPEN */
       } else {
 	 Error1("unknown device/address \"%s\"", token);
-	 /*!!! free something*/ return NULL;
+	 /*! free something */
+	 return -1;
       }
    }
 
@@ -686,15 +730,16 @@ static xiosingle_t *xioparse_single(const char **addr) {
    }
 
    if (parseopts(addr, addrdesc->groups, &sfd->opts) < 0) {
-      free(xfd);
-      return NULL;
+      return -1;
    }
 
-   return sfd;
+   return 0;
 }
 
-int xioopen_single(xiofile_t *xfd, int xioflags) {
-   struct single *sfd = &xfd->stream;
+int xioopen_single(
+	struct single *sfd,
+	int xioflags)
+{
    const struct addrdesc *addrdesc;
    const char *modetext[4] = { "none", "read-only", "write-only", "read-write" } ;
    /* Values to be saved until xioopen() is finished */
@@ -711,21 +756,21 @@ int xioopen_single(xiofile_t *xfd, int xioflags) {
    int save_netfd = -1;
 #endif
 
-   addrdesc = xfd->stream.addr;
+   addrdesc = sfd->addr;
    if (((xioflags+1)&XIO_ACCMODE) & ~(addrdesc->directions)) {
       Warn2("address is opened in %s mode but only supports %s", modetext[(xioflags+1)&XIO_ACCMODE], modetext[addrdesc->directions]);
    }
    if ((xioflags&XIO_ACCMODE) == XIO_RDONLY) {
-      xfd->tag = XIO_TAG_RDONLY;
+      sfd->tag = XIO_TAG_RDONLY;
    } else if ((xioflags&XIO_ACCMODE) == XIO_WRONLY) {
-      xfd->tag = XIO_TAG_WRONLY;
+      sfd->tag = XIO_TAG_WRONLY;
    } else if ((xioflags&XIO_ACCMODE) == XIO_RDWR) {
-      xfd->tag = XIO_TAG_RDWR;
+      sfd->tag = XIO_TAG_RDWR;
    } else {
-      Error1("invalid mode for address \"%s\"", xfd->stream.argv[0]);
+      Error1("invalid mode for address \"%s\"", addrdesc->defname);
    }
-   xfd->stream.flags     &= (~XIO_ACCMODE);
-   xfd->stream.flags     |= (xioflags & XIO_ACCMODE);
+   sfd->flags     &= (~XIO_ACCMODE);
+   sfd->flags     |= (xioflags & XIO_ACCMODE);
 
    /* Apply "temporary" process properties, save value for later restore */
 
@@ -745,15 +790,15 @@ int xioopen_single(xiofile_t *xfd, int xioflags) {
    if (xio_chdir(sfd->opts, &orig_dir) < 0)
       return STAT_NORETRY;
 
-   if (retropt_mode(xfd->stream.opts, OPT_UMASK, &tmp_umask) >= 0) {
+   if (retropt_mode(sfd->opts, OPT_UMASK, &tmp_umask) >= 0) {
       Info1("changing umask to 0%3o", tmp_umask);
       orig_umask = Umask(tmp_umask);
       have_umask = true;
    }
 
    /* Call the specific xioopen function */
-   result = (*addrdesc->func)(xfd->stream.argc, xfd->stream.argv,
-			      xfd->stream.opts, xioflags, xfd,
+   result = (*addrdesc->func)(sfd->argc, sfd->argv,
+			      sfd->opts, xioflags, (union bipipe *)sfd,
 			      addrdesc);
 
    /* Restore process properties */

@@ -108,10 +108,16 @@ bool xioopts_ignoregroups;
 #  define IF_UDPLITE(a,b)
 #endif
 
-#if WITH_SOCKS4
-#  define IF_SOCKS4(a,b) {a,b},
+#if WITH_SOCKS4 || WITH_SOCKS4A || WITH_SOCKS5
+#  define IF_SOCKS(a,b) {a,b},
 #else
-#  define IF_SOCKS4(a,b)
+#  define IF_SOCKS(a,b)
+#endif
+
+#if WITH_SOCKS5
+#  define IF_SOCKS5(a,b) {a,b},
+#else
+#  define IF_SOCKS5(a,b)
 #endif
 
 #if WITH_PROXY
@@ -689,6 +695,9 @@ const struct optname optionnames[] = {
 #ifdef SO_BINDTODEVICE
 	IF_SOCKET ("if",	&opt_so_bindtodevice)
 #endif
+#if HAVE_LINUX_RTNETLINK_H
+	IF_INTERFACE("if-mtu", 		&opt_interface_mtu)
+#endif
 	IF_INTERFACE("iff-allmulti",	&opt_iff_allmulti)
 #ifdef IFF_AUTOMEDIA
 	IF_INTERFACE("iff-automedia",	&opt_iff_automedia)
@@ -735,6 +744,9 @@ const struct optname optionnames[] = {
 	IF_TERMIOS("inpck",	&opt_inpck)
 #ifdef SO_BINDTODEVICE
 	IF_SOCKET ("interface",	&opt_so_bindtodevice)
+#endif
+#if HAVE_LINUX_RTNETLINK_H
+	IF_INTERFACE("interface-mtu", 	&opt_interface_mtu)
 #endif
 	IF_RETRY  ("interval",	&opt_intervall)
 	IF_RETRY  ("intervall",	&opt_intervall)
@@ -880,6 +892,15 @@ const struct optname optionnames[] = {
 #ifdef MCAST_JOIN_SOURCE_GROUP
 	IF_IP6    ("ipv6-join-source-group",	&opt_ipv6_join_source_group)
 #endif
+#ifdef IPV6_MULTICAST_LOOP
+	IF_IP6    ("ipv6-mcloop",		&opt_ipv6_multicast_loop)
+#endif
+#ifdef IPV6_MTU_DISCOVER
+	IF_IP     ("ipv6-mtu-discover",	&opt_ipv6_mtu_discover)
+#endif
+#ifdef IPV6_MULTICAST_LOOP
+	IF_IP6    ("ipv6-multicast-loop",	&opt_ipv6_multicast_loop)
+#endif
 #ifdef IPV6_PKTINFO
 	IF_IP6    ("ipv6-pktinfo",	&opt_ipv6_pktinfo)
 #endif
@@ -1004,6 +1025,7 @@ const struct optname optionnames[] = {
 #endif
 	IF_LISTEN ("max-children",	&opt_max_children)
 #if HAVE_SSL_set_max_proto_version || defined(SSL_set_max_proto_version)
+	IF_OPENSSL("max-proto-version",	&opt_openssl_max_proto_version)
 	IF_OPENSSL("max-version",	&opt_openssl_max_proto_version)
 #endif
 	IF_LISTEN ("maxchildren",	&opt_max_children)
@@ -1020,6 +1042,10 @@ const struct optname optionnames[] = {
 #ifdef TCP_MD5SUM
 	IF_TCP    ("md5sig",	&opt_tcp_md5sig)
 #endif
+	IF_IP     ("mcloop",		&opt_ip_multicast_loop)
+#ifdef IPV6_MULTICAST_LOOP
+	IF_IP6    ("mcloop6",		&opt_ipv6_multicast_loop)
+#endif
 #ifdef IP_ADD_MEMBERSHIP
 	IF_IP     ("membership",	&opt_ip_add_membership)
 #endif
@@ -1028,6 +1054,7 @@ const struct optname optionnames[] = {
 #endif
 	IF_TERMIOS("min",	&opt_vmin)
 #if HAVE_SSL_set_min_proto_version || defined(SSL_set_min_proto_version)
+	IF_OPENSSL("min-proto-version",	&opt_openssl_min_proto_version)
 	IF_OPENSSL("min-version",	&opt_openssl_min_proto_version)
 #endif
 	IF_ANY    ("mode",	&opt_perm)
@@ -1046,6 +1073,9 @@ const struct optname optionnames[] = {
 #endif
 #ifdef IP_MTU_DISCOVER
 	IF_IP     ("mtudiscover",	&opt_ip_mtu_discover)
+#endif
+#ifdef IPV6_MTU_DISCOVER
+	IF_IP     ("mtudiscover6",	&opt_ipv6_mtu_discover)
 #endif
 	IF_INTERFACE("multicast",	&opt_iff_multicast)
 	IF_IP     ("multicast-if",	&opt_ip_multicast_if)
@@ -1569,6 +1599,7 @@ const struct optname optionnames[] = {
 	IF_ANY    ("seek-end",		&opt_lseek32_end)
 	IF_ANY    ("seek-set",		&opt_lseek32_set)
 #endif
+	IF_TERMIOS("setflags",	&opt_termios_setflags)
 	IF_ANY    ("setgid",	&opt_setgid)
 	IF_ANY    ("setgid-early",	&opt_setgid_early)
 	IF_ANY 	  ("setlk",	&opt_f_setlk_wr)
@@ -1726,8 +1757,9 @@ const struct optname optionnames[] = {
 	IF_SOCKET ("sockopt-listen",	&opt_setsockopt_listen)
 	IF_SOCKET ("sockopt-sock",	&opt_setsockopt_socket)
 	IF_SOCKET ("sockopt-string",	&opt_setsockopt_string)
-	IF_SOCKS4 ("socksport",	&opt_socksport)
-	IF_SOCKS4 ("socksuser",	&opt_socksuser)
+	IF_SOCKS5 ("sockspass",	&opt_sockspass)
+	IF_SOCKS  ("socksport",	&opt_socksport)
+	IF_SOCKS  ("socksuser",	&opt_socksuser)
 	IF_SOCKET ("socktype",	&opt_so_type)
 #if defined(HAVE_STRUCT_IP_MREQ_SOURCE) && defined(IP_ADD_SOURCE_MEMBERSHIP)
 	IF_IP     ("source-membership",	&opt_ip_add_source_membership)
@@ -1882,6 +1914,7 @@ const struct optname optionnames[] = {
 #endif
 	IF_TERMIOS("termios-cfmakeraw",	&opt_termios_cfmakeraw)
 	IF_TERMIOS("termios-rawer",	&opt_termios_rawer)
+	IF_TERMIOS("termios-setflags",	&opt_termios_setflags)
 #ifdef O_TEXT
 	IF_ANY    ("text",	&opt_o_text)
 #endif
@@ -1891,6 +1924,7 @@ const struct optname optionnames[] = {
 	IF_SOCKET ("timestamp",	&opt_so_timestamp)
 #endif
 	IF_TERMIOS("tiocsctty",	&opt_tiocsctty)
+	IF_TERMIOS("tiocswinsz",	&opt_tiocswinsz)
 #if WITH_FS && defined(FS_TOPDIR_FL)
 	IF_ANY    ("topdir",	&opt_fs_topdir)
 #endif
@@ -2001,6 +2035,7 @@ const struct optname optionnames[] = {
 #ifdef TCP_WINDOW_CLAMP	/* Linux 2.4.0 */
 	IF_TCP    ("window-clamp",	&opt_tcp_window_clamp)
 #endif
+	IF_TERMIOS("winsz",		&opt_tiocswinsz)
 #if WITH_LIBWRAP
 	IF_IPAPP  ("wrap",		&opt_tcpwrappers)
 #endif
@@ -2480,6 +2515,29 @@ int parseopts_table(const char **a, groups_t groups, struct opt **opts,
 	 }
 	 Info3("setting option \"%s\" to %d:%d", ent->desc->defname,
 	       (*opts)[i].value.u_int, (*opts)[i].value2.u_int);
+	 break;
+
+      case TYPE_INT_ULONG:
+	 if (!assign) {
+	    Error1("option \"%s\": values required", a0);
+	    continue;
+	 }
+	 {
+	    char *rest;
+	    (*opts)[i].value.u_int = strtoul(token, &rest, 0);
+	    if (token == rest) {
+	       Error1("parseopts(): missing numerical value of option \"%s\"",
+		      a0);
+	    }
+	    if (*rest == '\0') {
+	       Error1("parseopts(): option \"%s\": 2 arguments required",
+		      ent->desc->defname);
+	    }
+	    ++rest;
+	    (*opts)[i].value2.u_ulong = Strtoul(rest, &rest, 0, a0);
+	 }
+	 Info3("setting option \"%s\" to %d:%lu", ent->desc->defname,
+	       (*opts)[i].value.u_int, (*opts)[i].value2.u_ulong);
 	 break;
 
       case TYPE_INT_BIN:
@@ -3341,23 +3399,32 @@ int retropt_bind(struct opt *opts,
 	 }
       }
 
+      if (0) { 	/* for canonical reasons */
+	 ;
 #  if WITH_IP4 || WITH_IP6
-      /* Set AI_PASSIVE, except when it is explicitly disabled */
-      ai_flags2[0] = ai_flags[0];
-      ai_flags2[1] = ai_flags[1];
-      if (!(ai_flags2[1] & AI_PASSIVE))
-	 ai_flags2[0] |= AI_PASSIVE;
+      } else if (af == AF_INET || af == AF_INET6) {
+       /* Set AI_PASSIVE, except when it is explicitly disabled */
+       ai_flags2[0] = ai_flags[0];
+       ai_flags2[1] = ai_flags[1];
+       if (!(ai_flags2[1] & AI_PASSIVE))
+	  ai_flags2[0] |= AI_PASSIVE;
 
-      if ((result =
-	   xioresolve(hostname[0]!='\0'?hostname:NULL, portp,
-		      af, socktype, ipproto,
-		      (union sockaddr_union *)sa, salen, ai_flags2))
-	  != STAT_OK) {
-	 Error("error resolving bind option");
-	 return STAT_NORETRY;
-      }
-/*#  else */
+       if ((result =
+	      xioresolve(hostname[0]!='\0'?hostname:NULL, portp,
+			 af, socktype, ipproto,
+			 (union sockaddr_union *)sa, salen, ai_flags2))
+	     != STAT_OK) {
+	    Error("error resolving bind option");
+	    return STAT_NORETRY;
+       }
 #  endif /* WITH_IP4 || WITH_IP6 */
+#  if WITH_VSOCK
+     } else if (af == AF_VSOCK) {
+	 result = xioopt_vsock_bind((struct sockaddr_vm *)sa, hostname, bindp+1);
+	 if (result != STAT_OK)
+	    return result;
+#  endif /* WITH_VSOCK */
+     }
       break;
 #endif /* WITH_IP4 || WITH_IP6 || WITH_VSOCK */
 
@@ -3442,7 +3509,7 @@ int applyopt_seek32(
 	struct opt *opt)
 {
 	if (Lseek(fd, opt->value.u_off, opt->desc->major) < 0) {
-		Error4("lseek(%d, "F_off", %d): %s",
+		Error4("lseek(%d, "F_off", %ld): %s",
 		       fd, opt->value.u_off, opt->desc->major, strerror(errno));
 		return -1;
 	}
@@ -3456,7 +3523,7 @@ int applyopt_seek64(
 {
 	/*! this depends on off64_t atomic type */
 	if (Lseek64(fd, opt->value.u_off64, opt->desc->major) < 0) {
-		Error4("lseek64(%d, "F_off64", %d): %s",
+		Error4("lseek64(%d, "F_off64", %ld): %s",
 		       fd, opt->value.u_off64, opt->desc->major,
 		       strerror(errno));
 		return -1;
@@ -3474,7 +3541,7 @@ int applyopt_fcntl(
 	if (opt->desc->type == TYPE_BOOL) {
 	   /* Retrieve existing flag settings */
 	   if ((flag = Fcntl(fd, opt->desc->major-1)) < 0) {
-		Error3("fcntl(%d, %d): %s",
+		Error3("fcntl(%d, %ld): %s",
 		       fd, opt->desc->major, strerror(errno));
 		return -1;
 	   }
@@ -3484,14 +3551,14 @@ int applyopt_fcntl(
 	      flag &= ~opt->desc->minor;
 	   }
 	   if (Fcntl_i(fd, opt->desc->major, flag) < 0) {
-	      Error4("fcntl(%d, %d, 0x%x): %s",
+	      Error4("fcntl(%d, %ld, 0x%x): %s",
 		     fd, opt->desc->major, flag, strerror(errno));
 	      return -1;
 	   }
 
 	} else if (opt->desc->type == TYPE_INT) {
 	   if (Fcntl_i(fd, opt->desc->major, opt->value.u_int) < 0) {
-	      Error4("fcntl(%d, %d, 0x%x): %s",
+	      Error4("fcntl(%d, %ld, 0x%x): %s",
 		     fd, opt->desc->major, opt->value.u_int, strerror(errno));
 	      return -1;
 	   }
@@ -3508,7 +3575,7 @@ int applyopt_ioctl(
 	struct opt *opt)
 {
 	if (Ioctl(fd, opt->desc->major, (void *)&opt->value) < 0) {
-		Error4("ioctl(%d, 0x%x, %p): %s",
+		Error4("ioctl(%d, 0x%lx, %p): %s",
 		       fd, opt->desc->major, (void *)&opt->value, strerror(errno));
 		return -1;
 	}
@@ -3526,7 +3593,7 @@ int applyopt_ioctl_mask_long(
 
 	if (Ioctl(fd, getreq, (void *)&val) < 0) {
 		Error4("ioctl(%d, 0x%x, %p): %s",
-		       fd, opt->desc->major, (void *)&val, strerror(errno));
+		       fd, getreq, (void *)&val, strerror(errno));
 		return -1;
 	}
 	val &= ~mask;
@@ -3534,7 +3601,7 @@ int applyopt_ioctl_mask_long(
 		val |= mask;
 	if (Ioctl(fd, setreq, (void *)&val) < 0) {
 		Error4("ioctl(%d, 0x%x, %p): %s",
-		       fd, opt->desc->major, (void *)&val, strerror(errno));
+		       fd, setreq, (void *)&val, strerror(errno));
 		return -1;
 	}
 	return 0;
@@ -3615,7 +3682,7 @@ int applyopt_sockopt(
 		if (Setsockopt(fd, opt->desc->major, opt->desc->minor,
 			       opt->value.u_bin.b_data, opt->value.u_bin.b_len)
 		    < 0) {
-			Error6("setsockopt(%d, %d, %d, %p, "F_Zu"): %s",
+			Error6("setsockopt(%d, %ld, %ld, %p, "F_Zu"): %s",
 			       fd, opt->desc->major, opt->desc->minor,
 			       opt->value.u_bin.b_data, opt->value.u_bin.b_len,
 			       strerror(errno));
@@ -3626,8 +3693,8 @@ int applyopt_sockopt(
 		if (Setsockopt(fd, opt->desc->major, opt->desc->minor,
 			       &opt->value.u_bool, sizeof(opt->value.u_bool))
 		    < 0) {
-			Error6("setsockopt(%d, %d, %d, {%d}, "F_Zu"): %s", fd,
-			       opt->desc->major, opt->desc->minor,
+			Error6("setsockopt(%d, %ld, %ld, {%d}, "F_Zu"): %s",
+			       fd, opt->desc->major, opt->desc->minor,
 			       opt->value.u_bool, sizeof(opt->value.u_bool),
 			       strerror(errno));
 			return -1;
@@ -3636,7 +3703,7 @@ int applyopt_sockopt(
 	case TYPE_BYTE:
 		if (Setsockopt(fd, opt->desc->major, opt->desc->minor,
 			       &opt->value.u_byte, sizeof(uint8_t)) < 0) {
-			Error6("setsockopt(%d, %d, %d, {%u}, "F_Zu"): %s",
+			Error6("setsockopt(%d, %ld, %ld, {%u}, "F_Zu"): %s",
 			       fd, opt->desc->major, opt->desc->minor,
 			       opt->value.u_byte, sizeof(uint8_t), strerror(errno));
 			return -1;
@@ -3645,7 +3712,7 @@ int applyopt_sockopt(
 	case TYPE_INT:
 		if (Setsockopt(fd, opt->desc->major, opt->desc->minor,
 			       &opt->value.u_int, sizeof(int)) < 0) {
-			Error6("setsockopt(%d, %d, %d, {%d}, "F_Zu"): %s",
+			Error6("setsockopt(%d, %ld, %ld, {%d}, "F_Zu"): %s",
 			       fd, opt->desc->major, opt->desc->minor,
 			       opt->value.u_int, sizeof(int), strerror(errno));
 			return -1;
@@ -3655,7 +3722,7 @@ int applyopt_sockopt(
 		if (opt->value2.u_bool &&
 		    Setsockopt(fd, opt->desc->major, opt->desc->minor,
 			       &opt->value.u_int, sizeof(int)) < 0) {
-			Error6("setsockopt(%d, %d, %d, {%d}, "F_Zu"): %s",
+			Error6("setsockopt(%d, %ld, %ld, {%d}, "F_Zu"): %s",
 			       fd, opt->desc->major, opt->desc->minor,
 			       opt->value.u_int, sizeof(int), strerror(errno));
 			return -1;
@@ -3664,7 +3731,7 @@ int applyopt_sockopt(
 	case TYPE_LONG:
 		if (Setsockopt(fd, opt->desc->major, opt->desc->minor,
 			       &opt->value.u_long, sizeof(long)) < 0) {
-			Error6("setsockopt(%d, %d, %d, {%ld}, "F_Zu"): %s",
+			Error6("setsockopt(%d, %ld, %ld, {%ld}, "F_Zu"): %s",
 			       fd, opt->desc->major, opt->desc->minor,
 			       opt->value.u_long, sizeof(long), strerror(errno));
 			return -1;
@@ -3674,7 +3741,7 @@ int applyopt_sockopt(
 		if (Setsockopt(fd, opt->desc->major, opt->desc->minor,
 			       opt->value.u_string,
 			       strlen(opt->value.u_string)+1) < 0) {
-			Error6("setsockopt(%d, %d, %d, \"%s\", "F_Zu"): %s",
+			Error6("setsockopt(%d, %ld, %ld, \"%s\", "F_Zu"): %s",
 			       fd, opt->desc->major, opt->desc->minor,
 			       opt->value.u_string, strlen(opt->value.u_string)+1,
 			       strerror(errno));
@@ -3684,7 +3751,7 @@ int applyopt_sockopt(
 	case TYPE_UINT:
 		if (Setsockopt(fd, opt->desc->major, opt->desc->minor,
 			       &opt->value.u_uint, sizeof(unsigned int)) < 0) {
-			Error6("setsockopt(%d, %d, %d, {%u}, "F_Zu"): %s",
+			Error6("setsockopt(%d, %ld, %ld, {%u}, "F_Zu"): %s",
 			       fd, opt->desc->major, opt->desc->minor,
 			       opt->value.u_uint, sizeof(unsigned int),
 			       strerror(errno));
@@ -3694,7 +3761,7 @@ int applyopt_sockopt(
 	case TYPE_TIMEVAL:
 		if (Setsockopt(fd, opt->desc->major, opt->desc->minor,
 			       &opt->value.u_timeval, sizeof(struct timeval)) < 0) {
-			Error7("setsockopt(%d, %d, %d, {%ld,%ld}, "F_Zu"): %s",
+			Error7("setsockopt(%d, %ld, %ld, {%ld,%ld}, "F_Zu"): %s",
 			       fd, opt->desc->major, opt->desc->minor,
 			       opt->value.u_timeval.tv_sec, opt->value.u_timeval.tv_usec,
 			       sizeof(struct timeval), strerror(errno));
@@ -3709,7 +3776,7 @@ int applyopt_sockopt(
 		lingstru.l_linger = opt->value.u_linger.l_linger;
 		if (Setsockopt(fd, opt->desc->major, opt->desc->minor,
 			       &lingstru, sizeof(lingstru)) < 0) {
-			Error6("setsockopt(%d, %d, %d, {%d,%d}): %s",
+			Error6("setsockopt(%d, %ld, %ld, {%d,%d}): %s",
 			       fd, opt->desc->major, opt->desc->minor,
 			       lingstru.l_onoff, lingstru.l_linger,
 			       strerror(errno));
@@ -3735,7 +3802,7 @@ int applyopt_sockopt(
 	case TYPE_IP4NAME:
 		if (Setsockopt(fd, opt->desc->major, opt->desc->minor,
 			       &opt->value.u_ip4addr, sizeof(opt->value.u_ip4addr)) < 0) {
-			Error6("setsockopt(%d, %d, %d, {0x%x}, "F_Zu"): %s",
+			Error6("setsockopt(%d, %ld, %ld, {0x%x}, "F_Zu"): %s",
 			       fd, opt->desc->major, opt->desc->minor,
 			       *(uint32_t *)&opt->value.u_ip4addr, sizeof(opt->value.u_ip4addr),
 			       strerror(errno));
@@ -3771,7 +3838,7 @@ int applyopt_sockopt_append(
 		if (Getsockopt(fd, opt->desc->major, opt->desc->minor,
 			       data, &oldlen)
 		    < 0) {
-			Error6("getsockopt(%d, %d, %d, %p, {"F_socklen"}): %s",
+			Error6("getsockopt(%d, %ld, %ld, %p, {"F_socklen"}): %s",
 			       fd, opt->desc->major, opt->desc->minor, data, oldlen,
 			       strerror(errno));
 			return -1;
@@ -3782,7 +3849,7 @@ int applyopt_sockopt_append(
 		if (Setsockopt(fd, opt->desc->major, opt->desc->minor,
 			       data, newlen)
 		    < 0) {
-			Error6("setsockopt(%d, %d, %d, %p, %d): %s",
+			Error6("setsockopt(%d, %ld, %ld, %p, %d): %s",
 			       fd, opt->desc->major, opt->desc->minor, data, newlen,
 			       strerror(errno));
 			return -1;
@@ -3846,7 +3913,7 @@ int applyopt_flock(
 	struct opt *opt)
 {
 	if (Flock(fd, opt->desc->major) < 0) {
-		Error3("flock(%d, %d): %s",
+		Error3("flock(%d, %ld): %s",
 		       fd, opt->desc->major, strerror(errno));
 		return -1;
 	}
@@ -3922,7 +3989,7 @@ int applyopt_spec(
 		l.l_len    = LONG_MAX;
 		l.l_pid    = 0;	/* hope this uses our current process */
 		if (Fcntl_lock(fd, opt->desc->major, &l) < 0) {
-			Error3("fcntl(%d, %d, {type=F_WRLCK,whence=SEEK_SET,start=0,len=LONG_MAX,pid=0}): %s", fd, opt->desc->major, strerror(errno));
+			Error3("fcntl(%d, %ld, {type=F_WRLCK,whence=SEEK_SET,start=0,len=LONG_MAX,pid=0}): %s", fd, opt->desc->major, strerror(errno));
 			return -1;
 		}
 	}
@@ -4067,7 +4134,7 @@ int applyopt_spec(
 		int mytty;
 		/* this code idea taken from ssh/pty.c: make pty controlling term. */
 		if ((mytty = Open("/dev/tty", O_NOCTTY, 0640)) < 0) {
-			Warn1("open(\"/dev/tty\", O_NOCTTY, 0640): %s", strerror(errno));
+			Info1("open(\"/dev/tty\", O_NOCTTY, 0640): %s", strerror(errno));
 		} else {
 			/*0 Info1("open(\"/dev/tty\", O_NOCTTY, 0640) -> %d", mytty);*/
 #ifdef TIOCNOTTY
@@ -4243,16 +4310,16 @@ int applyopts_flags(struct opt *opts, groups_t group, flags_t *result) {
 
 /* set the FD_CLOEXEC fcntl if the options do not set it to 0 */
 int applyopts_cloexec(int fd, struct opt *opts) {
-   bool docloexec = 1;
+   bool cloexec = 1;
 
    if (!opts)  return 0;
 
-   retropt_bool(opts, OPT_O_CLOEXEC, &docloexec);
-   if (docloexec) {
+   retropt_bool(opts, OPT_O_CLOEXEC, &cloexec);
+   Info2("setting FD_CLOEXEC on FD %d to %d", fd, cloexec);
+
       if (Fcntl_l(fd, F_SETFD, FD_CLOEXEC) < 0) {
 	 Warn2("fcntl(%d, F_SETFD, FD_CLOEXEC): %s", fd, strerror(errno));
       }
-   }
    return 0;
 }
 
@@ -4284,6 +4351,8 @@ static int applyopt_offset(struct single *sfd, struct opt *opt) {
       *(bool *)ptr = opt->value.u_bool;  break;
    case TYPE_INT:
       *(int *)ptr = opt->value.u_int;  break;
+   case TYPE_UINT:
+      *(uint *)ptr = opt->value.u_uint;  break;
    case TYPE_DOUBLE:
       *(double *)ptr = opt->value.u_double;  break;
    case TYPE_TIMEVAL:
@@ -4436,7 +4505,7 @@ static int applyopt(
 
 #if WITH_TERMIOS
 	case OFUNC_TERMIOS_FLAG:
-		rc = xiotermiosflag_applyopt(fd, opt);
+		rc = xiotermiosflag_applyopt(fd>=0 ? fd : sfd->fd, opt);
 		break;
 
 	case OFUNC_TERMIOS_VALUE:
@@ -4452,15 +4521,24 @@ static int applyopt(
 		rc = xiotermios_char(fd, opt->desc->major, opt->value.u_byte);
 		break;
 
+	case OFUNC_TERMIOS_SETFLAGS:
+		rc = xiotermios_setflags(fd, opt->value.u_int, opt->value2.u_int);
+		break;
+
 #ifdef HAVE_TERMIOS_ISPEED
 	case OFUNC_TERMIOS_SPEED:
 		rc = xiotermios_speed(fd, opt->desc->major, opt->value.u_uint);
 		break;
 #endif /* HAVE_TERMIOS_ISPEED */
 
-	case OFUNC_TERMIOS_SPEC:
-		rc = xiotermios_spec(fd, opt->desc->optcode);
+	case OFUNC_TERMIOS_COMB:
+		rc = xiotermios_flagscomb(fd, opt->desc->optcode);
 	   break;
+
+	case OFUNC_TERMIOS_SPEC:
+		rc = xiotermios_spec(fd, opt);
+	   break;
+
 #endif /* WITH_TERMIOS */
 
 #if WITH_STREAMS

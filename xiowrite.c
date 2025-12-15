@@ -49,6 +49,12 @@ ssize_t xiowrite(xiofile_t *file, const void *buff, size_t bytes) {
 
    switch (pipe->dtype & XIODATA_WRITEMASK) {
 
+   case XIOWRITE_STALL:
+      /* Should not be reached with STALL address */
+      Debug1("xiowrite(): dropping "F_Zu" bytes", bytes);
+      writt = bytes;
+      break;
+
    case XIOWRITE_STREAM:
       writt = writefull(pipe->fd, buff, bytes, NULL);
       if (writt < 0) {

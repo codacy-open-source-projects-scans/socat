@@ -149,20 +149,59 @@ int filan_fd(int fd, FILE *outfile) {
 	    Warn4("\tpoll({%d, %hd, %hd}, 1, 0): %s",
 		   ufds.fd, ufds.events, ufds.revents, strerror(errno));
 	 } else {
+	    bool comma = false;
+
 	    fputs("\tpoll: ", outfile);
-	    if (ufds.revents & POLLIN)   fputs("IN,", outfile);
-	    if (ufds.revents & POLLPRI)  fputs("PRI,", outfile);
-	    if (ufds.revents & POLLOUT)  fputs("OUT,", outfile);
-	    if (ufds.revents & POLLERR)  fputs("ERR,", outfile);
-	    if (ufds.revents & POLLNVAL) fputs("NVAL,", outfile);
-#ifdef FIONREAD
 	    if (ufds.revents & POLLIN) {
+	       fputs("IN", outfile);
+#ifdef FIONREAD
 	       size_t sizet;
 	       if ((result = Ioctl(fd, FIONREAD, &sizet) >= 0)) {
-		  fprintf (outfile, "; FIONREAD="F_Zu, sizet);
+		  fprintf (outfile, "(FIONREAD="F_Zu")", sizet);
 	       }
-	    }
 #endif /* defined(FIONREAD) */
+	       comma = true;
+	    }
+	    if (ufds.revents & POLLPRI) {
+	       if (comma)  fputc(',', outfile);
+	       fputs("PRI", outfile);
+	       comma = true;
+	    }
+	    if (ufds.revents & POLLOUT) {
+	       if (comma)  fputc(',', outfile);
+	       fputs("OUT", outfile);
+#ifdef FIONSPACE	/* e.g. NetBSD-9 */
+	       size_t sizet;
+	       if ((result = Ioctl(fd, FIONSPACE, &sizet) >= 0)) {
+		  fprintf (outfile, "(FIONSPACE="F_Zu")", sizet);
+	       }
+#endif /* defined(FIONSPACE) */
+	       comma = true;
+	    }
+	    if (ufds.revents & POLLERR) {
+	       char x = 0;
+	       int flags;
+	       ssize_t rc;
+	       if (comma)  fputc(',', outfile);
+	       fputs("ERR", outfile);
+	       flags = Fcntl(ufds.fd, F_GETFL);
+	       if (flags < 0) {
+		  fprintf(outfile, "(%s),", strerror(errno));
+	       } else if ((flags & O_ACCMODE) == O_RDONLY || (flags & O_ACCMODE) == O_RDWR) {
+		  rc = read(ufds.fd, &x, 0);
+		  if (rc <= 0) /* just make gcc happy regarding rc */
+		     fprintf(outfile, "(rd:%s),", strerror(errno));
+	       } else if ((flags & O_ACCMODE) == O_WRONLY) {
+		  rc = write(ufds.fd, &x, 0);
+		  fprintf(outfile, "(wr:%s)", strerror(errno));
+	       }
+	       comma = true;
+	    }
+	    if (ufds.revents & POLLNVAL) {
+	       if (comma)  fputc(',', outfile);
+	       fputs("NVAL", outfile);
+	       comma = true;
+	    }
 #if _WITH_SOCKET && defined(MSG_DONTWAIT)
 	    if ((ufds.revents & POLLIN) && isasocket(fd)) {
 	       char _peername[SOCKADDR_MAX];
@@ -519,7 +558,7 @@ int cdevan(int fd, FILE *outfile) {
 	 Warn3("tcgetattr(%d, %p): %s", fd, &termarg, strerror(errno));
 	 return -1;
       }
-      fprintf(outfile, " \tIFLAGS=%08x OFLAGS=%08x CFLAGS=%08x LFLAGS=%08x",
+      fprintf(outfile, " \tIFLAGS=0x%06x OFLAGS=0x%06x CFLAGS=0x%06x LFLAGS=0x%06x",
 	      (unsigned int)termarg.c_iflag,
 	      (unsigned int)termarg.c_oflag,
 	      (unsigned int)termarg.c_cflag,
@@ -548,6 +587,17 @@ int cdevan(int fd, FILE *outfile) {
 	    fprintf(outfile, " cc[%d]=%s", i, s);
 	 }
       }
+
+#if defined(TIOCGWINSZ)
+      /* terminal window size */
+      struct winsize winsize;
+      if (Ioctl(fd, TIOCGWINSZ, &winsize) == 0) {
+	 fprintf(outfile, " terminal window size:   %ux%u",
+		 winsize.ws_col, winsize.ws_row);
+	 fprintf(outfile, " terminal window pixels: %ux%u",
+		 winsize.ws_xpixel, winsize.ws_ypixel);
+      }
+#endif /* TIOCGWINSZ */
    }
 #endif /* _WITH_TERMIOS */
    return 0;

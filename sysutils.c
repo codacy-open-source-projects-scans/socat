@@ -22,8 +22,8 @@ const int one = 1;
 
 /* Substitute for Write():
    Try to write all bytes before returning; this handles EINTR,
-   EAGAIN/EWOULDBLOCK, and partial write situations. The drawback is that this
-   function might block even with O_NONBLOCK option.
+   EAGAIN/EWOULDBLOCK, and partial write situations. The drawback of this
+   function is that it blocks even with O_NONBLOCK option.
    Returns <0 on unhandled error, errno valid
    Will only return <0 or bytes
 */
@@ -87,6 +87,59 @@ ssize_t writefull(
    Notice3("write(%d, %p, "F_Zu") completed", fd, (const char *)buff, bytes);
    return writt;
 }
+
+
+/* Substitute for Read():
+   Try to read as many bytes as specified before returning; this handles EINTR,
+   EAGAIN/EWOULDBLOCK, and insufficient bytes; on EOF it returns the data read
+   so far.
+   The drawback of this function is that it blocks even with O_NONBLOCK option.
+   Returns <0 and errno on unhandled error;
+   returns the requested number, or less when EOF occurred; in the latter case,
+   the caller will get EOF on the next call to readfull().
+*/
+ssize_t readfull(
+	int fd,
+	void *buff,
+	size_t bytes,
+	const struct timeval *tmo0,	/* currently ignored */
+	int level)
+{
+	ssize_t result;
+	size_t exptg;	/* still expecting so many bytes */
+
+	exptg = bytes;
+	while (exptg > 0) {
+		result = Read(fd, buff, exptg);
+		if (result < 0 &&
+		    (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK))
+			continue;
+		if (result < 0) {
+			Msg4(level, "read(%d, %p, "F_Zu"): %s",
+			     fd, buff, exptg, strerror(errno));
+			if (Close(fd) < 0) {
+				Info2("close(%d): %s", fd, strerror(errno));
+			}
+			return -1;
+		}
+		if (result == 0) {
+			Msg2(level, "read(): EOF during read(), returning "F_Zu" instead of "F_Zu" bytes",
+			    bytes-exptg, bytes);
+			return bytes-exptg;
+		}
+
+		*(char **)&buff += result;
+		exptg -= result;
+		if (exptg <= 0) {
+			break;
+		}
+		Debug2("readfull(): received "F_Zd" bytes, waiting for "F_Zu" more bytes",
+			result, exptg);
+	}
+	Debug1("readfull(): received all "F_Zd" bytes", bytes);
+	return bytes-exptg;
+}
+
 
 #if WITH_UNIX
 void socket_un_init(struct sockaddr_un *sa) {
@@ -356,7 +409,10 @@ int sockaddr_vm_parse(struct sockaddr_vm *sa, const char *cid_str,
                       const char *port_str)
 {
    char *garbage = NULL;
-   if (!cid_str) {
+   memset(sa, 0, sizeof(*sa));
+   sa->svm_family = AF_VSOCK;
+
+   if (!cid_str || !cid_str[0]) {
       sa->svm_cid = VMADDR_CID_ANY;
    } else {
       sa->svm_cid = strtoul(cid_str, &garbage, 0);

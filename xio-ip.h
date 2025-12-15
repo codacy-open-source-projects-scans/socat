@@ -16,6 +16,7 @@ extern const struct optdesc opt_ip_ttl;
 extern const struct optdesc opt_ip_hdrincl;
 extern const struct optdesc opt_ip_recverr;
 extern const struct optdesc opt_ip_mtu_discover;
+extern const struct optdesc opt_ipv6_mtu_discover;
 extern const struct optdesc opt_ip_mtu;
 extern const struct optdesc opt_ip_freebind;
 extern const struct optdesc opt_ip_router_alert;

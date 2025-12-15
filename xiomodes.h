@@ -15,6 +15,8 @@
 #include "xio-creat.h"
 #include "xio-gopen.h"
 #include "xio-pipe.h"
+#include "xio-stall.h"
+#include "xio-text.h"
 #include "xio-socketpair.h"
 #if _WITH_SOCKET
 #include "xio-socket.h"
@@ -22,6 +24,7 @@
 #include "xio-unix.h"
 #include "xio-rawip.h"
 #include "xio-interface.h"
+#include "xio-netlink.h"
 #include "xio-ip.h"
 #if WITH_IP4
 #include "xio-ip4.h"

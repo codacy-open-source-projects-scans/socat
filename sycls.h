@@ -71,8 +71,8 @@ int Ftruncate64(int fd, off64_t length);
 #endif /* HAVE_FTRUNCATE64 */
 #endif /* WITH_SYCLS */
 int Flock(int fd, int operation);
-int Ioctl(int d, int request, void *argp);
-int Ioctl_int(int d, int request, int arg);
+int Ioctl(int d, unsigned long request, void *argp);
+int Ioctl_int(int d, unsigned long request, int arg);
 #if WITH_SYCLS
 int Close(int fd);
 int Fchown(int fd, uid_t owner, gid_t group);

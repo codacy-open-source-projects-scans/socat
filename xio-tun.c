@@ -12,6 +12,7 @@
 #include "xio-socket.h"
 #include "xio-ip.h"
 #include "xio-interface.h"
+#include "xio-netlink.h"
 
 #include "xio-tun.h"
 
@@ -63,8 +64,10 @@ static int xioopen_tun(
    int rw = (xioflags & XIO_ACCMODE);
    bool exists;
    struct ifreq ifr;
+   unsigned int ifidx;
    int sockfd;
    char *ifaddr;
+   unsigned int mtu;
    int result;
 
    if (argc > 2 || argc < 0) {
@@ -176,6 +179,17 @@ static int xioopen_tun(
    _xiointerface_apply_iff(sockfd, ifr.ifr_name, sfd->para.interface.iff_opts);
    if (_interface_retrieve_vlan(&xfd->stream, opts) < 0)
       return STAT_NORETRY;
+
+   if (ifindex(ifr.ifr_name, &ifidx, -1) < 0) {
+      Error1("unknown interface \"%s\"", ifr.ifr_name);
+      ifidx = 0;	/* desparate attempt to continue */
+   }
+
+#if HAVE_LINUX_RTNETLINK_H
+   if (retropt_uint(opts, OPT_INTERFACE_MTU, &mtu) == 0) {
+      xio_netlink_mtu(ifidx, mtu);
+   }
+#endif /* HAVE_LINUX_RTNETLINK_H */
 
    applyopts(sfd, -1, opts, PH_FD);
    applyopts_cloexec(sfd->fd, opts);

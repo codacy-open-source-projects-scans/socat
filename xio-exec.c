@@ -71,6 +71,8 @@ static int xioopen_exec(
       if (pargv == NULL)  return STAT_RETRYLATER;
       len = strlen(argv[1])+1;
       strp = argv[1];
+      while (isspace(*strp))
+	 ++strp;
       token = Malloc(len); /*! */
       tokp = token;
       if (nestlex(&strp, &tokp, &len, ends, hquotes, squotes, nests,
@@ -83,7 +85,7 @@ static int xioopen_exec(
       pargc = 1;
       while (*strp == ' ') {
 	 while (*++strp == ' ')  ;
-	 if ((pargc & 0x07) == 0) {
+	 if (((pargc+1) & 0x07) == 0x00) { 	/* one more is needed for final NULL */
 	    /*0 pargv = Realloc(pargv, (pargc+8)*sizeof(char *)); */
 	    pargv = Realloc3(pargv, (pargc+8)*sizeof(char *), pargc*sizeof(char *));
 	    if (pargv == NULL)  return STAT_RETRYLATER;

@@ -66,6 +66,7 @@ enum e_types {
    TYPE_INT_INT_BIN,	/* 3 params: first and second are int, 3rd is binary */
    TYPE_INT_INT_STRING,	/* 3 params: first and second are int, 3rd is string */
    TYPE_INT_INT_GENERIC,	/* 3 params: first and second are int, 3rd is specified by value (dalan syntax) */
+   TYPE_INT_ULONG,	/* 2 parameters: int, unsigned long */
 
    TYPE_IP4NAME,	/* IPv4 hostname or address */
    TYPE_IP4SOCK,	/* IPv4 hostname or address optionally with port */
@@ -110,8 +111,9 @@ enum e_func {
    OFUNC_TERMIOS_VALUE,	/* a variable value: major..tcflag, minor..mask, arg3..shift */
    OFUNC_TERMIOS_CHAR,	/* a termios functional character: major..c_cc index */
    OFUNC_TERMIOS_SPEED,	/* termios c_ispeed etc on FreeBSD */
-   OFUNC_TERMIOS_SPEC,	/* termios combined modes */
-
+   OFUNC_TERMIOS_SETFLAGS, 	/* set a complete tcflag_t in struct termios */
+   OFUNC_TERMIOS_COMB,	/* termios combined modes */
+   OFUNC_TERMIOS_SPEC,	/* termios specifically handled options */
    OFUNC_EXT,		/* with extended file descriptors only */
 #  define OFUNC_XIO OFUNC_EXT
    OFUNC_SPEC,		/* special, i.e. no generalizable function call */
@@ -152,7 +154,7 @@ enum e_func {
 
 #define GROUP_FD	0x00000001	/* everything applicable to a fd */
 #define GROUP_FIFO	0x00000002
-#define GROUP_CHR	0x00000004 	/* not yet used? */
+#define GROUP_CHR	0x00000004 	/* not yet used */
 #define GROUP_BLK	0x00000008
 #define GROUP_REG	0x00000010
 #define GROUP_FILE GROUP_REG
@@ -182,21 +184,23 @@ enum e_func {
 
 #define GROUP_IP_UDP	0x01000000 	/* not yet used? */
 #define GROUP_IP_TCP	0x02000000
-#define GROUP_IP_SOCKS	0x04000000	/* for socks4(a), socks5 */
+#define GROUP_IP_SOCKS	0x04000000	/* for socks4(a) clients */
+#define GROUP_IP_SOCKS4	0x04000000
 #define GROUP_OPENSSL	0x08000000
 
 #define GROUP_PROCESS	0x10000000	/* a process related option */
 #define GROUP_APPL	0x20000000	/* option handled by data loop */
 #define GROUP_HTTP	0x40000000	/* any HTTP client */
+#define GROUP_REMOTE	0x80000000	/* for remote clients like socks */
 
 /* Keep condition consistent with xio.h:groups_t! */
 #if WITH_POSIXMQ || WITH_SCTP || WITH_DCCP || WITH_UDPLITE
-/* The following groups are not expected on systems without uint64_t */
-#define GROUP_POSIXMQ	((groups_t)0x0100000000ULL)
-#define GROUP_IP_SCTP	((groups_t)0x0200000000ULL)
-#define GROUP_IP_DCCP	((groups_t)0x0400000000ULL)
+/* The following groups are only expected on systems with uint64_t */
+#define GROUP_POSIXMQ	 ((groups_t)0x0100000000ULL)
+#define GROUP_IP_SCTP	 ((groups_t)0x0200000000ULL)
+#define GROUP_IP_DCCP	 ((groups_t)0x0400000000ULL)
 #define GROUP_IP_UDPLITE ((groups_t)0x0800000000ULL)
-#define GROUP_ALL	((groups_t)0x0fffffffffULL) 	/* OMG... for 32bit systems */
+#define GROUP_ALL	 ((groups_t)0x0fffffffffULL) 	/* ULL for 32bit systems */
 #else /* !(WITH_POSIXMQ || WITH_SCTP || WITH_DCCP || WITH_UDPLITE) */
 #define GROUP_POSIXMQ	0
 #define GROUP_IP_SCTP	0
@@ -214,7 +218,8 @@ enum e_func {
    conflicts. */
 /* optcode's */
 enum e_optcode {
-   OPT_ADDRESS_FAMILY = 1,
+   OPT_ACCEPT_TIMEOUT = 1,	/* listening socket */
+   OPT_ADDRESS_FAMILY,
    OPT_AI_ADDRCONFIG, 	/* getaddrinfo() */
    OPT_AI_ALL, 		/* getaddrinfo() */
    OPT_AI_PASSIVE, 	/* getaddrinfo() */
@@ -389,6 +394,7 @@ enum e_optcode {
    OPT_IMAXBEL,		/* termios.c_iflag */
    OPT_INLCR,		/* termios.c_iflag */
    OPT_INPCK,		/* termios.c_iflag */
+   OPT_INTERFACE_MTU,
    OPT_INTERVALL,
    OPT_IPV6_AUTHHDR,
    OPT_IPV6_DSTOPTS,
@@ -397,6 +403,8 @@ enum e_optcode {
    OPT_IPV6_HOPOPTS,
    OPT_IPV6_JOIN_GROUP,
    OPT_IPV6_JOIN_SOURCE_GROUP,
+   OPT_IPV6_MTU_DISCOVER,
+   OPT_IPV6_MULTICAST_LOOP,
    OPT_IPV6_PKTINFO,
    OPT_IPV6_RECVDSTOPTS,
    OPT_IPV6_RECVERR,
@@ -429,9 +437,7 @@ enum e_optcode {
 #ifdef IP_MTU
    OPT_IP_MTU,
 #endif
-#ifdef IP_MTU_DISCOVER
    OPT_IP_MTU_DISCOVER,
-#endif
    OPT_IP_MULTICAST_IF,
    OPT_IP_MULTICAST_LOOP,
    OPT_IP_MULTICAST_TTL,
@@ -476,16 +482,9 @@ enum e_optcode {
    OPT_IXANY,		/* termios.c_iflag */
    OPT_IXOFF,		/* termios.c_iflag */
    OPT_IXON,		/* termios.c_iflag */
-   OPT_ACCEPT_TIMEOUT,	/* listening socket */
    OPT_LOCKFILE,
    OPT_LOWPORT,
    OPT_MAX_CHILDREN,
-#if WITH_POSIXMQ
-   OPT_POSIXMQ_FLUSH,
-   OPT_POSIXMQ_MAXMSG,
-   OPT_POSIXMQ_MSGSIZE,
-   OPT_POSIXMQ_PRIORITY,
-#endif
 #ifdef NLDLY
 #  ifdef NL0
    OPT_NL0,		/* termios.c_oflag */
@@ -617,6 +616,12 @@ enum e_optcode {
    OPT_PERM_LATE,
    OPT_PIPES,
    /*OPT_PORT,*/
+#if WITH_POSIXMQ
+   OPT_POSIXMQ_FLUSH,
+   OPT_POSIXMQ_MAXMSG,
+   OPT_POSIXMQ_MSGSIZE,
+   OPT_POSIXMQ_PRIORITY,
+#endif
    OPT_PROMPT,		/* readline */
    OPT_PROTOCOL,	/* 6=TCP, 17=UDP */
    OPT_PROTOCOL_FAMILY,	/* 1=PF_UNIX, 2=PF_INET, 10=PF_INET6 */
@@ -773,7 +778,8 @@ enum e_optcode {
 #ifdef SO_USE_IFBUFS
    OPT_SO_USE_IFBUFS,
 #endif /* SO_USE_IFBUFS */
-#if 1 || defined(WITH_SOCKS4)
+#if defined(WITH_SOCKS4) || defined(WITH_SOCKS5)
+   OPT_SOCKSPASS,
    OPT_SOCKSPORT,
    OPT_SOCKSUSER,
 #endif
@@ -863,7 +869,9 @@ enum e_optcode {
 #endif
    OPT_TERMIOS_CFMAKERAW,	/* termios.cfmakeraw() */
    OPT_TERMIOS_RAWER,
+   OPT_TERMIOS_SETFLAGS,
    OPT_TIOCSCTTY,
+   OPT_TIOCSWINSZ,
    OPT_TOSTOP,		/* termios.c_lflag */
    OPT_TUN_DEVICE,	/* tun: /dev/net/tun ... */
    OPT_TUN_NAME,	/* tun: tun0 */
@@ -984,9 +992,9 @@ struct optdesc {
    enum e_types type;	/* the data type as expected on input, and stored */
    enum e_func  func;	/* which function can apply this option, e.g. ioctl(),
 			   getsockopt(), or just a bit pattern */
-   int  major;		/* major id for func: level (SOL_...) for setsockopt(),
+   long major;		/* major id for func: level (SOL_...) for setsockopt(),
 			   request for ioctl() */
-   int  minor;	/* minor id for func: SO_..., IP_..., */
+   long minor;	/* minor id for func: SO_..., IP_..., */
    long arg3;
 } ;
 

@@ -136,7 +136,7 @@ int _xioopen_ipdgram_listen(struct single *sfd,
 	 if (Setsockopt(sfd->fd, opt_so_reuseaddr.major,
 			opt_so_reuseaddr.minor, &reuseaddr.u_int, sizeof(reuseaddr.u_int))
 	     < 0) {
-	    Warn6("setsockopt(%d, %d, %d, {%d}, "F_Zd"): %s",
+	    Warn6("setsockopt(%d, %ld, %ld, {%d}, "F_Zd"): %s",
 		  sfd->fd, opt_so_reuseaddr.major,
 		  opt_so_reuseaddr.minor, reuseaddr.u_int, sizeof(reuseaddr.u_int),
 		  strerror(errno));
@@ -291,6 +291,10 @@ int xioopen_ipdgram_listen(
    retropt_socket_pf(opts, &pf);
 
    retropt_int(opts, OPT_SO_PROTOTYPE, &ipproto);
+
+   if (sfd->howtoshut == XIOSHUT_UNSPEC)
+      sfd->howtoshut = XIOSHUT_NULL; 	/* send a 0 bytes datagram to shutdown
+					   peer */
 
    if (applyopts_single(sfd, opts, PH_INIT) < 0)
       return -1;

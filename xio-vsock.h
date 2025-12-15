@@ -11,6 +11,7 @@
 extern const struct addrdesc xioaddr_vsock_connect;
 extern const struct addrdesc xioaddr_vsock_listen;
 
+extern int xioopt_vsock_bind(struct sockaddr_vm *sa, const char *cid_str, const char *port_str);
 extern int xiosetsockaddrenv_vsock(int idx, char *namebuff, size_t namelen,
 				   char *valuebuff, size_t valuelen,
 				   struct sockaddr_vm *sa, int ipproto);

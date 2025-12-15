@@ -32,6 +32,7 @@ static int xioopen_gopen(
    flags_t openflags = (xioflags & XIO_ACCMODE);
    mode_t st_mode;
    bool exists;
+   bool opt_append = true;
    bool opt_unlink_close = false;
    int result;
 
@@ -43,9 +44,11 @@ static int xioopen_gopen(
    }
    st_mode = result;
 
+   retropt_bool(opts, OPT_O_APPEND, &opt_append);
+
    if (exists) {
       /* file (or at least named entry) exists */
-      if ((xioflags&XIO_ACCMODE) != XIO_RDONLY) {
+      if ((xioflags&XIO_ACCMODE) != XIO_RDONLY && opt_append) {
 	 openflags |= O_APPEND;
       }
    } else {

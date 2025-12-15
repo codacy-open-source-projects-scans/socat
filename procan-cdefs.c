@@ -249,6 +249,21 @@ int procan_cdefs(FILE *outfile) {
 #ifdef TCP_MAXSEG
    fprintf(outfile, "#define TCP_MAXSEG %d\n",   TCP_MAXSEG);
 #endif
+
+   /* netlink */
+#ifdef RTM_NEWLINK
+   fprintf(outfile, "#define %24s %d\n", "RTM_NEWLINK", RTM_NEWLINK);
+#endif
+#ifdef RTM_DELLINK
+   fprintf(outfile, "#define %24s %d\n", "RTM_DELLINK", RTM_DELLINK);
+#endif
+#ifdef RTM_GETLINK
+   fprintf(outfile, "#define %24s %d\n", "RTM_GETLINK", RTM_GETLINK);
+#endif
+#ifdef RTM_SETLINK
+   fprintf(outfile, "#define %24s %d\n", "RTM_SETLINK", RTM_SETLINK);
+#endif
+
 #ifdef AI_PASSIVE
    fprintf(outfile, "#define AI_PASSIVE     0x%02x\n", AI_PASSIVE);
 #endif
@@ -322,5 +337,9 @@ int procan_cdefs(FILE *outfile) {
    fprintf(outfile, "#define EAI_IDN_ENCODE  %d\n", EAI_IDN_ENCODE);
 #endif
 
+   /* template */
+#ifdef XXXX
+   fprintf(outfile, "#define %24s %d\n", "XXXX", XXXX);
+#endif
    return 0;
 }

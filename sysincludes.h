@@ -150,6 +150,12 @@
 #if HAVE_LINUX_IF_TUN_H
 #include <linux/if_tun.h>
 #endif
+#if HAVE_ASM_TYPES_H
+#include <asm/types.h>
+#endif
+#if HAVE_LINUX_RTNETLINK_H
+#include <linux/rtnetlink.h>
+#endif
 #if HAVE_NETINET_DCCP_H
 #include <netinet/dccp.h>
 #endif

@@ -79,6 +79,8 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
    bool nofork = false;
    bool withfork;
    char *tn = NULL;
+   char *linkname = NULL;
+   bool opt_unlink_close = true;	/* remove symlink afterwards */
    int trigger[2]; 	/* [0] watched by parent, [1] closed by child when ready */
 
    opts = *optsp;
@@ -286,6 +288,14 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
       applyopts(sfd, ptyfd, popts, PH_FD);
       sfd->fd = ptyfd;
 
+      retropt_string(opts, OPT_SYMBOLIC_LINK, &linkname);
+      if (linkname != NULL && opt_unlink_close) {
+	 if ((sfd->unlink_close = strdup(linkname)) == NULL) {
+	    Error1("strdup(\"%s\"): out of memory", linkname);
+	 }
+	 sfd->opt_unlink_close = true;
+      }
+
       /* end withfork, use_pty */
    } else /* end withfork, use_pty */
 #endif /* HAVE_PTY */
@@ -443,6 +453,14 @@ int _xioopen_foxec(int xioflags,	/* XIO_RDONLY etc. */
 	       Ioctl(ttyfd, I_PUSH, "ttcompat");	/* HP-UX: -1 */
 	    }
 #endif
+
+	    if (linkname != NULL) {
+	       xio_unlink(linkname, E_ERROR);
+	       if (Symlink(ptyname, linkname) < 0) {
+		  Error3("symlink(\"%s\", \"%s\"): %s",
+			 ptyname, linkname, strerror(errno));
+	       }
+	    }
 
 	    /* this for child, was after fork */
 	    applyopts(sfd, ttyfd, copts, PH_FD);

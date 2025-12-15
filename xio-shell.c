@@ -15,7 +15,7 @@
 
 static int xioopen_shell(int arg, const char *argv[], struct opt *opts, int xioflags, xiofile_t *xfd, const struct addrdesc *addrdesc);
 
-const struct addrdesc xioaddr_shell = { "SHELL", 3, xioopen_shell, GROUP_FD|GROUP_FORK|GROUP_EXEC|GROUP_SOCKET|GROUP_SOCK_UNIX|GROUP_TERMIOS|GROUP_FIFO|GROUP_PTY|GROUP_PARENT|GROUP_SHELL, 1, 0, 0 HELP(":<shell-command>") };
+const struct addrdesc xioaddr_shell = { "SHELL", 3, xioopen_shell, GROUP_FD|GROUP_FORK|GROUP_EXEC|GROUP_SOCKET|GROUP_SOCK_UNIX|GROUP_TERMIOS|GROUP_FIFO|GROUP_PTY|GROUP_PARENT|GROUP_SHELL, 1, 0, 0 HELP("[:<shell-command>]") };
 
 const struct optdesc opt_shell = { "shell", NULL, OPT_SHELL, GROUP_SHELL, PH_PREEXEC, TYPE_STRING, OFUNC_SPEC, 0, 0 };
 
@@ -36,7 +36,7 @@ static int xioopen_shell(
 	const char *shellname;
 	const char *string = argv[1];
 
-	if (argc != 2) {
+	if (argc < 1 || argc > 2) {
 		xio_syntax(argv[0], 1, argc-1, addrdesc->syntax);
 		return STAT_NORETRY;
 	}
@@ -80,10 +80,17 @@ static int xioopen_shell(
 
 		Setenv("SHELL", shellpath, 1);
 
-		Info1("executing shell command \"%s\"", string);
-		Debug3("execl(\"%s\", \"%s\", \"-c\", \"%s\", NULL)",
-		       shellpath, shellname, string);
-		result = execl(shellpath, shellname, "-c", string, (char *)NULL);
+		if (string != NULL) {
+			Info1("executing shell command \"%s\"", string);
+			Debug3("execl(\"%s\", \"%s\", \"-c\", \"%s\", NULL)",
+			       shellpath, shellname, string);
+			result = execl(shellpath, shellname, "-c", string, (char *)NULL);
+		} else {
+			Info("executing interactive shell");
+			Debug2("execl(\"%s\", \"%s\", NULL)",
+			       shellpath, shellname);
+			result = execl(shellpath, shellname, (char *)NULL);
+		}
 		if (result != 0) {
 			Warn2("execl(\"%s\") returned with status %d", string, result);
 			Warn1("execl(): %s", strerror(errno));

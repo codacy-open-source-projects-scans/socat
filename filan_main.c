@@ -17,20 +17,41 @@ const char copyright[] = "filan by Gerhard Rieger and contributors - see http://
 
 #define WITH_HELP 1
 
+
+struct filan_data {
+   FILE *fdout;
+   const char *outfname;
+   const char *filename;
+   unsigned int m;
+   unsigned int n;
+   int style;
+} ;
+
+struct filan_data filan_data;
+
+
 static void filan_usage(FILE *fd);
+static int filan_once(struct filan_data *data);
+static void sigaction_sigwinch(int signum, siginfo_t *siginfo, void *data);
 
 
 int main(int argc, const char *argv[]) {
    const char **arg1, *a0, *a;
-   const char *filename = NULL, *waittimetxt;
-   unsigned int m = 0;		/* first FD (default) */
-   unsigned int n = FD_SETSIZE;	/* last excl. */
-   unsigned int i;
-   int style = 0;
+   struct filan_data *data = &filan_data;
+   const char *waittimetxt;
    struct timespec waittime = { 0, 0 };
-   FILE *fdout = stdout;
-   const char *outfname = NULL;
    unsigned long fildes;
+#if defined(SIGWINCH)
+   bool sigwinch_loop = false;
+#endif
+   int rc;
+
+   data->fdout = stdout;
+   data->outfname = NULL;
+   data->filename = NULL;
+   data->m = 0;		/* first FD (default) */
+   data->n = FD_SETSIZE;	/* last excl. */
+   data->style = 0;
 
    diag_set('I', NULL);
    diag_set('p', strchr(argv[0], '/') ? strrchr(argv[0], '/')+1 : argv[0]);
@@ -47,9 +68,12 @@ int main(int argc, const char *argv[]) {
 #endif
       case 'L': filan_followsymlinks = true; break;
       case 'd': diag_set('d', NULL); break;
-      case 's': style = arg1[0][1]; break;
-      case 'S': style = arg1[0][1]; break;
+      case 's': data->style = arg1[0][1]; break;
+      case 'S': data->style = arg1[0][1]; break;
       case 'r': filan_rawoutput = true; break;
+#if defined(SIGWINCH)
+      case 'W': sigwinch_loop = true; break;
+#endif
       case 'i':  if (arg1[0][2]) {
 	    a = a0 = *arg1+2;
          } else {
@@ -59,14 +83,14 @@ int main(int argc, const char *argv[]) {
 	       filan_usage(stderr); exit(1);
 	    }
 	 }
-         m = strtoul(a, (char **)&a, 0);
+         data->m = strtoul(a, (char **)&a, 0);
 	 if (a == a0) {
 	    Error1("not a numerical arg in \"-i %s\"", a0);
 	 }
 	 if (*a != '\0') {
 	    Error1("trailing garbage in \"-i %s\"", a0);
 	 }
-	 n = m;
+	 data->n = data->m;
 	 break;
       case 'n': if (arg1[0][2]) {
 	    a = a0 = *arg1+2;
@@ -77,7 +101,7 @@ int main(int argc, const char *argv[]) {
 	       filan_usage(stderr); exit(1);
 	    }
 	 }
-         n = strtoul(a, (char **)&a, 0);
+         data->n = strtoul(a, (char **)&a, 0);
 	 if (a == a0) {
 	    Error1("not a numerical arg in \"-n %s\"", a0);
 	 }
@@ -86,10 +110,10 @@ int main(int argc, const char *argv[]) {
 	 }
 	 break;
       case 'f': if (arg1[0][2]) {
-	    filename = *arg1+2;
+	    data->filename = *arg1+2;
 	 } else {
 	    ++arg1, --argc;
-	    if ((filename = *arg1) == NULL) {
+	    if ((data->filename = *arg1) == NULL) {
 	       Error("option -f requires an argument");
 	       filan_usage(stderr); exit(1);
 	    }
@@ -112,10 +136,10 @@ int main(int argc, const char *argv[]) {
 	 }
 	 break;
       case 'o':  if (arg1[0][2]) {
-            outfname = *arg1+2;
+            data->outfname = *arg1+2;
          } else {
             ++arg1, --argc;
-            if ((outfname = *arg1) == NULL) {
+            if ((data->outfname = *arg1) == NULL) {
                Error("option -o requires an argument");
                filan_usage(stderr); exit(1);
             }
@@ -141,24 +165,24 @@ int main(int argc, const char *argv[]) {
       filan_usage(stderr);
       exit(1);
    }
-   if (outfname) {
+   if (data->outfname) {
       /* special cases */
-      if (!strcmp(outfname,"stdin")) { fdout=stdin; }
-      else if (!strcmp(outfname,"stdout")) { fdout=stdout; }
-      else if (!strcmp(outfname,"stderr")) { fdout=stderr; }
+      if (!strcmp(data->outfname,"stdin")) { data->fdout = stdin; }
+      else if (!strcmp(data->outfname,"stdout")) { data->fdout = stdout; }
+      else if (!strcmp(data->outfname,"stderr")) { data->fdout = stderr; }
       /* file descriptor */
-      else if (*outfname == '+') {
-	 a  = outfname+1;
+      else if (*data->outfname == '+') {
+	 a  = data->outfname+1;
 	 fildes = strtoul(a, (char **)&a, 0);
-	 if ((fdout = fdopen(fildes, "w")) == NULL) {
+	 if ((data->fdout = fdopen(fildes, "w")) == NULL) {
 	    Error2("can't fdopen file descriptor %lu: %s\n", fildes, strerror(errno));
 	    exit(1);
 	 }
       } else {
 	 /* file name */
-	 if ((fdout = fopen(outfname, "w")) == NULL) {
+	 if ((data->fdout = fopen(data->outfname, "w")) == NULL) {
 	    Error2("can't fopen '%s': %s\n",
-		   outfname, strerror(errno));
+		   data->outfname, strerror(errno));
 	    exit(1);
 	 }
       }
@@ -166,62 +190,105 @@ int main(int argc, const char *argv[]) {
 
    Nanosleep(&waittime, NULL);
 
-   if (style == 0) {
+   rc = filan_once(data);
+
+#if defined(SIGWINCH)
+   if (sigwinch_loop) {
+      struct sigaction act;
+      sigset_t mask;
+
+      sigemptyset(&mask);
+      act.sa_sigaction = sigaction_sigwinch;
+      act.sa_mask   = mask;
+      act.sa_flags  = SA_SIGINFO;
+      Sigaction(SIGWINCH, &act, NULL);
+   }
+   while (sigwinch_loop) {
+      int rc;
+
+      rc = Select(0, NULL, NULL, NULL, NULL);
+      if (rc < 0 && errno == EINTR)
+	 continue;
+      continue;
+   }
+#endif /* defined(SIGWINCH) */
+
+   return rc;
+}
+
+
+#if defined(SIGWINCH)
+void sigaction_sigwinch(
+	int signum,
+	siginfo_t *siginfo,
+	void *blah)
+{
+   struct filan_data *data = &filan_data;
+   filan_once(data);
+}
+#endif
+
+
+static int filan_once(struct filan_data *data)
+{
+   unsigned int i;
+
+   if (data->style == 0) {
       /* This style gives detailed infos, but requires a file descriptor */
-      if (filename) {
+      if (data->filename) {
 #if LATER /* this is just in case that S_ISSOCK does not work */
 	 struct stat buf;
 	 int fd;
 
-	 if (Stat(filename, &buf) < 0) {
-	    Error3("stat(\"%s\", %p): %s", filename, &buf, strerror(errno));
+	 if (Stat(data->filename, &buf) < 0) {
+	    Error3("stat(\"%s\", %p): %s", data->filename, &buf, strerror(errno));
 	 }
 	 /* note: when S_ISSOCK was undefined, it always gives 0 */
 	 if (S_ISSOCK(buf.st_mode)) {
 	    Error("cannot analyze UNIX domain socket");
 	 }
 #endif
-	 filan_file(filename, fdout);
+	 filan_file(data->filename, data->fdout);
       } else {
-	 if (m == n) {
-	    ++n;
+	 if (data->m == data->n) {
+	    ++data->n;
 	 }
-	 for (i = m; i < n; ++i) {
-	    filan_fd(i, fdout);
+	 for (i = data->m; i < data->n; ++i) {
+	    filan_fd(i, data->fdout);
 	 }
       }
    } else {
       /* this style gives only type and path / socket addresses, and works from
 	 file descriptor or filename (with restrictions) */
-      if (filename) {
+      if (data->filename) {
 	 /* filename: NULL means yet unknown; "" means no name at all */
 #if LATER
 	 int fd;
 	 if ((fd =
-	      Open(filename, O_RDONLY|O_NOCTTY|O_NONBLOCK
+	      Open(data->filename, O_RDONLY|O_NOCTTY|O_NONBLOCK
 #ifdef O_LARGEFILE
 		   |O_LARGEFILE
 #endif
 		   , 0700))
 	     < 0) {
 	    Debug2("open(\"%s\", O_RDONLY|O_NOCTTY|O_NONBLOCK|O_LARGEFILE, 0700): %s",
-		   filename, strerror(errno));
+		   data->filename, strerror(errno));
 	 }
-	 fdname(filename, fd, fdout, NULL, style);
+	 fdname(data->filename, fd, data->fdout, NULL, data->style);
 #endif
-	 fdname(filename, -1, fdout, NULL, style);
+	 fdname(data->filename, -1, data->fdout, NULL, data->style);
       } else {
-	 if (m == n) {
-	    fdname("", m, fdout, NULL, style);
+	 if (data->m == data->n) {
+	    fdname("", data->m, data->fdout, NULL, data->style);
 	 } else {
-	    for (i = m; i < n; ++i) {
-	       fdname("", i, fdout, "%5u ", style);
+	    for (i = data->m; i < data->n; ++i) {
+	       fdname("", i, data->fdout, "%5u ", data->style);
 	    }
 	 }
       }
    }
-   if (outfname && fdout != stdout && fdout != stderr) {
-      fclose(fdout);
+   if (data->outfname && data->fdout != stdout && data->fdout != stderr) {
+      fclose(data->fdout);
    }
    return 0;
 }
@@ -255,6 +322,9 @@ static void filan_usage(FILE *fd) {
    fputs("      -T<seconds>    wait before analyzing, useful to connect with debugger\n", fd);
    fputs("      -r             raw output for time stamps and rdev\n", fd);
    fputs("      -L             follow symbolic links instead of showing their properties\n", fd);
+#if defined(SIGWINCH)
+   fputs("      -W             after printing FDs info, wait and reprint info on SIGWINCH\n", fd);
+#endif
    fputs("      -o<filename>   output goes to filename, that can be:\n", fd);
    fputs("                     a regular file name, the output goes to that\n", fd);
    fputs("                     +<filedes> , output goes to the file descriptor (which must be open writable)\n", fd);

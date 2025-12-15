@@ -54,7 +54,8 @@ int xioopen_ipapp_connect(
    /* Apply and retrieve some options */
    result = _xioopen_ipapp_init(sfd, xioflags, opts,
 				&dofork, &maxchildren,
-				&pf, &socktype, &ipproto);
+				&pf, &socktype, &ipproto,
+				socktype == SOCK_DGRAM ? XIOSHUT_NULL : -1);
    if (result != STAT_OK)
       return result;
 
@@ -199,10 +200,15 @@ int _xioopen_ipapp_init(
 	int *maxchildren,
 	int *pf,
 	int *socktype,
-	int *ipproto)
+	int *ipproto,
+	int howtoshut)
 {
    if (sfd->howtoend == END_UNSPEC)
       sfd->howtoend = END_SHUTDOWN;
+
+   if (sfd->howtoshut == XIOSHUT_UNSPEC && howtoshut >= 0) {
+      sfd->howtoshut = howtoshut;
+   }
 
    if (applyopts_single(sfd, opts, PH_INIT) < 0)
       return -1;

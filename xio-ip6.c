@@ -78,6 +78,9 @@ const struct optdesc opt_ipv6_recvtclass = { "ipv6-recvtclass", "recvtclass", OP
 #ifdef IPV6_RECVPATHMTU
 const struct optdesc opt_ipv6_recvpathmtu = { "ipv6-recvpathmtu", "recvpathmtu", OPT_IPV6_RECVPATHMTU, GROUP_SOCK_IP6, PH_PASTSOCKET, TYPE_INT, OFUNC_SOCKOPT, SOL_IPV6, IPV6_RECVPATHMTU };
 #endif
+#ifdef IPV6_MULTICAST_LOOP
+const struct optdesc opt_ipv6_multicast_loop = { "ipv6-multicast-loop", "mcloop6", OPT_IPV6_MULTICAST_LOOP, GROUP_SOCK_IP6, PH_PASTSOCKET, TYPE_INT, OFUNC_SOCKOPT, SOL_IPV6, IPV6_MULTICAST_LOOP };
+#endif
 
 /* Returns canonical form of IPv6 address.
    IPv6 address may be enclose in brackets.
@@ -506,7 +509,7 @@ int xioapply_ipv6_join_group(
 
 	if (Setsockopt(sfd->fd, opt->desc->major, opt->desc->minor,
 		       &ip6_mreq, sizeof(ip6_mreq)) < 0) {
-		Error6("setsockopt(%d, %d, %d, {...,0x%08x}, "F_Zu"): %s",
+		Error6("setsockopt(%d, %ld, %ld, {...,0x%08x}, "F_Zu"): %s",
 		       sfd->fd, opt->desc->major, opt->desc->minor,
 		       ip6_mreq.ipv6mr_interface,
 		       sizeof(ip6_mreq),
@@ -656,7 +659,7 @@ int xioapply_ip6_join_source_group(struct single *sfd, struct opt *opt) {
    memcpy(&ip6_gsr.gsr_source, &sockaddr2.ip6, socklen2);
    if (Setsockopt(sfd->fd, opt->desc->major, opt->desc->minor,
 		  &ip6_gsr, sizeof(ip6_gsr)) < 0) {
-      Error6("setsockopt(%d, %d, %d, {%d,...}, "F_Zu"): %s",
+      Error6("setsockopt(%d, %ld, %ld, {%d,...}, "F_Zu"): %s",
 	     sfd->fd, opt->desc->major, opt->desc->minor,
 	     ip6_gsr.gsr_interface,
 	     sizeof(ip6_gsr),

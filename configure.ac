@@ -221,6 +221,22 @@ AC_ARG_ENABLE(pipe, [  --disable-pipe          disable pipe support],
 	       esac],
 	       [AC_DEFINE(WITH_PIPE) AC_MSG_RESULT(yes)])
 
+AC_MSG_CHECKING(whether to include explicit stall support)
+AC_ARG_ENABLE(stall, [  --disable-stall          disable stall support],
+	      [case "$enableval" in
+	       no) AC_MSG_RESULT(no);;
+	       *) AC_DEFINE(WITH_STALL) AC_MSG_RESULT(yes);;
+	       esac],
+	       [AC_DEFINE(WITH_STALL) AC_MSG_RESULT(yes)])
+
+AC_MSG_CHECKING(whether to include explicit text support)
+AC_ARG_ENABLE(text,  [  --disable-text           disable text support],
+	      [case "$enableval" in
+	       no) AC_MSG_RESULT(no);;
+	       *) AC_DEFINE(WITH_TEXT) AC_MSG_RESULT(yes);;
+	       esac],
+	       [AC_DEFINE(WITH_TEXT) AC_MSG_RESULT(yes)])
+
 AC_MSG_CHECKING(whether to include explicit socketpair support)
 AC_ARG_ENABLE(socketpair, [  --disable-socketpair    disable socketpair support],
 	      [case "$enableval" in
@@ -924,6 +940,15 @@ fi
 if test "$WITH_INTERFACE"; then
    AC_DEFINE(WITH_INTERFACE)
 fi
+
+if test "$WITH_INTERFACE" || test "$WITH_TUN"; then
+   AC_CHECK_HEADERS(asm/types.h)
+   AC_CHECK_HEADER(linux/rtnetlink.h, AC_DEFINE(HAVE_LINUX_RTNETLINK_H), [], [AC_INCLUDES_DEFAULT
+	#if HAVE_ASM_TYPES_H
+	#include <asm/types.h>
+	#endif])
+fi
+
 
 AC_MSG_CHECKING(whether to include system call tracing)
 AC_ARG_ENABLE(sycls, [  --disable-sycls         disable system call tracing],
@@ -2158,7 +2183,10 @@ AC_BASIC_TYPE([#include <sys/types.h>
 AC_BASIC_TYPE([#include <sys/stat.h>], dev_t, HAVE_BASIC_DEV_T, sc_cv_type_dev_basic)
 
 AC_BASIC_TYPE([#include <unistd.h>
-#include <termios.h>], speed_t, HAVE_BASIC_SPEED_T, sc_cv_type_spee_t)
+#include <termios.h>], speed_t, HAVE_BASIC_SPEED_T, sc_cv_type_speed_t)
+
+AC_BASIC_TYPE([#include <unistd.h>
+#include <termios.h>], tcflag_t, HAVE_BASIC_TCFLAG_T, sc_cv_type_tcflag_t)
 
 AC_TYPEOF_COMPONENT([#include <sys/stat.h>], struct stat, st_ino, HAVE_TYPEOF_ST_INO, sc_cv_type_stat_stino_basic)
 AC_TYPEOF_COMPONENT([#include <sys/stat.h>], struct stat, st_nlink, HAVE_TYPEOF_ST_NLINK, sc_cv_type_stat_stnlink_basic)

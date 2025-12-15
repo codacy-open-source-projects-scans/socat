@@ -48,6 +48,7 @@ extern const int one;
 #endif
 
 extern ssize_t writefull(int fd, const void *buff, size_t bytes, const struct timeval *tmo0);
+extern ssize_t readfull(int fd, void *buff, size_t bytes, const struct timeval *tmo0, int level);
 
 #if _WITH_SOCKET
 extern socklen_t socket_init(int af, union sockaddr_union *sa);

@@ -14,10 +14,11 @@
 
 #define SOCKSPORT "1080"
 
-#if WITH_SOCKS4 || WITH_SOCKS4A
+#if WITH_SOCKS4 || WITH_SOCKS4A || WITH_SOCKS5
 
 #include "xio-socks.h"
 
+#if WITH_SOCKS4 || WITH_SOCKS4A
 
 enum {
    SOCKS_CD_GRANTED = 90,
@@ -30,8 +31,15 @@ enum {
 
 static int xioopen_socks4_connect(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *fd, const struct addrdesc *addrdesc);
 
+#endif /* WITH_SOCKS4 || WITH_SOCKS4A */
+
 const struct optdesc opt_socksport = { "socksport", NULL, OPT_SOCKSPORT, GROUP_IP_SOCKS, PH_LATE, TYPE_STRING, OFUNC_SPEC };
 const struct optdesc opt_socksuser = { "socksuser", NULL, OPT_SOCKSUSER, GROUP_IP_SOCKS, PH_LATE, TYPE_NAME, OFUNC_SPEC };
+#if WITH_SOCKS5
+const struct optdesc opt_sockspass = { "sockspass", NULL, OPT_SOCKSPASS, GROUP_IP_SOCKS, PH_LATE, TYPE_NAME, OFUNC_SPEC };
+#endif /* WITH_SOCKS5 */
+
+#if WITH_SOCKS4 || WITH_SOCKS4A
 
 const struct addrdesc xioaddr_socks4_connect = { "SOCKS4", 3, xioopen_socks4_connect, GROUP_FD|GROUP_SOCKET|GROUP_SOCK_IP4|GROUP_SOCK_IP6|GROUP_IP_TCP|GROUP_IP_SOCKS|GROUP_CHILD|GROUP_RETRY, 0, 0, 0 HELP(":<socks-server>:<host>:<port>") };
 
@@ -49,7 +57,7 @@ static int xioopen_socks4_connect(
    struct single *sfd = &xxfd->stream;
    int socks4a = addrdesc->arg1;
    struct opt *opts0 = NULL;
-   const char *sockdname; char *socksport;
+   const char *sockdname; char *socksport = NULL;
    const char *targetname, *targetport;
    int pf = PF_UNSPEC;
    int ipproto = IPPROTO_TCP;
@@ -61,7 +69,7 @@ static int xioopen_socks4_connect(
    bool needbind = false;
    bool lowport = false;
    unsigned char buff[BUFF_LEN];
-   struct socks4 *sockhead = (struct socks4 *)buff;
+   struct socks4u *sockhead = (struct socks4u *)buff;
    size_t buflen = sizeof(buff);
    int socktype = SOCK_STREAM;
    int level;
@@ -78,7 +86,7 @@ static int xioopen_socks4_connect(
    /* Apply and retrieve some options */
    result = _xioopen_ipapp_init(sfd, xioflags, opts,
 			        &dofork, &maxchildren,
-			        &pf, &socktype, &ipproto);
+			        &pf, &socktype, &ipproto, -1);
    if (result != STAT_OK)
       return result;
 
@@ -271,7 +279,6 @@ static int xioopen_socks4_connect(
 }
 
 #endif /* WITH_SOCKS4 || WITH_SOCKS4A */
-#if WITH_SOCKS4 || WITH_SOCKS4A || WITH_SOCKS5
 
 int _xioopen_opt_socksport(
 	struct opt *opts,
@@ -297,14 +304,13 @@ int _xioopen_opt_socksport(
    return 0;
 }
 
-#endif /* WITH_SOCKS4 || WITH_SOCKS4A || WITH_SOCKS5 */
 #if WITH_SOCKS4 || WITH_SOCKS4A
 
 int _xioopen_socks4_init(
 	const char *targetport,
 	struct opt *opts,
 	char **socksport,
-	struct socks4 *sockhead,
+	struct socks4u *sockhead,
 	size_t *headlen)
 {
    char *userid;
@@ -325,7 +331,8 @@ int _xioopen_socks4_init(
 	 }
       }
    }
-   sockhead->userid[0] = '\0'; strncat(sockhead->userid, userid, *headlen-SIZEOF_STRUCT_SOCKS4-1);
+   sockhead->userid[0] = '\0';
+   strncat(sockhead->userid, userid, *headlen-SIZEOF_STRUCT_SOCKS4-1);
    *headlen = SIZEOF_STRUCT_SOCKS4+strlen(userid)+1;
    return STAT_OK;
 }
@@ -336,7 +343,7 @@ int _xioopen_socks4_prepare(
 	struct single *sfd,
 	const char *hostname,	/* socks target host */
 	int socks4a,
-	struct socks4 *sockhead,
+	struct socks4u *sockhead,
 	ssize_t *headlen,	/* get available space, return used length*/
 	int level)
 {
@@ -382,7 +389,7 @@ int _xioopen_socks4_prepare(
 /* perform socks4 client dialog on existing FD.
    Called within fork/retry loop, after connect() */
 int _xioopen_socks4_connect(struct single *sfd,
-			    struct socks4 *sockhead,
+			    struct socks4u *sockhead,
 			    size_t headlen,
 			    int level) {
    ssize_t bytes;
@@ -439,6 +446,7 @@ int _xioopen_socks4_connect(struct single *sfd,
 	 if (Close(sfd->fd) < 0) {
 	    Info2("close(%d): %s", sfd->fd, strerror(errno));
 	 }
+	 break;
       }
       if (result == 0) {
 	 Msg(level, "read(): EOF during read of socks reply, peer might not be a socks4 server");
@@ -502,5 +510,8 @@ int _xioopen_socks4_connect(struct single *sfd,
 
    return STAT_OK;
 }
+
 #endif /* WITH_SOCKS4 || WITH_SOCKS4A */
+
+#endif /* WITH_SOCKS4 || WITH_SOCKS4A || WITH_SOCKS5 */
 

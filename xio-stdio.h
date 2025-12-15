@@ -6,7 +6,7 @@
 #define __xio_stdio_h_included 1
 
 
-
+extern int xioopen_stdio(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *fd, const struct addrdesc *addrdesc);
 extern int xioopen_stdio_bi(xiofile_t *sock);
 
 extern const struct addrdesc xioaddr_stdio;

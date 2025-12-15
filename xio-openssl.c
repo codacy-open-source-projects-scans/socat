@@ -311,7 +311,7 @@ static int xioopen_openssl_connect(
    /* Apply and retrieve some options */
    result = _xioopen_ipapp_init(sfd, xioflags, opts,
 				&dofork, &maxchildren,
-				&pf, &socktype, &ipproto);
+				&pf, &socktype, &ipproto, -1);
    if (result != STAT_OK)
       return result;
 
@@ -923,7 +923,7 @@ static int _xio_openssl_parse_version(const char *verstring, int vergroups) {
    we = keyw(_xio_openssl_versions, verstring,
 	     sizeof(_xio_openssl_versions)/sizeof(struct wordent));
    if (we == 0) {
-      Error1("Unknown SSL/TLS version \"%s\"", verstring);
+      Error1("Unknown SSL/TLS version \"%s\" (use forms like \"TLS1.2\")", verstring);
       return -1;
    }
    sslver = (size_t)we->desc;

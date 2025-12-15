@@ -190,18 +190,20 @@ label(option_S)dit(bf(tt(-S))tt(<signals-bitmap>))
    Note: Signals SIGHUP, SIGINT, SIGQUIT, SIGUSR1, SIGPIPE, SIGALRM, SIGTERM, and
    SIGCHLD may be handled specially anyway.
 label(option_t)dit(bf(tt(-t))tt(<timeout>))
-   When one channel has reached EOF, the write part of the other channel is shut
-   down. Then, socat() waits <timeout> [link(timeval)(TYPE_TIMEVAL)] seconds
-   before terminating. Default is 0.5 seconds. This timeout only applies to
-   addresses where write and read part can be closed independently. When during
-   the timeout interval the read part gives EOF, socat terminates without
-   awaiting the timeout.
+   When one channel has reached EOF (that is not ignored through option
+   (link(ignoreoef)(OPTION_ignoreeof), the write part of the other channel is
+   shut down. Then, socat() waits <timeout> [link(timeval)(TYPE_TIMEVAL)]
+   seconds before terminating. When during
+   the timeout interval the read part of that other channel gives EOF, socat
+   terminates without awaiting the timeout. Default is 0.5 seconds, 0 is valid.
+   This timeout is only useful with addresses where write and read part can be
+   closed or shut down independently.
 label(option_T)dit(bf(tt(-T))tt(<timeout>))
    Total inactivity timeout: when socat() is already in the transfer loop and
    nothing has happened for <timeout> [link(timeval)(TYPE_TIMEVAL)] seconds
    (no data arrived, no interrupt occurred...) then it terminates. Up to
-   version 1.8.0.0 "0" meant infinite"; since version 1.8.0.1 "0" means 0
-   and values <0 mean infinite.nl()
+   version 1.8.0.0 "0" meant "infinite"; since version 1.8.0.1 "0" means 0
+   and values <0 mean infinite, default is -1.nl()
    Useful with protocols like UDP that cannot transfer EOF.
 label(option_u)dit(bf(tt(-u)))
    Uses unidirectional mode. The first address is only used for reading, and the
@@ -469,6 +471,7 @@ label(ADDRESS_INTERFACE)dit(bf(tt(INTERFACE:<interface>)))
    link(pf)(OPTION_PROTOCOL_FAMILY),
    link(type)(OPTION_SO_TYPE)nl()
    See also: link(ip-recv)(ADDRESS_IP_RECV)
+
 label(ADDRESS_IP4_SENDTO)dit(bf(tt(IP4-SENDTO:<host>:<protocol>)))
    Like link(IP-SENDTO)(ADDRESS_IP_SENDTO), but always uses IPv4.nl()
    Option groups: link(FD)(GROUP_FD),link(SOCKET)(GROUP_SOCKET),link(IP4)(GROUP_IP4) nl()
@@ -773,6 +776,23 @@ label(ADDRESS_SOCKETPAIR)dit(bf(tt(SOCKETPAIR)))
    link(socktype)(OPTION_SO_TYPE)nl()
    See also: link(unnamed pipe)(ADDRESS_UNNAMED_PIPE)
 
+label(ADDRESS_STALL)dit(bf(tt(STALL)))
+   The read part of this address never provides any data nor EOF; the write
+   part never gets ready for writing data. This might be useful for testing and
+   for some special scenarios.
+
+label(ADDRESS_TEXT)dit(bf(tt(TEXT:<string>)))
+   The text provided as parameter is taken as input data: it is buffered
+   in an internal pipe and then processed as usual. The standard conversions
+   are performed on the string, so you may check how parameters are parsed and
+   prepared which is critical for addresses like EXEC.nl()
+   Output on this address is sent to tt(stdout). Thus this address can replace
+   constructs like:nl()
+   bf(tt(echo "<string>" | socat STDIO TCP:<server>:<port>))nl()
+   with:nl()
+   bf(tt(socat TEXT:"<string>\n" TCP:<server>:<port>))nl()
+   Have a look at the link(example with sudo)(EXAMPLE_ADDRESS_TEXT) below.
+
 label(ADDRESS_POSIXMQ_READ)dit(bf(tt(POSIXMQ-READ:/<mqueue>)))
    Opens or creates the specified POSIX message queue and reads messages
    (packets). It keeps the packet boundaries.nl()
@@ -830,7 +850,9 @@ label(ADDRESS_POSIXMQ_BIDIRECTIONAL)dit(bf(tt(POSIXMQ-BIDIRECTIONAL:/mqueue)))
 dit(bf(tt(POSIXMQ:/mqueue)))
    Opens or creates the specified POSIX message queue in read and/or write mode
    depending on context, then reads and/or writes messages (packets).
-   In bidirectional mode this is just another echo service.nl()
+   In bidirectional mode this is just another echo service. POSIXMQ refuses
+   bidirectional mode to prevent unwanted flushing of queue; use
+   POSIXMQ-BIDIRECTIONAL when needed.nl()
    See link(POSIXMQ-READ)(ADDRESS_POSIXMQ_READ) and
    link(POSIXMQ-SEND)(ADDRESS_POSIXMQ_SEND) for more info.
 
@@ -895,7 +917,8 @@ label(ADDRESS_SCTP_CONNECT)dit(bf(tt(SCTP-CONNECT:<host>:<port>)))
    link(pf)(OPTION_PROTOCOL_FAMILY),
    link(connect-timeout)(OPTION_CONNECT_TIMEOUT),
    link(tos)(OPTION_TOS),
-   link(mtudiscover)(OPTION_MTUDISCOVER),
+   link(mtudiscover)(OPTION_IP_MTU_DISCOVER),
+   link(mtudiscover6)(OPTION_IPV6_MTU_DISCOVER),
    link(sctp-maxseg)(OPTION_SCTP_MAXSEG),
    link(sctp-nodelay)(OPTION_SCTP_NODELAY),
    link(nonblock)(OPTION_O_NONBLOCK),
@@ -1127,6 +1150,8 @@ dit(bf(tt(SOCKS5-CONNECT:<socks-server>:<target-host>:<target-port>)))
    Option groups: link(FD)(GROUP_FD), link(SOCKET)(GROUP_SOCKET), link(IP4)(GROUP_IP4), link(IP6)(GROUP_IP6), link(TCP)(GROUP_TCP), link(CHILD)(GROUP_CHILD), link(RETRY)(GROUP_RETRY)nl()
    Useful options:
    link(socksport)(OPTION_SOCKSPORT),
+   link(socksuser)(OPTION_SOCKSUSER),
+   link(sockspass)(OPTION_SOCKSPASS),
    link(sourceport)(OPTION_SOURCEPORT),
    link(pf)(OPTION_PROTOCOL_FAMILY),
    link(retry)(OPTION_RETRY)nl()
@@ -1178,13 +1203,15 @@ label(ADDRESS_STDOUT)dit(bf(tt(STDOUT)))
    Option groups: link(FD)(GROUP_FD) (link(TERMIOS)(GROUP_TERMIOS),link(REG)(GROUP_REG),link(SOCKET)(GROUP_SOCKET)) nl()
    See also: link(FD)(ADDRESS_FD)
 label(ADDRESS_SHELL)dit(bf(tt(SHELL:<shell-command>)))
+dit(bf(tt(SHELL)))
    Forks a sub process that establishes communication with its parent process
    and invokes the specified program with the configured shell ($SHELL).
    Note that <shell-command> [link(string)(TYPE_STRING)] must
-   not contain ',' or "!!", and that shell meta characters may have to be
+   not contain ',' or "!!", and that ':' and shell meta characters may have to be
    protected.
    After successful program start, socat() writes data to stdin of the 
    process and reads from its stdout.nl()
+   When invoked without parameter, this opens an interactive shell.
    Option groups: link(FD)(GROUP_FD),link(SOCKET)(GROUP_SOCKET),link(EXEC)(GROUP_EXEC),link(FORK)(GROUP_FORK),link(TERMIOS)(GROUP_TERMIOS) nl()
    Useful options:
    link(path)(OPTION_PATH),
@@ -1247,7 +1274,8 @@ label(ADDRESS_TCP_CONNECT)dit(bf(tt(TCP:<host>:<port>)))
    link(bind)(OPTION_BIND),
    link(pf)(OPTION_PROTOCOL_FAMILY),
    link(tos)(OPTION_TOS),
-   link(mtudiscover)(OPTION_MTUDISCOVER),
+   link(mtudiscover)(OPTION_IP_MTU_DISCOVER),
+   link(mtudiscover6)(OPTION_IPV6_MTU_DISCOVER),
    link(mss)(OPTION_MSS),
    link(nodelay)(OPTION_TCP_NODELAY),
    link(nonblock)(OPTION_O_NONBLOCK),
@@ -1322,6 +1350,7 @@ label(ADDRESS_TUN)dit(bf(tt(TUN[:<if-addr>/<bits>])))
    link(tun-device)(OPTION_TUN_DEVICE),
    link(tun-name)(OPTION_TUN_NAME),
    link(tun-type)(OPTION_TUN_TYPE),
+   link(interface-mtu)(OPTION_INTERFACE_MTU),
    link(iff-no-pi)(OPTION_IFF_NO_PI),
    link(netns)(OPTION_NETNS)nl()
    See also:
@@ -1333,10 +1362,13 @@ label(ADDRESS_UDP_CONNECT)dit(bf(tt(UDP:<host>:<port>)))
    <host> [link(IP address)(TYPE_IP_ADDRESS)] using UDP/IP version 4 or 6
    depending on address specification, name resolution, or option
    link(pf)(OPTION_PROTOCOL_FAMILY).nl()
-   Please note that,
-   due to UDP protocol properties, no real connection is established; data has
-   to be sent for `connecting' to the server, and no end-of-file condition can
-   be transported.nl()
+   Please note that, due to UDP protocol properties, no real connection is
+   established; data has to be sent for `connecting' to the server, and no
+   end-of-file condition can be transported.nl()
+   Since version 1.8.1.0, the socket sends, when shutting down, a zero length
+   UDP packet that might trigger EOF on the peer (implicit option
+   link(shut-null)(OPTION_SHUT_NULL)).
+   Restore old behaviour with option link(shut-none)(OPTION_SHUT_NONE).nl()
    Option groups: link(FD)(GROUP_FD),link(SOCKET)(GROUP_SOCKET),link(IP4)(GROUP_IP4),link(IP6)(GROUP_IP6) nl()
    Useful options:
    link(ttl)(OPTION_TTL),
@@ -1403,11 +1435,14 @@ label(ADDRESS_UDP_LISTEN)dit(bf(tt(UDP-LISTEN:<port>)))
    [link(UDP service)(TYPE_UDP_SERVICE)] and `connects' back to sender.
    The accepted IP version is 4 or the one specified with option
    link(pf)(OPTION_PROTOCOL_FAMILY).
-   Please note that,
-   due to UDP protocol properties, no real connection is established; data has
-   to arrive from the peer first, and no end-of-file condition can be
-   transported. Note that opening  
-   this address usually blocks until a client connects.nl()
+   Please note that, due to UDP protocol properties, no real connection is
+   established; data has to arrive from the peer first, thus, opening 
+   this address usually blocks until a client connects. Furthermore,
+   no end-of-file condition is specified in UDP.nl()
+   Since version 1.8.1.0, the socket sends, when shutting down, a zero length
+   UDP packet that might trigger EOF on the peer (implicit option
+   link(shut-null)(OPTION_SHUT_NULL)).
+   Restore old behaviour with option link(shut-none)(OPTION_SHUT_NONE).nl()
    Option groups: link(FD)(GROUP_FD),link(SOCKET)(GROUP_SOCKET),link(LISTEN)(GROUP_LISTEN),link(CHILD)(GROUP_CHILD),link(RANGE)(GROUP_RANGE),link(IP4)(GROUP_IP4),link(IP6)(GROUP_IP6) nl()
    Useful options:
    link(fork)(OPTION_FORK),
@@ -2335,10 +2370,14 @@ label(OPTION_SNDBUF_LATE)dit(bf(tt(sndbuf-late=<bytes>)))
 label(OPTION_SNDLOWAT)dit(bf(tt(sndlowat=<bytes>)))
    Specifies the minimum number of bytes in the send buffer until the socket
    layer will send the data to <bytes> [link(int)(TYPE_INT)].
-label(OPTION_PROTOCOL_FAMILY)dit(bf(tt(pf=<string>)))
-   Forces the use of the specified IP version or protocol. <string> can be
-   something like "ip4" or "ip6". The resulting value is
-   used as first argument to the code(socket()) or code(socketpair()) calls.
+label(OPTION_PROTOCOL_FAMILY)dit(bf(tt(protocol-family=<string>)), bf(tt(pf=<string>)))
+   pf means protocol family, sometimes called communication domain or address
+   family.
+   It forces the use of the specified IP version or protocol. <string> can be
+   a number or something like "ip4" (meaning 2) or "ip6" (meaning 10).
+   The resulting value is used as first argument to the code(socket()) or
+   code(socketpair()) calls, and in the field code(ai_family) in the
+   code(getaddrinfo()) hints.
    This option affects address resolution and the required syntax of bind and
    range options.
 label(OPTION_SO_TYPE)dit(bf(tt(socktype=<type>)))
@@ -2473,13 +2512,11 @@ COMMENT(   x00 end of option list
    x07 record route
    x0804 stream ID
    x44 internet timestamp)
-label(OPTION_MTUDISCOVER)dit(bf(tt(mtudiscover=<0|1|2>)))
-   Takes 0, 1, 2 to never, want, or always use path MTU discover on this
+label(OPTION_IP_MTU_DISCOVER)dit(bf(tt(ip-mtu-discover=<0|1|2>, mtudiscover=<0|1|2>)))
+   Takes 0, 1, 2 to never, want, or always use path MTU discover on the IPv4
    socket. 
 COMMENT(label(OPTION_HRDINCL)dit(bf(tt(ip-hdrincl)))
    Tell the raw socket that the application data includes the IP header.)
-COMMENT(label(OPTION_IP_MULTICAST_LOOP)dit(bf(tt(ip-multicastloop)))
-   Allow looping back outgoing multicast to the local interface.)
 COMMENT(label(OPTION_IP_MULTICAST_TTL)dit(bf(tt(ip-multicastttl)))
    Set the TTL for outgoing multicast packets.)
 label(OPTION_IP_PKTINFO)dit(bf(tt(ip-pktinfo)))
@@ -2560,8 +2597,8 @@ dit(bf(tt(ip-multicast-if=<hostname>)))
    Specifies hostname or address of the network interface to be used for
    multicast traffic.
 label(OPTION_IP_MULTICAST_LOOP)
-dit(bf(tt(ip-multicast-loop[=<bool>])))
-   Specifies if outgoing multicast traffic should loop back to the interface.
+dit(bf(tt(ip-multicast-loop[=<bool>], mcloop[=<bool>])))
+   Specifies if outgoing multicast traffic should also loop back to the interface.
 label(OPTION_IP_MULTICAST_TTL)
 dit(bf(tt(ip-multicast-ttl=<byte>)))
    Sets the TTL used for outgoing multicast traffic. Default is 1.
@@ -2673,6 +2710,12 @@ label(OPTION_IPV6_TCLASS)dit(bf(tt(ipv6-tclass)))
 label(OPTION_IPV6_RECVTCLASS)dit(bf(tt(ipv6-recvtclass)))
    Sets the IPV6_RECVTCLASS socket option. This enables receiving and logging
    of ancillary messages containing the transfer class.
+label(OPTION_IPV6_MULTICAST_LOOP)
+dit(bf(tt(ipv6-multicast-loop[=<bool>], mcloop6[=<bool>])))
+   Specifies if outgoing multicast traffic should also loop back to the interface.
+label(OPTION_IPV6_MTU_DISCOVER)dit(bf(tt(ipv6-mtu-discover=<0|1|2>, mtudiscover6=<0|1|2>)))
+   Takes 0, 1, 2 to never, want, or always use path MTU discover on the IPv6
+   socket.
 enddit()
 
 startdit()enddit()nl()
@@ -2843,6 +2886,9 @@ label(OPTION_SOCKSPORT)dit(bf(tt(socksport=<tcp service>)))
 label(OPTION_SOCKSUSER)dit(bf(tt(socksuser=<user>)))
    Sends the <user> [link(string)(TYPE_STRING)] in the username field to the
    socks server. Default is the actual user name ($LOGNAME or $USER) (link(example)(EXAMPLE_OPTION_SOCKSUSER)).
+label(OPTION_SOCKSPASS)dit(bf(tt(sockspass=<string>)))
+   Sends the given password [link(string)(TYPE_STRING)] on username,password
+   authentication to the socks5 server.
 enddit()
 
 startdit()enddit()nl()
@@ -3230,6 +3276,9 @@ label(OPTION_I_PUSH)dit(bf(tt(i-push=<string>)))
    (link(string)(TYPE_STRING)) onto the stack. For example, to make sure that a
    character device on Solaris supports termios etc, use the following options:
    tt(i-pop-all,i-push=ptem,i-push=ldterm,i-push=ttcompat)
+label(OPTION_TERMIOS_SETFLAGS)dit(bf(tt(termios-setflags=<word>:<flags>, setflags=<word>:<flags>)))
+   Sets one tt(c_*flag) word of tt(struct termios) to the given value. Word 0
+   is tt(c_iflag), word 3 is tt(c_lflag).
 enddit()
 
 startdit()enddit()nl()
@@ -3272,6 +3321,8 @@ label(OPTION_SITOUT_EIO)dit(bf(tt(sitout-eio=<timeval>)))
    might terminate. With this option socat() tolerates EIO for the specified
    time. Please note that in this state socat() blocks traffic in both
    directions, even when it is not related to this channel.
+label(OPTION_TIOCSWINSZ)dit(bf(tt(tiocswinsz=<col>:<row>, tiocswinsz=<col>:<row>)))
+   Sets the size of a pseudo terminal.nl()
 enddit()
 
 
@@ -3317,7 +3368,7 @@ label(OPTION_OPENSSL_METHOD)dit(bf(tt(method=<ssl-method>)))
    When this option is not provided OpenSSL negotiates the method with its
    peer.
    enddit()
-label(OPTION_OPENSSL_MIN_PROTO_VERSION)dit(bf(tt(min-proto-version)))
+label(OPTION_OPENSSL_MIN_PROTO_VERSION)dit(bf(tt(openssl-min-proto-version=<string>)), bf(tt(min-proto-version=<string>)))
    This option tells OpenSSL to use this or a later SSL/TLS protocol version
    and refuses to accept a lower/older protocol. Valid syntax is:
    startdit()
@@ -3328,7 +3379,7 @@ label(OPTION_OPENSSL_MIN_PROTO_VERSION)dit(bf(tt(min-proto-version)))
    dit(tt(TLS1.2)) Select TLS protocol version 1.2.
    dit(tt(TLS1.3)) Select TLS protocol version 1.3.
    enddit()
-label(OPTION_OPENSSL_MAX_PROTO_VERSION)dit(bf(tt(openssl-max-proto-version)))
+label(OPTION_OPENSSL_MAX_PROTO_VERSION)dit(bf(tt(openssl-max-proto-version=<string>)), bf(tt(max-proto-version=<string>)))
    This option is similar to link(min-proto-version)(OPTION_OPENSSL_MIN_PROTO_VERSION),
    however, it disallows use of a higher protocol version. Useful for testing
    the peer.
@@ -3483,6 +3534,8 @@ label(OPTION_IFF_AUTOMEDIA)dit(bf(tt(iff-automedia)))
    Sets the AUTOMEDIA flag of the TUN device.
 label(OPTION_IFF_DYNAMIC)dit(bf(tt(iff-dynamic)))
    Sets the DYNAMIC flag of the TUN device.
+label(OPTION_INTERFACE_MTU)dit(bf(tt(interface-mtu=<num> (if-mtu=<num>))))
+   Sets the interfaces MTU using the netlink interface.
 enddit()
 
 startdit()enddit()nl()
@@ -3518,18 +3571,22 @@ label(GROUP_POSIXMQ)em(bf(POSIX-MQ option group))
 Options that may be applied to POSIX-MQ addresses.
 
 startdit()
-label(OPTION_POSIXMQ_PRIORITY)dit(bf(tt(posixmq-priority (mq-prio))))
+label(OPTION_POSIXMQ_PRIORITY)dit(bf(tt(posixmq-priority=<link(TYPE_UNSIGNED_INT)(unsigned int)>) (mq-prio))))
    Sets the priority of messages (packets) written to the queue, or the minimal
-   priority of packet read from the queue.
+   priority of packet to be read from the queue.
 label(OPTION_POSIXMQ_FLUSH)dit(bf(tt(posixmq-flush (mq-flush))))
    "Consumes" (drops) all messages currently in the queue before starting
    transfers.
-label(OPTION_POSIXMQ_MAXMSG)dit(bf(tt(posixmq-maxmsg (mq-maxmsg))))
+label(OPTION_POSIXMQ_MAXMSG)dit(bf(tt(posixmq-maxmsg=<long> (mq-maxmsg))))
    Sets the maxmsg parameter of the POSIX message queue when creating it.nl()
-   Note: This option applies only when the queue does not already exist.
-label(OPTION_POSIXMQ_MSGSIZE)dit(bf(tt(posixmq-msgsize (mq-msgsize))))
+   Note: This option applies only when the queue does not already exist.nl()
+   Note: The value is restricted by kernel setting
+   code(/proc/sys/fs/mqueue/msg_max) with system default as low as 10.
+label(OPTION_POSIXMQ_MSGSIZE)dit(bf(tt(posixmq-msgsize=<long> (mq-msgsize))))
    Sets the msgsize parameter of the POSIX message queue when creating it.nl()
-   Note: This option applies only when the queue does not already exist.
+   Note: This option applies only when the queue does not already exist.nl()
+   Note: The value is restricted by kernel setting
+   code(/proc/sys/fs/mqueue/msgsize_max).
 enddit()
 
 
@@ -3838,7 +3895,7 @@ the program. Because mail.sh inherits stdin and stdout while socat() does not
 use them, the script can read a
 mail body from stdin. Socat() makes alias1 your local source address
 (link(bind)(OPTION_BIND)), cares for correct network line termination
-(link(crnl)(OPTION_CRNL)) and sends  
+(link(crnl)(OPTION_CRNL)) and sends 
 at most 512 data bytes per packet (link(mss)(OPTION_MSS)). 
 
 
@@ -4178,6 +4235,22 @@ listens for incoming TCP connections on port 7777. For each accepted
 connection, invokes a shell. This shell has its stdin and stdout directly
 connected to the TCP socket (link(nofork)(OPTION_NOFORK)).  The shell starts filan and lets it print the socket addresses to
 stderr (your terminal window).
+
+
+mancommand(\.LP)
+mancommand(\.nf)
+mancommand(\fBsocat \\)
+mancommand(\.RS)
+mancommand(\fBSTDIO,cfmakeraw \\ 
+	SHELL,pty,setsid,ctty,stderr\fP)
+mancommand(\.RE)
+mancommand(\.fi)
+
+htmlcommand(<hr><div class="shell">socat &#x5C;
+    STDIO,cfmakeraw &#x5C;
+    SHELL,pty,setsid,ctty,stderr</div>)
+
+creates a shell in the current terminal that provides job control, history etc.
 
 
 mancommand(\.LP)
@@ -4602,8 +4675,22 @@ descriptor as FDs 0 and 1. Socat() accepts the waiting connection and starts
 data transfer.
 
 
-dit(bf(tt()))
+label(EXAMPLE_ADDRESS_TEXT)
+mancommand(\.LP)
+mancommand(\.nf)
+mancommand(\fBsudo socat -u TEXT:"0 $((2**31-1))" /proc/sys/net/ipv4/ping_group_range\fP)
+mancommand(\.RE)
+mancommand(\.fi)
 
+htmlcommand(<hr><div class="shell">sudo socat -u TEXT:"1" /proc/sys/net/ipv4/ip_forward</div>)
+
+Writes text into a tt(/proc/sys/) file using tt(sudo) using socat() TEXT address
+instead of piping it to a tt(tee) under tt(sudo).
+
+
+htmlcommand(<hr>)
+
+dit(bf(tt()))
 
 
 enddit()
@@ -4825,7 +4912,7 @@ standard specifications available on the Internet for free.
 label(VERSION)
 manpagesection(VERSION)
 
-This man page describes version 1.8.0 of socat().
+This man page describes version 1.8.1 of socat().
 
 
 label(BUGS)

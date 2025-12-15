@@ -844,6 +844,7 @@ int _xioopen_connect(struct single *sfd, union sockaddr_union *us, size_t uslen,
 
    if (sfd->para.socket.connect_timeout.tv_sec  != 0 ||
        sfd->para.socket.connect_timeout.tv_usec != 0) {
+      Info1("Setting O_NONBLOCK on FD %d for handling connect-timeout", sfd->fd);
       fcntl_flags = Fcntl(sfd->fd, F_GETFL);
       Fcntl_l(sfd->fd, F_SETFL, fcntl_flags|O_NONBLOCK);
    }
@@ -1444,8 +1445,9 @@ int _xioopen_dgram_recv(struct single *sfd, int xioflags,
 #ifdef IPPROTO_UDPLITE
    case IPPROTO_UDPLITE:
 #endif
-      if (pf == PF_INET && ((struct sockaddr_in *)us)->sin_port == 0 ||
-	  pf == PF_INET6 && ((struct sockaddr_in6 *)us)->sin6_port == 0) {
+      if (us != NULL /* happens to be NULL with IP_RECV:17 */ &&
+	  (pf == PF_INET && ((struct sockaddr_in *)us)->sin_port == 0 ||
+	   pf == PF_INET6 && ((struct sockaddr_in6 *)us)->sin6_port == 0)) {
 	 struct sockaddr_storage bound;
 	 socklen_t bndlen = sizeof(bound);
 	 char sockbuff[256];
@@ -1689,7 +1691,9 @@ int xiocheckrange(union sockaddr_union *sa, struct xiorange *range) {
 int xiocheckpeer(xiosingle_t *sfd,
 		 union sockaddr_union *pa, union sockaddr_union *la) {
    char infobuff[256];
+#if (WITH_TCP || WITH_UDP) && WITH_LIBWRAP
    int result;
+#endif
 
 #if WITH_IP4 || WITH_IP6
    if (sfd->para.socket.dorange) {

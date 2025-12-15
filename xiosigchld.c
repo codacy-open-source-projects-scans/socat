@@ -88,7 +88,7 @@ void childdied(int signum) {
       pid = Waitpid(-1, &status, WNOHANG);
       if (pid == 0) {
 	 Msg(wassig?E_INFO:E_WARN,
-	     "waitpid(-1, {}, WNOHANG): no child has exited");
+	     "waitpid(-1, {}, WNOHANG): no (more) child has exited");
 	 Info("childdied() finished");
 	 diag_in_handler = 0;
 	 errno = _errno;
@@ -111,20 +111,18 @@ void childdied(int signum) {
 	 errno = _errno;
 	 return;
       }
-   /*! indent */
-   if (num_child) {
-      --num_child;
-      Info1("number of children decreased to %d", num_child);
-   }
-   /* check if it was a registered child process */
-   i = 0;
-   while (i < XIO_MAXSOCK) {
-      if (xio_checkchild(sock[i], i, pid))  break;
-      ++i;
-   }
-   if (i == XIO_MAXSOCK) {
+
+      /* Check if it was a registered child process
+	 (by EXEC, SHELL, SYSTEM without nofork) */
+      i = 0;
+      while (i < XIO_MAXSOCK) {
+	 if (xio_checkchild(sock[i], i, pid))
+	    break;
+	 ++i;
+      }
+      if (i == XIO_MAXSOCK) {
+	 /* Not found, thus not (yet) registered */
 	 Info2("childdied(%d): cannot identify child %d", signum, pid);
-	 if (num_child) num_child--;
 	 if (nextunknown == NUMUNKNOWN) {
 	    nextunknown = 0;
 	 }
@@ -132,6 +130,10 @@ void childdied(int signum) {
 	 statunknown[nextunknown++] = WEXITSTATUS(status);
 	 Debug1("saving pid in diedunknown"F_Zu,
 		nextunknown/*sic, for compatibility*/);
+	 if (num_child) {
+	    --num_child;
+	    Info1("number of children decreased to %d", num_child);
+	 }
       }
 
    if (WIFEXITED(status)) {

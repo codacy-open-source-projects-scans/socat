@@ -6,7 +6,7 @@
 
 # Performs primitive simulation of a socks5 server with echo function via stdio.
 # Accepts and answers SOCKS5 CONNECT request without authentication to
-# 8.8.8.8:80, however is does not connect there but just echoes data.
+# 127.0.0.1:80, however is does not connect there but just echoes data.
 # It is required for test.sh
 # For TCP, use this script as:
 # socat TCP-L:1080,reuseaddr EXEC:"socks5connect-echo.sh"

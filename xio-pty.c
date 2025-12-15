@@ -40,6 +40,7 @@ static int xioopen_pty(
    struct single *sfd = &xfd->stream;
    int ptyfd = -1; 	/* master */
    int ttyfd = -1; 	/* slave */
+   int optfd = -1; 	/* for applyopts(), differs openpty() vs /dev/ptmx */
 #if defined(HAVE_DEV_PTMX) || defined(HAVE_DEV_PTC)
    bool useptmx = false;	/* use /dev/ptmx or equivalent */
 #endif
@@ -113,13 +114,14 @@ static int xioopen_pty(
 	 return -1;
       }
       Notice1("PTY is %s", ptyname);
+      optfd = ttyfd;
    }
 #endif /* HAVE_OPENPTY */
 
 #if defined(HAVE_DEV_PTMX)
 #  define PTMX "/dev/ptmx"	/* Linux */
 #elif HAVE_DEV_PTC
-#  define PTMX "/dev/ptc"	/* AIX 4.3.3 */
+#  define PTMX "/dev/ptc"	/* AIX */
 #endif
 #if HAVE_DEV_PTMX || HAVE_DEV_PTC
    if (useptmx || ptyfd < 0) {
@@ -156,7 +158,27 @@ static int xioopen_pty(
 	    }
 	 }
 	 ptyname[0] = '\0'; strncat(ptyname, tn, MAXPTYNAMELEN-1);
+#if __sun__  || defined(_AIX)
+	 ttyfd = Open(tn, O_RDWR|O_NOCTTY, 0620);
+	 if (ttyfd >= 0)
+	    optfd = ttyfd;
+	 else
+	    optfd = ptyfd;
+#endif
       }
+
+#ifdef I_PUSH
+	    /* Linux: I_PUSH def'd; pty: ioctl(, I_FIND, ...) -> -1 EINVAL */
+	    /* AIX:   I_PUSH def'd; pty: ioctl(, I_FIND, ...) -> 1 */
+	    /* SunOS: I_PUSH def'd; pty: ioctl(, I_FIND, ...) -> 0 */
+	    /* HP-UX: I_PUSH def'd; pty: ioctl(, I_FIND, ...) -> 0 */
+	    if (Ioctl(ttyfd, I_FIND, "ldterm\0") == 0) {
+	       Ioctl(ttyfd, I_PUSH, "ptem\0\0\0");	/* 0 */ /* padding for AdressSanitizer */
+	       Ioctl(ttyfd, I_PUSH, "ldterm\0");	/* 0 */
+	       Ioctl(ttyfd, I_PUSH, "ttcompat");	/* HP-UX: -1 */
+	    }
+#endif
+
    }
 #endif /* HAVE_DEV_PTMX || HAVE_DEV_PTC */
 
@@ -180,7 +202,7 @@ static int xioopen_pty(
    applyopts_cloexec(ptyfd, opts);/*!*/
    sfd->dtype    = XIODATA_PTY;
 
-   applyopts(sfd, ttyfd, opts, PH_FD);
+   applyopts(sfd, optfd, opts, PH_FD);
 
    {
       /* special handling of user-late etc.; with standard behaviour (up to
@@ -209,7 +231,7 @@ static int xioopen_pty(
    }
 
    sfd->fd = ptyfd;
-   applyopts(sfd, -1, opts, PH_LATE);
+   applyopts(sfd, optfd, opts, PH_LATE);
    if (applyopts_single(sfd, opts, PH_LATE) < 0)
       return -1;
 

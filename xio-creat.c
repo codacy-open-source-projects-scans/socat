@@ -60,6 +60,11 @@ static int xioopen_creat(
       return result;
    }
 
+   if (rw == XIO_RDONLY) {
+	   Error1("CREAT:\"%s\": read-only mode, refusing to truncate or create file",
+		  filename);
+   }
+
    retropt_bool(opts, OPT_UNLINK_CLOSE, &opt_unlink_close);
    if (opt_unlink_close) {
       if ((sfd->unlink_close = strdup(filename)) == NULL) {

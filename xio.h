@@ -49,6 +49,7 @@ struct opt;
 #define XIOREAD_READLINE	0x6000	/* ... */
 #define XIOREAD_OPENSSL		0x7000	/* SSL_read() */
 #define XIODATA_WRITEMASK	0x0f00	/* mask for basic r/w method */
+#define XIOWRITE_STALL		0x0000	/* just drop the data */
 #define XIOWRITE_STREAM		0x0100	/* write() (default) */
 #define XIOWRITE_SENDTO		0x0200	/* sendto() */
 #define XIOWRITE_PIPE		0x0300	/* write() to alternate (pipe) Fd */
@@ -75,6 +76,7 @@ struct opt;
 #define XIODATA_RECV		(XIOREAD_RECV|XIOWRITE_SENDTO|XIOREAD_RECV_CHECKRANGE)
 #define XIODATA_RECV_SKIPIP	(XIODATA_RECV|XIOREAD_RECV_SKIPIP)
 #define XIODATA_PIPE		(XIOREAD_STREAM|XIOWRITE_PIPE)
+#define XIODATA_STALL		(XIOREAD_STREAM|XIOWRITE_STALL)
 #define XIODATA_2PIPE		(XIOREAD_STREAM|XIOWRITE_2PIPE)
 #define XIODATA_POSIXMQ		(XIOREAD_POSIXMQ|XIOWRITE_POSIXMQ)
 #define XIODATA_PTY		(XIOREAD_PTY|XIOWRITE_STREAM)
@@ -394,7 +396,7 @@ struct addrdesc {
 #define XIO_RDSTREAM(s) (((s)->tag==XIO_TAG_DUAL)?(s)->dual.stream[0]:&(s)->stream)
 #define XIO_WRSTREAM(s) (((s)->tag==XIO_TAG_DUAL)?(s)->dual.stream[1]:&(s)->stream)
 #define XIO_GETRDFD(s) (((s)->tag==XIO_TAG_DUAL)?(s)->dual.stream[0]->fd:(s)->stream.fd)
-#define XIO_GETWRFD(s) (((s)->tag==XIO_TAG_DUAL)?(s)->dual.stream[1]->fd:(((s)->stream.dtype&XIODATA_WRITEMASK)==XIOWRITE_2PIPE)?(s)->stream.para.exec.fdout:(((s)->stream.dtype&XIODATA_WRITEMASK)==XIOWRITE_PIPE)?(s)->stream.para.bipipe.fdout:(s)->stream.fd)
+#define XIO_GETWRFD(s) (((s)->tag==XIO_TAG_DUAL)?((((s)->dual.stream[1]->dtype&XIODATA_WRITEMASK)==XIOWRITE_2PIPE)?(s)->dual.stream[1]->para.exec.fdout:(s)->dual.stream[1]->fd):((((s)->stream.dtype&XIODATA_WRITEMASK)==XIOWRITE_2PIPE)?(s)->stream.para.exec.fdout:((((s)->stream.dtype&XIODATA_WRITEMASK)==XIOWRITE_PIPE))?(s)->stream.para.bipipe.fdout:(s)->stream.fd))
 #define XIO_EOF(s) (XIO_RDSTREAM(s)->eof && !XIO_RDSTREAM(s)->ignoreeof)
 
 typedef unsigned long flags_t;

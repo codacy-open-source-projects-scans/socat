@@ -48,6 +48,9 @@ const struct optdesc opt_ip_recverr = { "ip-recverr", "recverr",   OPT_IP_RECVER
 #ifdef IP_MTU_DISCOVER
 const struct optdesc opt_ip_mtu_discover={"ip-mtu-discover","mtudiscover",OPT_IP_MTU_DISCOVER,GROUP_SOCK_IP,PH_PASTSOCKET,TYPE_INT,OFUNC_SOCKOPT,SOL_IP,IP_MTU_DISCOVER };
 #endif
+#ifdef IPV6_MTU_DISCOVER
+const struct optdesc opt_ipv6_mtu_discover={"ipv6-mtu-discover","mtudiscover6",OPT_IP_MTU_DISCOVER,GROUP_SOCK_IP,PH_PASTSOCKET,TYPE_INT,OFUNC_SOCKOPT,SOL_IPV6,IPV6_MTU_DISCOVER };
+#endif
 #ifdef IP_MTU
 const struct optdesc opt_ip_mtu     = { "ip-mtu",     "mtu",       OPT_IP_MTU,     GROUP_SOCK_IP, PH_PASTSOCKET, TYPE_INT, OFUNC_SOCKOPT, SOL_IP, IP_MTU };
 #endif
@@ -63,7 +66,7 @@ const struct optdesc opt_ip_router_alert={"ip-router-alert","routeralert",OPT_IP
 /* following: Linux allows int but OpenBSD reqs char/byte */
 const struct optdesc opt_ip_multicast_ttl={"ip-multicast-ttl","multicastttl",OPT_IP_MULTICAST_TTL,GROUP_SOCK_IP,PH_PASTSOCKET,TYPE_BYTE,OFUNC_SOCKOPT,SOL_IP,IP_MULTICAST_TTL};
 /* following: Linux allows int but OpenBSD reqs char/byte */
-const struct optdesc opt_ip_multicast_loop={"ip-multicast-loop","multicastloop",OPT_IP_MULTICAST_LOOP,GROUP_SOCK_IP,PH_PASTSOCKET,TYPE_BYTE,OFUNC_SOCKOPT,SOL_IP,IP_MULTICAST_LOOP};
+const struct optdesc opt_ip_multicast_loop={"ip-multicast-loop","mcloop",OPT_IP_MULTICAST_LOOP,GROUP_SOCK_IP,PH_PASTSOCKET,TYPE_BYTE,OFUNC_SOCKOPT,SOL_IP,IP_MULTICAST_LOOP};
 const struct optdesc opt_ip_multicast_if  ={"ip-multicast-if",  "multicast-if", OPT_IP_MULTICAST_IF,  GROUP_SOCK_IP,PH_PASTSOCKET,TYPE_IP4NAME,OFUNC_SOCKOPT,SOL_IP,IP_MULTICAST_IF};
 #ifdef IP_PKTOPTIONS
 const struct optdesc opt_ip_pktoptions = { "ip-pktoptions", "pktopts", OPT_IP_PKTOPTIONS, GROUP_SOCK_IP, PH_PASTSOCKET, TYPE_INT, OFUNC_SOCKOPT, SOL_IP, IP_PKTOPTIONS };
@@ -371,7 +374,7 @@ static int xioip_getaddrinfo_devtests(
 	 (service?htons(atoi(service)):0);
       keep_hardcoded_records[count_hardcoded_records++] = *res;
       return 0;
-#endif /* !WITH_IP6 */
+#endif /* WITH_IP6 */
 
 #if WITH_IP4 && WITH_IP6
    } else if (!strcmp(node, "localhost-4-6")) {
@@ -456,13 +459,13 @@ int _xiogetaddrinfo(const char *node, const char *service,
    size_t nodelen;
 #if HAVE_GETADDRINFO
    struct addrinfo hints = {0};
-#else /* HAVE_PROTOTYPE_LIB_getipnodebyname || nothing */
+#else
    struct hostent *host;
 #endif
    bool restore_proto = false;
    int error_num;
 
-   Debug8("_xiogetaddrinfo(node=\"%s\", service=\"%s\", family=%d, socktype=%d, protoco=%d, ai_flags={0x%04x/0x%04x} }, res=%p",
+   Debug8("_xiogetaddrinfo(node=\"%s\", service=\"%s\", family=%d, socktype=%d, protocol=%d, ai_flags={0x%04x/0x%04x} }, res=%p",
 	  node?node:"NULL", service?service:"NULL", family, socktype, protocol,
 	  ai_flags?ai_flags[0]:0, ai_flags?ai_flags[1]:0, res);
    if (service && service[0]=='\0') {
@@ -1307,7 +1310,7 @@ mc:addr
 #if HAVE_STRUCT_IP_MREQN
 	if (Setsockopt(sfd->fd, opt->desc->major, opt->desc->minor,
 		       &ip4_mreqn.mreqn, sizeof(ip4_mreqn.mreqn)) < 0) {
-		Error8("setsockopt(%d, %d, %d, {0x%08x,0x%08x,%d}, "F_Zu"): %s",
+		Error8("setsockopt(%d, %ld, %ld, {0x%08x,0x%08x,%d}, "F_Zu"): %s",
 		       sfd->fd, opt->desc->major, opt->desc->minor,
 		       ip4_mreqn.mreqn.imr_multiaddr.s_addr,
 		       ip4_mreqn.mreqn.imr_address.s_addr,
@@ -1320,7 +1323,7 @@ mc:addr
 #else
 	if (Setsockopt(sfd->fd, opt->desc->major, opt->desc->minor,
 		       &ip4_mreqn.mreq, sizeof(ip4_mreqn.mreq)) < 0) {
-		Error7("setsockopt(%d, %d, %d, {0x%08x,0x%08x}, "F_Zu"): %s",
+		Error7("setsockopt(%d, %ld, %ld, {0x%08x,0x%08x}, "F_Zu"): %s",
 		       sfd->fd, opt->desc->major, opt->desc->minor,
 		       ip4_mreqn.mreq.imr_multiaddr,
 		       ip4_mreqn.mreq.imr_interface,
@@ -1465,7 +1468,7 @@ int xioapply_ip_add_source_membership(struct single *sfd, struct opt *opt) {
    ip4_mreq_src.imr_sourceaddr = sockaddr3.ip4.sin_addr;
    if (Setsockopt(sfd->fd, opt->desc->major, opt->desc->minor,
 		  &ip4_mreq_src, sizeof(ip4_mreq_src)) < 0) {
-      Error8("setsockopt(%d, %d, %d, {0x%08x,0x%08x,0x%08x}, "F_Zu"): %s",
+      Error8("setsockopt(%d, %ld, %ld, {0x%08x,0x%08x,0x%08x}, "F_Zu"): %s",
 	     sfd->fd, opt->desc->major, opt->desc->minor,
 	     htonl((uint32_t)ip4_mreq_src.imr_multiaddr.s_addr),
 	     ip4_mreq_src.imr_interface.s_addr,

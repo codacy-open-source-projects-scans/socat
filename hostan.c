@@ -232,6 +232,30 @@ int hostan(FILE *outfile) {
    fprintf(outfile, "typedef unsigned long long  ino_t;      /* sizeof(ino_t) = %u */\n", (unsigned int)sizeof(x.st_ino));
 #endif
    }
+
+#if WITH_TERMIOS
+   {
+      tcflag_t tcflag;
+#  if HAVE_BASIC_TCFLAG_T==1
+   fprintf(outfile, "typedef          short      tcflag_t;      /* sizeof(tcflag_t) = %u */\n", (unsigned int)sizeof(tcflag));
+#elif HAVE_BASIC_TCFLAG_T==2
+   fprintf(outfile, "typedef unsigned short      tcflag_t;      /* sizeof(tcflag_t) = %u */\n", (unsigned int)sizeof(tcflag));
+#elif HAVE_BASIC_TCFLAG_T==3
+   fprintf(outfile, "typedef          int        tcflag_t;      /* sizeof(tcflag_t) = %u */\n", (unsigned int)sizeof(tcflag));
+#elif HAVE_BASIC_TCFLAG_T==4
+   fprintf(outfile, "typedef unsigned int        tcflag_t;      /* sizeof(tcflag_t) = %u */\n", (unsigned int)sizeof(tcflag));
+#elif HAVE_BASIC_TCFLAG_T==5
+   fprintf(outfile, "typedef          long       tcflag_t;      /* sizeof(tcflag_t) = %u */\n", (unsigned int)sizeof(tcflag));
+#elif HAVE_BASIC_TCFLAG_T==6
+   fprintf(outfile, "typedef unsigned long       tcflag_t;      /* sizeof(tcflag_t) = %u */\n", (unsigned int)sizeof(tcflag));
+#elif HAVE_BASIC_TCFLAG_T==7
+   fprintf(outfile, "typedef          long long  tcflag_t;      /* sizeof(tcflag_t) = %u */\n", (unsigned int)sizeof(tcflag));
+#elif HAVE_BASIC_TCFLAG_T==8
+   fprintf(outfile, "typedef unsigned long long  tcflag_t;      /* sizeof(tcflag_t) = %u */\n", (unsigned int)sizeof(tcflag));
+#endif
+   }
+#endif /* WITH_TERMIOS */
+
    {
       unsigned short x = 0x100;
       if (x == ntohs(0x100)) {

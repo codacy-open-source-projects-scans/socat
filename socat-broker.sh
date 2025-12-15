@@ -89,7 +89,7 @@ if [ -z "$PORT" ]; then
 	exit 1
     fi
     PORT=
-    while [ -z "$PORT" ] || ss -aun |grep -e ":$PORT\>" >/dev/null; do
+    while [ -z "$PORT" ] || ss -aun |grep -e ":$PORT[[:space:]]" >/dev/null; do
 	if [ -z "$LOWPORT" ]; then
 	    PORT=$((16384+RANDOM))
 	else

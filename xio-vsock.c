@@ -57,6 +57,19 @@ static int vsock_init(struct opt *opts, struct single *sfd) {
    return STAT_OK;
 }
 
+int xioopt_vsock_bind(
+	struct sockaddr_vm *sa,
+	const char *cid_str,
+	const char *port_str)
+{
+   int ret;
+
+   if (cid_str[0] == '\0')
+      cid_str = NULL;
+   ret = vsock_addr_init(sa, cid_str, port_str, PF_VSOCK);
+   return ret;
+}
+
 static int xioopen_vsock_connect(
 	int argc,
 	const char *argv[],

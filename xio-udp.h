@@ -24,9 +24,7 @@ extern const struct addrdesc xioaddr_udp6_datagram;
 extern const struct addrdesc xioaddr_udp6_recvfrom;
 extern const struct addrdesc xioaddr_udp6_recv;
 
-extern int _xioopen_ipdgram_listen(struct single *sfd,
-	int xioflags, union sockaddr_union *us, socklen_t uslen,
-	struct opt *opts, int pf, int socktype, int ipproto);
+extern int _xioopen_ipdgram_listen(struct single *sfd, int xioflags, union sockaddr_union *us, socklen_t uslen, struct opt *opts, int pf, int socktype, int ipproto);
 
 extern int xioopen_udp_sendto(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *xfd, const struct addrdesc *addrdesc);
 extern int xioopen_udp_datagram(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *xfd, const struct addrdesc *addrdesc);

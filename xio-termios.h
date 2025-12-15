@@ -6,6 +6,7 @@
 #define __xio_termios_h_included 1
 
 extern const struct optdesc opt_tiocsctty;
+extern const struct optdesc opt_tiocswinsz;
 
 extern const struct optdesc opt_brkint;
 extern const struct optdesc opt_icrnl;
@@ -114,6 +115,7 @@ extern const struct optdesc opt_noflsh;
 extern const struct optdesc opt_tostop;
 extern const struct optdesc opt_pendin;
 extern const struct optdesc opt_iexten;
+extern const struct optdesc opt_termios_setflags;
 extern const struct optdesc opt_vintr;
 extern const struct optdesc opt_vquit;
 extern const struct optdesc opt_verase;
@@ -147,11 +149,13 @@ extern int xiotermios_clrflag(int fd, int word, tcflag_t mask);
 extern int xiotermiosflag_applyopt(int fd, struct opt *opt);
 extern int xiotermios_value(int fd, int word, tcflag_t mask, tcflag_t value);
 extern int xiotermios_char(int fd, int n, unsigned char c);
+extern int xiotermios_setflags(int fd, int word, tcflag_t val);
 #ifdef HAVE_TERMIOS_ISPEED
 extern int xiotermios_speed(int fd, int n, speed_t speed);
 #endif
-extern int xiotermios_spec(int fd, int optcode);
+extern int xiotermios_flagscomb(int fd, int optcode);
 extern int xiotermios_flush(int fd);
+extern int xiotermios_spec(int fd, struct opt *opt);
 #endif /* _WITH_TERMIOS */
 
 #endif /* !defined(__xio_termios_h_included) */

@@ -25,6 +25,7 @@ extern const struct optdesc opt_iff_multicast;
 extern const struct optdesc opt_iff_portsel;
 extern const struct optdesc opt_iff_automedia;
 /*extern const struct optdesc opt_iff_dynamic;*/
+extern const struct optdesc opt_interface_mtu;
 extern const struct optdesc opt_retrieve_vlan;
 
 extern int xiolog_ancillary_packet(struct single *sfd, struct cmsghdr *cmsg, int *num, char *typbuff, int typlen, char *nambuff, int namlen, char *envbuff, int envlen, char *valbuff, int vallen);

@@ -1,4 +1,145 @@
 ﻿
+####################### V 1.8.1.0:
+
+Features:
+	Implemented new address STALL that never sends data or EOF, and never
+	gets ready to write data.
+	Tests: STALL_RD STALL_WR
+
+	Added option termios-setflags (setflags) to set the termios tcflags.
+
+	Added address TEXT that takes a string from command line as input data;
+	output is sent to STDOUT.
+	Test: TEXT_STDOUT
+
+	Added option ipv6-multicast-loop (ipv6-mcloop, mcloop6).
+
+	Added option interface-mtu (if-mtu) to set the MTU of TUN and INTERFACE
+	addresses.
+	Test: TUN_MTU
+	Feature proposed by Baldur Gislason
+
+	Address SHELL now can be used without argument to provide an
+	interactive shell.
+	Test: INTERACTIVE_SHELL
+
+	Added SOCKS5 client user,password authentication with (old socks4)
+	option socksuser and new option sockspass
+	Test: SOCKS5_USER_PASS
+
+	Added option ipv6-mtu-discover.
+	Thanks to Ondřej Martinek for sending the patch.
+
+	New option tiocswinsz (winsz) (pre)sets size of pseudo terminal (PTY).
+	Test: TIOCSWINSZ
+
+	Filan queries and prints terminal size (window size) using
+	ioctl(TIOCGWINSZ).
+
+	Filan: new option -W keeps it running and makes it print the FD infos
+	on SIGWINCH, useful for watching changes of terminal size (window
+	size).
+
+	Filan tries to show more info on dynamic file descriptor states
+	(FIONREAD etc.)
+
+	Program invocation (EXEC, SHELL, SYSTEM) with option pty now support
+	option symbolic-link (link).
+	Feature proposed by Dmitry Koterov.
+
+Corrections:
+	Fixed possible SIGSEGV after failed getprotobynumber_r() .
+
+	Fixed minor issues with child process counter.
+
+	Address EXEC had a realloc() based heap overflow when the sub command
+	had 8 components and had length 48..63 bytes. On some versions of
+	FreeBSD, NetBSD and MacOSX this could produce a failure:
+	E execvp("", "", "arg1", "arg2", ...): No such file or directory
+	Test: EXEC_REALLOC
+
+	Socat crashed with addresses like IP-RECV:17 because some routine
+	assumed existance of a bind address as with UDP.
+	Test: IP_RECV_17
+
+	PTY generated per /dev/ptmx (or /dev/ptc) instead of openpty() might
+	not have gotten all address options (esp.AIX).
+
+	In version 1.8.0.3 SOCKS4 and SOCKS4a without option sockdport failed
+	with something like:
+	E getaddrinfo(...): Servname not supported for ai_socktype
+
+	SOCKS4 addresses could SIGSEGV when peer sent TCP-RST during initial
+	dialog.
+	Test: SOCKS4_SIGSEGV
+
+	Option posixmq-priority had been implemented as boolean and thus only
+	the values 0 or 1 were applied.
+
+	Address POSIXMQ now refuses bidirectional mode to prevent unwanted
+	flushing of queue; use POSIXMQ-BIDIRECTIONAL when needed.
+
+	Deactivated explicit printing of newline on empty READLINE input line.
+
+	When CREATE is used in read-only context it now refuses to truncate or
+	create file.
+
+	Fixed bind option with VSOCK: do not try to resolve vsock id
+	(regression after 1.8.0.0).
+
+	EXEC with leading space tried to invoke program with empty name.
+	Now it skips leading space.
+
+	Socat with options -v or -x showed incorrect timestamps (microseconds
+	in decimal position of nanoseconds).
+	Thanks to David Šmíd for reporting and fixing this issue.
+
+	Address GOPEN per default applies the O_APPEND flag; however, the
+	option o-append=0 had no effect.
+	Test: GOPEN_NO_APPEND
+
+	Options min-proto-version and max-proto-version were documented but
+	available only as openssl-min-proto-version etc.
+	Now bother forms are documented and available.
+	Thanks to Matt Panaro and Stefan Rieche for reporting this issue.
+
+Porting:
+	Changed Ioctl() request from int to unsigned long to prevent ioctl
+	sign-extension console warnings on 32bit BSD systems.
+	And see htps://bugzilla.kernel.org/show_bug.cgi?id=42705 for discussion.
+
+	PTYs on Solaris require use of STREAMs.
+	Test: SOLARIS_PTY
+
+	Modifications for: gcc -std=c99 --pedantic
+
+Documentation:
+	Improved documentation of POSIXMQ options.
+
+Testing:
+	A few tests required to be run in tty/pty.
+
+	test.sh: New option -Z, tests only up to this number.
+
+	test.sh: Many corrections.
+
+	Made test.sh work on Solaris with bad PATH
+
+	test.sh: AIX grep understands [[:blank:]] but not \< \>
+
+	Fixed some testing issues for MacOSX
+
+	Improved test.sh for systems without ping, without /etc/services, with
+	empty $USER .
+	Proposed by Maxim Cournoyer for GNU Guix
+
+	More minor corrections of test.sh
+
+	A few tests fail when performed by almighty root, rate this as "cant".
+
+	Options -N and -Z may now be combined to select a range
+	New option -X <num> to exclude a test
+
 ####################### V 1.8.0.3:
 
 Security:
@@ -7,7 +148,7 @@ Security:
 	other users.
 
 Corrections:
-	Fixed display of option phases in help output.
+	Flixed display of option phases in help output.
 
 	filan -s  displayed "(stream)" instead of "tcp" with addresses
 	(regression).
@@ -22,7 +163,7 @@ Corrections:
 
 	Do not log simple successful write with NOTICE level.
 
-	On partial write to not poll with sleep() but use select()/poll().
+	On partial write do not poll with sleep() but use select()/poll().
 
 	Partial write situations respect total inactivity timeout when
 	nonblocking.
