@@ -24,7 +24,7 @@ bool xioopts_ignoregroups;
 #  define IF_NAMED(a,b)
 #endif
 
-#if WITH_PIPE || WITH_GOPEN
+#if WITH_OPEN
 #  define IF_OPEN(a,b) {a,b},
 #else
 #  define IF_OPEN(a,b)

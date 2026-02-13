@@ -117,7 +117,7 @@ int xioparsenetwork_ip6(
 	struct xiorange *range,
 	const int ai_flags[2])
 {
-   char *delimpos;	/* absolute address of delimiter */
+   const char *delimpos;	/* absolute address of delimiter */
    size_t delimind;	/* index of delimiter in string */
    unsigned int bits;	/* netmask bits */
    char *endptr;
@@ -613,10 +613,6 @@ int xiotype_ip6_join_source_group(
 	 opt->value.u_string/*mcaddr*/,
 	 opt->value2.u_string/*ifindex*/,
 	 opt->value3.u_string/*srcaddr*/);
-
-   if (!xioparms.experimental) {
-      Warn1("option %s is experimental", opt->desc->defname);
-   }
 
    return 0;
 }

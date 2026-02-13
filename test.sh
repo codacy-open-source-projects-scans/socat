@@ -8328,7 +8328,7 @@ TEST="$NAME: PTY handles option end-close"
 # check its return status.
 if ! eval $NUMCOND; then :;
  else
-tf="$td/test$N.stout"
+tf="$td/test$N.stdout"
 te="$td/test$N.stderr"
 # -t  must be longer than 0.1 on OpenBSD
 CMD="$TRACE $SOCAT $opts -d -d -t 0.5 /dev/null pty,end-close"
@@ -8370,7 +8370,7 @@ TEST="$NAME: options shut-null and null-eof"
 # When the receiving process only received and stored the first test record the
 # test succeeded
 if ! eval $NUMCOND; then :; else
-tf="$td/test$N.stout"
+tf="$td/test$N.stdout"
 te="$td/test$N.stderr"
 tdiff="$td/test$N.diff"
 da="test$N $(date) $RANDOM"
@@ -9918,7 +9918,7 @@ TEST="$NAME: ignoreeof does not block other direction"
 # we send data in the reverse direction and then the total timeout fires.
 # it the data has passed, the test succeeded.
 if ! eval $NUMCOND; then :; else
-tf="$td/test$N.stout"
+tf="$td/test$N.stdout"
 te="$td/test$N.stderr"
 tdiff="$td/test$N.diff"
 da="test$N $(date) $RANDOM"
@@ -18093,13 +18093,13 @@ tdiff="$td/test$N.diff"
 newport dccp4; tsl=$PORT
 ts="127.0.0.1:$tsl"
 da="test$N $(date) $RANDOM"
-CMD1="$TRACE $SOCAT $opts DCCP4-LISTEN:$tsl,$REUSEADDR PIPE"
-CMD2="$TRACE $SOCAT $opts STDIN!!STDOUT DCCP4:$ts"
+CMD0="$TRACE $SOCAT $opts DCCP4-LISTEN:$tsl,$REUSEADDR PIPE"
+CMD1="$TRACE $SOCAT $opts STDIN!!STDOUT DCCP4:$ts"
 printf "test $F_n $TEST... " $N
-$CMD1 >"$tf" 2>"${te}1" &
-pid1=$!
+$CMD0 >"$tf" 2>"${te}0" &
+pid0=$!
 waittcp4port $tsl 1
-echo "$da" |$CMD2 >>"$tf" 2>>"${te}2"
+echo "$da" |$CMD1 >>"$tf" 2>>"${te}1"
 if [ $? -ne 0 ]; then
 	$PRINTF "$FAILED\n"
 	echo "$CMD0 &"
@@ -18124,7 +18124,7 @@ else
 	if [ "$DEBUG" ];   then cat "${te}1" >&2; fi
 	ok
 fi
-kill $pid1 2>/dev/null
+kill $pid0 2>/dev/null
 wait
 fi ;; # NUMCOND, checkconds
 esac

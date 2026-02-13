@@ -1638,7 +1638,8 @@ int xiodopacketinfo(
 	 if (withenv) {
 	    if (*envp) {
 	       xiosetenv(envp, valp, 1, NULL);
-	    } else if (!strcasecmp(typp+strlen(typp)-strlen(namp), namp)) {
+	    } else if (strlen(typp)>strlen(namp) &&
+		       !strcasecmp(typp+strlen(typp)-strlen(namp), namp)) {
 	       xiosetenv(typp, valp, 1, NULL);
 	    } else	{
 	       xiosetenv2(typp, namp, valp, 1, NULL);

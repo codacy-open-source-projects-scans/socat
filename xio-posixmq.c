@@ -20,11 +20,11 @@ static int _posixmq_unlink(const char *name, int level);
 
 static int xioopen_posixmq(int argc, const char *argv[], struct opt *opts, int xioflags, xiofile_t *xfd, const struct addrdesc *addrdesc);
 
-const struct addrdesc xioaddr_posixmq_bidir   = { "POSIXMQ-BIDIRECTIONAL", 1+XIO_RDWR,   xioopen_posixmq, GROUP_FD|GROUP_OPEN|GROUP_NAMED|GROUP_POSIXMQ|GROUP_RETRY,                  XIO_RDWR,   0, 0 HELP(":<mqname>") };
-const struct addrdesc xioaddr_posixmq_read    = { "POSIXMQ-READ",          1+XIO_RDONLY, xioopen_posixmq, GROUP_FD|GROUP_OPEN|GROUP_NAMED|GROUP_POSIXMQ|GROUP_RETRY,                  XIO_RDONLY, 0, 0 HELP(":<mqname>") };
-const struct addrdesc xioaddr_posixmq_receive = { "POSIXMQ-RECEIVE",       1+XIO_RDONLY, xioopen_posixmq, GROUP_FD|GROUP_OPEN|GROUP_NAMED|GROUP_POSIXMQ|GROUP_RETRY|GROUP_CHILD,      XIO_RDONLY, XIOREAD_RECV_ONESHOT, 0 HELP(":<mqname>") };
-const struct addrdesc xioaddr_posixmq_send    = { "POSIXMQ-SEND",          1+XIO_WRONLY, xioopen_posixmq, GROUP_FD|GROUP_OPEN|GROUP_NAMED|GROUP_POSIXMQ|GROUP_RETRY|GROUP_CHILD,      XIO_WRONLY, 0, 0 HELP(":<mqname>") };
-const struct addrdesc xioaddr_posixmq_write   = { "POSIXMQ-WRITE",         1+XIO_WRONLY, xioopen_posixmq, GROUP_FD|GROUP_OPEN|GROUP_NAMED|GROUP_POSIXMQ|GROUP_RETRY|GROUP_CHILD,      XIO_WRONLY, 0, 0 HELP(":<mqname>") };
+const struct addrdesc xioaddr_posixmq_bidir   = { "POSIXMQ-BIDIRECTIONAL", 1+XIO_RDWR,   xioopen_posixmq, GROUP_FD|GROUP_OPEN|GROUP_NAMED|GROUP_POSIXMQ|GROUP_RETRY,                  0,          0, 0 HELP(":<mqname>") };
+const struct addrdesc xioaddr_posixmq_read    = { "POSIXMQ-READ",          1+XIO_RDONLY, xioopen_posixmq, GROUP_FD|GROUP_OPEN|GROUP_NAMED|GROUP_POSIXMQ|GROUP_RETRY,                  0,          0, 0 HELP(":<mqname>") };
+const struct addrdesc xioaddr_posixmq_receive = { "POSIXMQ-RECEIVE",       1+XIO_RDONLY, xioopen_posixmq, GROUP_FD|GROUP_OPEN|GROUP_NAMED|GROUP_POSIXMQ|GROUP_RETRY|GROUP_CHILD,      XIOREAD_RECV_ONESHOT, 0, 0 HELP(":<mqname>") };
+const struct addrdesc xioaddr_posixmq_send    = { "POSIXMQ-SEND",          1+XIO_WRONLY, xioopen_posixmq, GROUP_FD|GROUP_OPEN|GROUP_NAMED|GROUP_POSIXMQ|GROUP_RETRY|GROUP_CHILD,      0,          0, 0 HELP(":<mqname>") };
+const struct addrdesc xioaddr_posixmq_write   = { "POSIXMQ-WRITE",         1+XIO_WRONLY, xioopen_posixmq, GROUP_FD|GROUP_OPEN|GROUP_NAMED|GROUP_POSIXMQ|GROUP_RETRY|GROUP_CHILD,      0,          0, 0 HELP(":<mqname>") };
 
 const struct optdesc opt_posixmq_priority   = { "posixmq-priority",   "mq-prio",  OPT_POSIXMQ_PRIORITY,   GROUP_POSIXMQ, PH_INIT, TYPE_UINT, OFUNC_OFFSET, XIO_OFFSETOF(para.posixmq.prio), XIO_SIZEOF(para.posixmq.prio), 0 };
 const struct optdesc opt_posixmq_flush      = { "posixmq-flush",      "mq-flush", OPT_POSIXMQ_FLUSH,      GROUP_POSIXMQ, PH_EARLY, TYPE_BOOL, OFUNC_SPEC,   0,                               0,                             0 };
@@ -45,8 +45,8 @@ static int xioopen_posixmq(
 	/* We expect the form: /mqname */
 	xiosingle_t *sfd = &xfd->stream;
 	const char *name;
-	int dirs = addrdesc->arg1;
-	int oneshot = addrdesc->arg2;
+	int dirs = addrdesc->directions-1;
+	int oneshot = addrdesc->arg1;
 	bool opt_unlink_early = false;
 	bool nonblock = 0;
 	bool flush = false;
@@ -74,7 +74,7 @@ static int xioopen_posixmq(
 	}
 
 	if (addrdesc == &xioaddr_posixmq_bidir &&
-	    dirs == XIO_RDWR &&
+	    (xioflags&O_ACCMODE) == XIO_RDWR &&
 	    !strcasecmp(argv[0], "POSIXMQ")) {
 		Error("Keyword \"POSIXMQ\" in bidirectional mode might unwanted flush the queue; use \"POSIXMQ-BIDIRECTIONAL\" to confirm usage");
 	}
@@ -200,7 +200,7 @@ static int xioopen_posixmq(
 	mqd = mq_open(name, oflag, opt_mode, setopts ? &attr : NULL);
 	_errno = errno;
 	Debug1("mq_open() -> %d", mqd);
-	if (mqd < 0) {
+	if (mqd == (mqd_t)-1) {
 		if (setopts)
 			Error9("%s: mq_open(\"%s\", "F_mode", "F_mode", {flags=%ld, maxmsg=%ld, msgsize=%ld, curmsgs=%ld} ): %s", argv[0], name, oflag, opt_mode, attr.mq_flags, attr.mq_maxmsg, attr.mq_msgsize, attr.mq_curmsgs, strerror(errno));
 		else

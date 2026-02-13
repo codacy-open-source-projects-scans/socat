@@ -30,7 +30,8 @@ int xio_netlink_mtu(
 	struct nlmsghdr buf[8192/sizeof(struct nlmsghdr)];
 	struct iovec iov = { buf, sizeof(buf) };
 	struct sockaddr_nl sa;
-	struct msghdr rtmsg = { &sa, sizeof(sa), &iov, 1, NULL, 0, 0 };
+	struct msghdr rtmsg = { &sa, sizeof(sa), &iov, 1
+				/* rest is 0 or NULL */ };
 	struct nlmsghdr *nh;
 
 	Info2("Setting interface %d MTU to %u using netlink", interface_index, mtu);

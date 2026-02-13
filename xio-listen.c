@@ -174,7 +174,7 @@ int _xioopen_accept_fd(
 	int proto,
 	int level)
 {
-   struct sockaddr sa;
+   union sockaddr_union sa;
    socklen_t salen;
    char *rangename;
    bool dofork = false;

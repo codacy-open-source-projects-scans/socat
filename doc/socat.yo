@@ -191,7 +191,7 @@ label(option_S)dit(bf(tt(-S))tt(<signals-bitmap>))
    SIGCHLD may be handled specially anyway.
 label(option_t)dit(bf(tt(-t))tt(<timeout>))
    When one channel has reached EOF (that is not ignored through option
-   (link(ignoreoef)(OPTION_ignoreeof), the write part of the other channel is
+   (link(ignoreoef)(OPTION_IGNOREEOF), the write part of the other channel is
    shut down. Then, socat() waits <timeout> [link(timeval)(TYPE_TIMEVAL)]
    seconds before terminating. When during
    the timeout interval the read part of that other channel gives EOF, socat
@@ -235,7 +235,6 @@ dit(bf(tt(-S)))
    Logs transfer statistics (bytes and blocks counters for both directions)
    before terminating socat().nl()
    See also link(signal USR1)(signal_usr1).nl()
-   This feature is experimental and might change in future versions.
 enddit()
 
 
@@ -2224,7 +2223,7 @@ label(OPTION_NETNS)dit(bf(tt(netns=<net-namespace-name>)))
    After opening the address it switches back to the previous namespace
    (link(example with TCP forwarder)(EXAMPLE_OPTION_NETNS),
    link(example with virtual network connection)(EXAMPLE_TUN_NETNS)).nl()
-   Only on Linux; requires root; use option tt(--experimental).nl()
+   Only on Linux; this option requires root and is experimental.nl()
 enddit()
 
 startdit()enddit()nl()
@@ -2349,7 +2348,7 @@ label(OPTION_SO_RCVTIMOE)dit(bf(tt(so-rcvtimeo=<time>, rcvtimeo=<time>)))
    that data is available. However this option is useful with DTLS addresses to
    timeout during connection negotiation.
 label(OPTION_SO_SNDTIMOE)dit(bf(tt(so-sndtimeo=<time>, sndtimeo=<time>)))
-   Like link(so-recvtimeo)(OPTION_SO_RCVTIMOE), but for code(send). Not usecase
+   Like link(so-rcvtimeo)(OPTION_SO_RCVTIMOE), but for code(send). Not usecase
    known.
 label(OPTION_RCVLOWAT)dit(bf(tt(rcvlowat=<bytes>)))
    Specifies the minimum number of received bytes [link(int)(TYPE_INT)] until
@@ -2591,7 +2590,6 @@ dit(bf(tt(ipv6-join-source-group=<multicast-address:interface-index:source-addre
    info about the desired network interface and the source IP address of the
    multicast traffic. The indices of active network interfaces can be shown
    using the utility procan().nl()
-   This feature is experimental.
 label(OPTION_IP_MULTICAST_IF)
 dit(bf(tt(ip-multicast-if=<hostname>)))
    Specifies hostname or address of the network interface to be used for

@@ -1389,7 +1389,7 @@ int Sendto(int s, const void *mesg, size_t len, int flags,
 #if WITH_SYCLS
    sockaddr_info(to, tolen, infobuff, sizeof(infobuff));
    Debug7("sendto(%d, %p[%08x...], "F_Zu", %d, {%s}, %d)",
-	  s, mesg, htonl(*(unsigned long *)mesg), len, flags, infobuff, tolen);
+	  s, mesg, len>0?htonl(*(unsigned long *)mesg):0, len, flags, infobuff, tolen);
 #endif /* WITH_SYCLS */
    retval = sendto(s, mesg, len, flags, to, tolen);
    _errno = errno;

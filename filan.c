@@ -1105,7 +1105,7 @@ const char *getfiletypestring(int st_mode) {
 }
 
 static int printtime(FILE *outfile, time_t time) {
-   const char *s;
+   char *s;
 
    if (filan_rawoutput) {
       fprintf(outfile, "\t"F_time, time);

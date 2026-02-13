@@ -74,7 +74,7 @@ Arch Linux: openssl       readline
 
 Get the tarball and extract it:
 	tar xzf socat.tar.gz
-	cd socat-1.8.1.0
+	cd socat-1.8.1.1
 	./configure
 	make
 	su

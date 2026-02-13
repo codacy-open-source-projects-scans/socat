@@ -141,13 +141,7 @@ int _xioopen_interface(const char *ifname,
 
 int _interface_retrieve_vlan(struct single *sfd, struct opt *opts) {
 #if HAVE_STRUCT_TPACKET_AUXDATA
-   if (retropt_bool(opts, OPT_RETRIEVE_VLAN,
-		    &sfd->para.socket.retrieve_vlan)
-       == 0) {
-      if (!xioparms.experimental) {
-	 Warn1("option %s is experimental", opts->desc->defname);
-      }
-   }
+   retropt_bool(opts, OPT_RETRIEVE_VLAN, &sfd->para.socket.retrieve_vlan);
    if (sfd->para.socket.retrieve_vlan) {
       if (_interface_setsockopt_auxdata(sfd->fd, 1) < 0) {
 	 return -1;

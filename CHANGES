@@ -1,4 +1,24 @@
 ﻿
+####################### V 1.8.1.1:
+
+Corrections:
+	Socat with options -v or -x showed incorrect timestamps (microseconds
+	in decimal position of nanoseconds).
+	There was a related commit in 1.8.1.0, but it did not contain the fix.
+	Thanks to David Šmíd for fixing this issue.
+
+	Fixed issue with POSIXMQ in unidirectional context.
+
+	Fixed a few buffer read overruns detected on CheriBSD.
+
+Porting:
+	glibc-2.43: strchr with const
+	Thanks to Khem Raj, Holger Hoffstätte and others for providing patches.
+
+	Avoid 'int' vs. 'void *' compilation issue in xio-netlink.c caused by
+	explicit padding on Musl libc.
+	Thanks to Hongxu Jia and others for reporting this issue.
+
 ####################### V 1.8.1.0:
 
 Features:

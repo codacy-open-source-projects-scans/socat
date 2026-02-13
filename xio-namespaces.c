@@ -25,7 +25,7 @@ int xio_set_namespace(
 	int rc;
 
 	if (!xioparms.experimental) {
-		Error1("option \"%s\" requires use of --experimental", nstype);
+		Warn1("option \"%s\" is experimental", nstype);
 	}
 
 	snprintf(nspath, sizeof(nspath)-1, "/run/%s/%s", nstype, nsname);
